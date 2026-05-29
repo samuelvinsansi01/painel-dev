@@ -897,6 +897,19 @@
       </section>
 
       <section class="lead-drawer-section">
+        <div class="lead-drawer-section-title">Follow-up</div>
+        <div class="lead-followup-box">
+          <label for="leadFollowUpDate">Próximo contato</label>
+          <div class="lead-followup-row">
+            <input type="date" id="leadFollowUpDate" class="lead-followup-input">
+            <button class="btn btn-primary" onclick="saveLeadFollowUp()">Salvar</button>
+            <button class="btn btn-ghost" onclick="clearLeadFollowUp()">Limpar</button>
+          </div>
+          <div id="leadFollowUpStatus" class="lead-followup-status empty">// sem follow-up agendado</div>
+        </div>
+      </section>
+
+      <section class="lead-drawer-section">
         <div class="lead-drawer-section-title">Notas</div>
         <textarea id="leadNoteInput" class="lead-note-input" placeholder="Escreva uma observação sobre este lead..."></textarea>
         <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="addLeadNote()">+ Adicionar nota</button>

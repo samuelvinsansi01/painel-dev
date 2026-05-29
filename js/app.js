@@ -162,6 +162,28 @@ function crmNowLabel() {
   return new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
 }
 
+function todayIsoDate() {
+  const d = new Date();
+  d.setMinutes(d.getMinutes() - d.getTimezoneOffset());
+  return d.toISOString().slice(0, 10);
+}
+
+function formatIsoDateBR(iso) {
+  if (!iso) return '';
+  const [y, m, d] = String(iso).split('-');
+  if (!y || !m || !d) return iso;
+  return `${d}/${m}/${y}`;
+}
+
+function getFollowUpInfo(dateIso) {
+  if (!dateIso) return { className: 'empty', label: '// sem follow-up agendado' };
+  const today = todayIsoDate();
+  if (dateIso === today) return { className: 'today', label: `Hoje · ${formatIsoDateBR(dateIso)}` };
+  if (dateIso < today) return { className: 'late', label: `Atrasado · ${formatIsoDateBR(dateIso)}` };
+  return { className: 'future', label: `Futuro · ${formatIsoDateBR(dateIso)}` };
+}
+
+
 function ensureLeadCrm(id, baseLead = {}) {
   const store = getLeadCrmStore();
   if (!store[id]) {
@@ -177,6 +199,7 @@ function ensureLeadCrm(id, baseLead = {}) {
     store[id].notes = Array.isArray(store[id].notes) ? store[id].notes : [];
     store[id].history = Array.isArray(store[id].history) ? store[id].history : [];
     store[id].pipelineStatus = store[id].pipelineStatus || 'contato_enviado';
+    store[id].followUpDate = store[id].followUpDate || '';
   }
   return store[id];
 }
@@ -255,6 +278,8 @@ function renderLeadDrawer() {
   const pipelineEl = document.getElementById('leadDrawerPipeline');
   const notesEl = document.getElementById('leadNotesList');
   const historyEl = document.getElementById('leadHistoryList');
+  const followUpInput = document.getElementById('leadFollowUpDate');
+  const followUpStatus = document.getElementById('leadFollowUpStatus');
   if (!nameEl || !metaEl || !channelsEl || !pipelineEl || !notesEl || !historyEl) return;
 
   const local = [lead.cidade, lead.estado].filter(Boolean).join(' - ');
@@ -274,6 +299,13 @@ function renderLeadDrawer() {
       ${escHtml(step.label)}
     </button>
   `).join('');
+
+  if (followUpInput) followUpInput.value = crm.followUpDate || '';
+  if (followUpStatus) {
+    const info = getFollowUpInfo(crm.followUpDate || '');
+    followUpStatus.className = `lead-followup-status ${info.className}`;
+    followUpStatus.textContent = info.label;
+  }
 
   notesEl.innerHTML = crm.notes.length
     ? crm.notes.slice().reverse().map(note => `
@@ -344,6 +376,45 @@ function updateLeadPipeline(status) {
   addLeadHistory(activeLeadDrawerId, `Pipeline alterado: ${old} → ${step.label}`);
   renderLeadDrawer();
   notify(`Pipeline: ${step.label}`);
+}
+
+function saveLeadFollowUp() {
+  if (!activeLeadDrawerId) return;
+  const input = document.getElementById('leadFollowUpDate');
+  const dateIso = (input?.value || '').trim();
+  if (!dateIso) {
+    notify('Selecione uma data para o follow-up.', 'warn');
+    return;
+  }
+
+  const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+  const oldDate = crm.followUpDate || '';
+  crm.followUpDate = dateIso;
+  saveLeadCrm(activeLeadDrawerId, crm);
+
+  const message = oldDate
+    ? `Follow-up reagendado: ${formatIsoDateBR(oldDate)} → ${formatIsoDateBR(dateIso)}`
+    : `Follow-up agendado para ${formatIsoDateBR(dateIso)}`;
+
+  addLeadHistory(activeLeadDrawerId, message, activeLeadDrawerData || {});
+  renderLeadDrawer();
+  notify('Follow-up salvo.');
+}
+
+function clearLeadFollowUp() {
+  if (!activeLeadDrawerId) return;
+  const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+  if (!crm.followUpDate) {
+    notify('Este lead não possui follow-up agendado.', 'warn');
+    return;
+  }
+
+  const oldDate = crm.followUpDate;
+  crm.followUpDate = '';
+  saveLeadCrm(activeLeadDrawerId, crm);
+  addLeadHistory(activeLeadDrawerId, `Follow-up removido: ${formatIsoDateBR(oldDate)}`, activeLeadDrawerData || {});
+  renderLeadDrawer();
+  notify('Follow-up removido.');
 }
 
 document.addEventListener('keydown', (event) => {
