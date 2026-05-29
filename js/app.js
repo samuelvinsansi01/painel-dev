@@ -187,6 +187,16 @@ function saveLeadCrm(id, crm) {
   saveLeadCrmStore(store);
 }
 
+function addLeadHistory(id, text, baseLead = {}) {
+  const crm = ensureLeadCrm(id, baseLead);
+  crm.history.push({
+    at: crmNowLabel(),
+    text
+  });
+  saveLeadCrm(id, crm);
+}
+
+
 function findLeadEverywhere(id) {
   const data = ensureWeekData();
   const weekLead = Object.values(data.days || {}).flat().find(e => e.id === id);
@@ -314,8 +324,9 @@ function addLeadNote() {
   if (!text) { notify('Escreva uma nota antes de adicionar.', 'warn'); return; }
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
   crm.notes.push({ at: crmNowLabel(), text });
-  crm.history.push({ at: crmNowLabel(), text: 'Nota adicionada' });
   saveLeadCrm(activeLeadDrawerId, crm);
+
+  addLeadHistory(activeLeadDrawerId, 'Nota adicionada');
   if (input) input.value = '';
   renderLeadDrawer();
   notify('Nota adicionada ao lead.');
@@ -328,8 +339,9 @@ function updateLeadPipeline(status) {
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
   const old = PIPELINE_STEPS.find(s => s.id === crm.pipelineStatus)?.label || 'Sem status';
   crm.pipelineStatus = status;
-  crm.history.push({ at: crmNowLabel(), text: `Pipeline alterado: ${old} → ${step.label}` });
   saveLeadCrm(activeLeadDrawerId, crm);
+
+  addLeadHistory(activeLeadDrawerId, `Pipeline alterado: ${old} → ${step.label}`);
   renderLeadDrawer();
   notify(`Pipeline: ${step.label}`);
 }
@@ -783,6 +795,7 @@ function atribuirParaDia(ids, day) {
       ramoId: lead.ramoId || null,
       status: 'Não enviada', criadoEm: lead.criadoEm || todayStr(),
     });
+    addLeadHistory(lead.id, `Atribuído para ${dayLabel(diaFinal)}`, lead);
     atribuidos++;
   });
 
@@ -848,6 +861,7 @@ function mandarParaBacklogZap(id) {
   saveAtribuicaoData(atrib.filter(a => a.id !== id));
   atribSelecionados.delete(id);
   renderAtribuicao(); updateBadges();
+  addLeadHistory(lead.id, 'Movido para Fila WhatsApp', lead);
   notify(`✓ ${lead.nome} → Backlog Fila Zap`);
 }
 function moverParaBacklogZapDoDia(id, day) {
@@ -984,6 +998,7 @@ function mandarParaFilaInsta(id) {
   saveAtribuicaoData(atrib.filter(a => a.id !== id));
   atribSelecionados.delete(id);
   renderAtribuicao(); updateBadges();
+  addLeadHistory(lead.id, 'Movido para Fila Instagram', lead);
   notify(`✓ ${lead.nome} → Fila Insta`);
 }
 
