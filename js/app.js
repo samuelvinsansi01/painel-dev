@@ -1,24 +1,42 @@
 
+
 function renderCommercialDashboard() {
   const s = getDashboardStats();
-  return `
-  <section class="dashboard-commercial">
-    <div class="dash-grid">
-      <div class="dash-card"><div class="dash-title">Leads Ativos</div><div class="dash-value">${s.total}</div></div>
-      <div class="dash-card"><div class="dash-title">Notas</div><div class="dash-value">${s.notes}</div></div>
-      <div class="dash-card"><div class="dash-title">Atividades</div><div class="dash-value">${s.history}</div></div>
-      <div class="dash-card"><div class="dash-title">Follow-ups Hoje</div><div class="dash-value">${s.followToday}</div></div>
-    </div>
-    <div class="dash-grid">
-      <div class="dash-card"><div class="dash-title">Contato</div><div class="dash-value">${s.contato}</div></div>
-      <div class="dash-card"><div class="dash-title">Responderam</div><div class="dash-value">${s.respondeu}</div></div>
-      <div class="dash-card"><div class="dash-title">Reunião</div><div class="dash-value">${s.reuniao}</div></div>
-      <div class="dash-card"><div class="dash-title">Proposta</div><div class="dash-value">${s.proposta}</div></div>
-      <div class="dash-card"><div class="dash-title">Fechados</div><div class="dash-value">${s.fechado}</div></div>
-    </div>
-  </section>`;
-}
+  const max = Math.max(s.contato, s.respondeu, s.reuniao, s.proposta, s.fechado, 1);
 
+  const bar = (label, value) => `
+    <div class="pipeline-row">
+      <div class="pipeline-label">${label}</div>
+      <div class="pipeline-track">
+        <div class="pipeline-fill" style="width:${(value/max)*100}%"></div>
+      </div>
+      <div class="pipeline-value">${value}</div>
+    </div>
+  `;
+
+  return \`
+  <section class="dashboard-pro">
+    <div class="dashboard-top-cards">
+      <div class="metric-card"><span>Leads ativos</span><strong>\${s.total}</strong></div>
+      <div class="metric-card"><span>Follow-ups hoje</span><strong>\${s.followToday}</strong></div>
+      <div class="metric-card"><span>Aguardando resposta</span><strong>\${s.respondeu}</strong></div>
+      <div class="metric-card"><span>Fechados</span><strong>\${s.fechado}</strong></div>
+    </div>
+
+    <div class="pipeline-card">
+      <div class="pipeline-header">
+        <h3>Funil Comercial</h3>
+        <span>// visão rápida da prospecção</span>
+      </div>
+
+      \${bar('Contato', s.contato)}
+      \${bar('Responderam', s.respondeu)}
+      \${bar('Reunião', s.reuniao)}
+      \${bar('Proposta', s.proposta)}
+      \${bar('Fechado', s.fechado)}
+    </div>
+  </section>\`;
+}
 
 /* DASHBOARD COMMERCIAL */
 function getDashboardStats() {
