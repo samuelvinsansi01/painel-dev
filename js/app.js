@@ -634,6 +634,7 @@ function openLeadDrawer(id) {
   const drawer = document.getElementById('leadDrawer');
   if (overlay) overlay.classList.add('open');
   if (drawer) drawer.setAttribute('aria-hidden', 'false');
+  renderLeadPresentations();
 }
 
 function closeLeadDrawer() {
@@ -1354,6 +1355,45 @@ async function loadSupabaseAsPrimarySource() {
 }
 
 
+
+/* ════════════════════════════
+   LEAD PRESENTATIONS V16.1 VISIBILITY FIX
+════════════════════════════ */
+function ensureLeadPresentationsContainer() {
+  if (document.getElementById('leadPresentationsList')) return true;
+
+  const drawer = document.getElementById('leadDrawer');
+  if (!drawer) return false;
+
+  const target =
+    document.getElementById('leadTimelineList') ||
+    document.getElementById('leadNotesList') ||
+    document.getElementById('leadHistoryList');
+
+  const block = document.createElement('div');
+  block.className = 'lead-presentations-block';
+  block.innerHTML = `
+    <div class="lead-presentation-title-label">Apresentações</div>
+    <div class="lead-presentation-form">
+      <input id="leadPresentationTitle" type="text" placeholder="Nome da apresentação. Ex: Site Institucional V1">
+      <div class="lead-presentation-row">
+        <input id="leadPresentationDeskUrl" type="url" placeholder="URL desktop">
+        <input id="leadPresentationMobUrl" type="url" placeholder="URL mobile">
+      </div>
+      <button class="btn btn-primary" onclick="addLeadPresentation()">+ Vincular apresentação</button>
+    </div>
+    <div id="leadPresentationsList" class="lead-presentations-list"></div>
+  `;
+
+  if (target && target.parentElement) {
+    target.parentElement.insertAdjacentElement('beforebegin', block);
+  } else {
+    drawer.appendChild(block);
+  }
+
+  return true;
+}
+
 /* ════════════════════════════
    LEAD PRESENTATIONS V16
 ════════════════════════════ */
@@ -1371,6 +1411,7 @@ function presentationPublicUrl(presentation) {
 }
 
 function renderLeadPresentations() {
+  ensureLeadPresentationsContainer();
   const list = document.getElementById('leadPresentationsList');
   if (!list || !activeLeadDrawerId) return;
 
