@@ -35,25 +35,36 @@ const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não re
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
 
+
 /* ════════════════════════════
-   AUTH GATE V20.1
+   AUTH GATE V20.2 FIXED
 ════════════════════════════ */
+function isAuthenticated() {
+  return !!(currentUser && currentUser.id);
+}
+
 function showAuthGate() {
   const gate = document.getElementById('authGate');
   if (gate) gate.classList.add('open');
+  document.documentElement.classList.add('auth-locked');
   document.body.classList.add('auth-locked');
 }
 
 function hideAuthGate() {
   const gate = document.getElementById('authGate');
   if (gate) gate.classList.remove('open');
+  document.documentElement.classList.remove('auth-locked');
   document.body.classList.remove('auth-locked');
 }
 
 function updateAuthGate() {
-  if (currentUser) hideAuthGate();
+  if (isAuthenticated()) hideAuthGate();
   else showAuthGate();
 }
+
+document.addEventListener('DOMContentLoaded', () => {
+  showAuthGate();
+});
 
 /* ════════════════════════════
    AUTH — SUPABASE / GOOGLE
@@ -106,6 +117,7 @@ function clearLocalSessionData() {
   localStorage.removeItem('vs_empresas_v2');
   localStorage.removeItem('vs_lead_crm_v1');
   localStorage.removeItem(SYNC_STATE_KEY);
+  updateAuthGate();
 }
 
 async function initAuth() {
@@ -124,18 +136,24 @@ async function initAuth() {
     clearLocalSessionData();
   }
 renderAuthUser(currentUser);
+  updateAuthGate();
   renderProductionReadyNote();
 
   sbClient.auth.onAuthStateChange(async (_event, session) => {
     currentUser = session?.user || null;
     renderAuthUser(currentUser);
+    updateAuthGate();
 
     if (currentUser) {
-      if (typeof loadSupabaseLeadsToLocalState === 'function') {
+      if (typeof loadSupabaseAsPrimarySource === 'function') {
         await loadSupabaseAsPrimarySource();
+      } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
+        await loadSupabaseLeadsToLocalState();
       }
     } else {
-      clearLocalSessionData();
+      if (typeof clearLocalSessionData === 'function') clearLocalSessionData();
+      localStorage.removeItem('vs_empresas_v2');
+      localStorage.removeItem('vs_lead_crm_v1');
       if (typeof renderInicio === 'function') renderInicio();
       if (typeof updateBadges === 'function') updateBadges();
     }
@@ -7590,3 +7608,14 @@ function renderLeadTimeline(leadId){
   `).join('');
 }
 
+
+
+function authGateSelfTest() {
+  const gate = document.getElementById('authGate');
+  return {
+    hasGate: !!gate,
+    gateOpen: !!gate?.classList.contains('open'),
+    bodyLocked: document.body.classList.contains('auth-locked'),
+    currentUser: currentUser ? { id: currentUser.id, email: currentUser.email } : null
+  };
+}
