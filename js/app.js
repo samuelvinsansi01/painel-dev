@@ -1602,6 +1602,57 @@ function renderExecutiveDashboard() {
   `);
 }
 
+
+/* ════════════════════════════
+   KANBAN V18
+════════════════════════════ */
+function findLeadEverywhereSafe(id){
+  try { return findLeadEverywhere(id); } catch { return null; }
+}
+
+function renderKanban() {
+  const board = document.getElementById('kanbanBoard');
+  if (!board) return;
+
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+
+  const stages = [
+    ['contato_enviado','Contato'],
+    ['respondeu','Respondeu'],
+    ['reuniao','Reunião'],
+    ['proposta','Proposta'],
+    ['fechado','Fechado'],
+    ['perdido','Perdido']
+  ];
+
+  board.innerHTML = stages.map(([key,label]) => {
+    const items = Object.entries(crm).filter(([_,v]) => (v.pipelineStatus || 'contato_enviado') === key);
+
+    return `
+      <div class="kanban-col">
+        <div class="kanban-head">
+          <span>${label}</span>
+          <span>${items.length}</span>
+        </div>
+
+        <div class="kanban-list">
+          ${items.map(([leadId]) => {
+            const lead = findLeadEverywhereSafe(leadId) || {nome:'Lead'};
+            return `
+              <div class="kanban-card" onclick="openLeadDrawer('${leadId}')">
+                <div class="kanban-card-title">${escHtml(lead.nome || 'Lead')}</div>
+                <div class="kanban-card-meta">
+                  ${(lead.instagram || '')}
+                </div>
+              </div>
+            `;
+          }).join('')}
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
 /* ════════════════════════════
    DEFAULT RAMOS
 ════════════════════════════ */
@@ -2366,7 +2417,7 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
-const PANELS = ['inicio','importar','validacao','atribuicao','instagram','fila-zap','followups','acompanhamento','redirecionamentos','configuracoes'];
+const PANELS = ['inicio','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes'];
 function switchPanel(name) {
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
@@ -2383,6 +2434,7 @@ function switchPanel(name) {
   if (name==='atribuicao')     { renderAtribuicao(); updateAtribTabCounts(); if (atribActiveTab==='insta') { renderAtribInstaFila(); updateAtribInstaCorteInfo(); } }
   if (name==='instagram')      renderInstagram();
   if (name==='fila-zap')       renderFilaZap();
+  if (name==='kanban')         renderKanban();
   if (name==='followups')      renderFollowups();
   if (name==='acompanhamento') renderAcompanhamento();
   if (name==='configuracoes')  renderConfiguracoes();

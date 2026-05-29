@@ -68,6 +68,10 @@
       <span class="nav-label">Follow-ups</span>
       <span class="nav-badge" id="badge-followups">0</span>
     </div>
+    <div class="nav-item" onclick="switchPanel('kanban')" data-label="Kanban">
+      <div class="nav-icon">📋</div>
+      <span class="nav-label">Kanban</span>
+    </div>
     <div class="nav-item" onclick="switchPanel('acompanhamento')" data-label="Acompanhamento">
       <div class="nav-icon">📈</div>
       <span class="nav-label">Acompanhamento</span>
@@ -570,6 +574,15 @@
   </div>
 </div>
 
+
+
+<div class="panel" id="panel-kanban">
+  <div class="page-header">
+    <div class="page-title">Kanban <span>Comercial.</span></div>
+    <div class="page-sub">// pipeline visual de negociação</div>
+  </div>
+  <div id="kanbanBoard" class="kanban-board"></div>
+</div>
 
 <!-- ── FOLLOW-UPS ── -->
 <div class="panel" id="panel-followups">

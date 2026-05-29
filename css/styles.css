@@ -1149,3 +1149,12 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 @media(max-width:560px){
   .exec-metrics{grid-template-columns:1fr;}
 }
+
+/* ══ KANBAN V18 ══ */
+.kanban-board{display:grid;grid-template-columns:repeat(6,minmax(260px,1fr));gap:12px;overflow:auto;padding-bottom:8px;}
+.kanban-col{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:12px;min-height:500px;}
+.kanban-head{display:flex;justify-content:space-between;margin-bottom:12px;font-family:'DM Mono',monospace;font-size:9px;}
+.kanban-list{display:flex;flex-direction:column;gap:8px;}
+.kanban-card{background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:10px;cursor:pointer;}
+.kanban-card-title{font-weight:800;font-size:12px;margin-bottom:6px;}
+.kanban-card-meta{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);}
