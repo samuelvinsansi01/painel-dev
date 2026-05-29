@@ -1767,3 +1767,26 @@ body.auth-locked .app{
     flex-direction:column;
   }
 }
+
+
+/* ══ CHIPS V29 ══ */
+.chips-v29-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:16px;margin-bottom:16px;flex-shrink:0;}
+.chips-v29-form{display:flex;flex-direction:column;gap:8px;}
+.chips-v29-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;}
+.chips-v29-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:12px;}
+.chips-v29-summary{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.8;background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:12px;}
+.chips-v29-list{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;}
+.chip-card{background:var(--bg);border:1px solid var(--border2);border-radius:14px;padding:14px;}
+.chip-card.paused{border-color:rgba(240,164,41,.35);background:rgba(240,164,41,.05);}
+.chip-card.disabled{opacity:.55;}
+.chip-card-top{display:flex;justify-content:space-between;gap:10px;align-items:flex-start;margin-bottom:10px;}
+.chip-card-name{font-weight:800;font-size:13px;}
+.chip-card-meta{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);line-height:1.7;margin-top:4px;}
+.chip-progress{height:7px;background:var(--surface3);border-radius:999px;overflow:hidden;margin:10px 0;}
+.chip-progress-fill{height:100%;background:var(--accent);border-radius:999px;}
+.chip-card-actions{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.chip-pill{font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;border-radius:999px;border:1px solid var(--border2);}
+.chip-pill.ok{color:var(--ok);border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06);}
+.chip-pill.warn{color:var(--warning);border-color:rgba(240,164,41,.35);background:rgba(240,164,41,.07);}
+.chip-pill.err{color:var(--error);border-color:rgba(255,92,92,.35);background:rgba(255,92,92,.06);}
+@media(max-width:980px){.chips-v29-grid,.chips-v29-list{grid-template-columns:1fr}.chips-v29-row{grid-template-columns:1fr}}

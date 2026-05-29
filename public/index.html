@@ -809,6 +809,48 @@
 <!-- ── EVOLUTION API ── -->
 
 <!-- ── FILA WHATSAPP V27 ── -->
+
+<!-- ── CHIPS V29 ── -->
+<div class="panel" id="panel-chips">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">WhatsApp <span>Chips.</span></div>
+    <div class="page-sub">// limite por chip · blocos · distribuição da fila</div>
+  </div>
+
+  <div class="chips-v29-grid">
+    <div class="stretch-card">
+      <div class="card-title">Cadastrar chip</div>
+      <div class="chips-v29-form">
+        <input id="chipName" type="text" placeholder="Nome do chip. Ex: Chip Comercial 01">
+        <input id="chipInstance" type="text" placeholder="Instância Evolution">
+        <div class="chips-v29-row">
+          <input id="chipDailyLimit" type="number" value="120" placeholder="Limite diário">
+          <input id="chipBlockSize" type="number" value="30" placeholder="Mensagens por bloco">
+        </div>
+        <div class="chips-v29-row">
+          <input id="chipInterval" type="number" value="120" placeholder="Intervalo em segundos">
+          <input id="chipBlocks" type="text" value="08:00,10:00,14:00,16:00" placeholder="Blocos">
+        </div>
+        <button class="btn btn-primary" onclick="addWhatsappChip()">Adicionar chip</button>
+      </div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="card-title">Operação</div>
+      <div id="chipsOperationSummary" class="chips-v29-summary"></div>
+      <div class="chips-v29-actions">
+        <button class="btn btn-primary" onclick="assignChipsToReadyQueue()">Distribuir leads prontos</button>
+        <button class="btn btn-ghost" onclick="resetDailyChipUsage()">Zerar contadores do dia</button>
+      </div>
+    </div>
+  </div>
+
+  <div class="stretch-card">
+    <div class="card-title" style="flex-shrink:0">Chips cadastrados</div>
+    <div id="chipsList" class="chips-v29-list"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-whatsappQueue">
   <div class="page-header" style="flex-shrink:0">
     <div class="page-title">Fila <span>WhatsApp.</span></div>
