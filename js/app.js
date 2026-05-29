@@ -62,17 +62,12 @@ const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
    Não salva leads no banco ainda.
 ════════════════════════════ */
 function getAuthRedirectUrl() {
-  // Mantém o retorno simples e igual às URLs cadastradas no Supabase.
-  // Evita voltar para /index.html, /alguma-rota ou file:// por engano.
-  const origin = window.location.origin;
-
-  if (origin === 'null' || window.location.protocol === 'file:') {
-    notify('Abra pelo localhost ou domínio publicado, não pelo arquivo direto.', 'warn');
-    return 'http://localhost:3000';
+  if (window.location.protocol === 'file:') {
+    notify('Abra pelo domínio publicado, não pelo arquivo direto.', 'warn');
+    return window.location.origin;
   }
 
-  if (origin.includes('localhost')) return 'http://localhost:3000';
-  return 'https://painel.samuelvinsansi.com.br';
+  return window.location.origin;
 }
 
 function getUserDisplayName(user) {
