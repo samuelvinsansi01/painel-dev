@@ -6148,3 +6148,15 @@ function confirmarExcluirLead() {
     }
   }, 50);
 })();
+
+
+function getPipelineStats() {
+  const store = getLeadCrmStore();
+  const stats = {};
+  LEAD_PIPELINE_STEPS.forEach(s => stats[s.key]=0);
+  Object.values(store).forEach(crm => {
+    const k = crm.pipelineStatus || LEAD_PIPELINE_STEPS[0].key;
+    if (stats[k] !== undefined) stats[k]++;
+  });
+  return stats;
+}
