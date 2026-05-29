@@ -605,6 +605,8 @@ function renderLeadDrawer() {
     `).join('')
     : '<div class="lead-note"><div class="lead-note-text" style="color:var(--muted)">// nenhuma nota ainda</div></div>';
 
+  renderLeadTimeline(activeLeadDrawerId);
+
   historyEl.innerHTML = crm.history.length
     ? crm.history.slice().reverse().map(item => `
       <div class="lead-history-item">
@@ -6782,26 +6784,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
 /* ===== V13 TIMELINE ===== */
+
 function getLeadTimelineEvents(leadId){
   const store = (typeof getLeadCrmStore === 'function') ? getLeadCrmStore() : {};
   const crm = store[leadId] || {};
   const events = [];
 
-  (crm.notes || []).forEach(n => events.push({
-    type:'note',
-    at:n.at || '',
-    text:n.text || ''
-  }));
-
   (crm.history || []).forEach(h => events.push({
     type:'history',
+    icon:'🧭',
     at:h.at || '',
     text:h.text || ''
+  }));
+
+  (crm.notes || []).forEach(n => events.push({
+    type:'note',
+    icon:'📝',
+    at:n.at || '',
+    text:n.text || ''
   }));
 
   if (crm.followUpDate) {
     events.push({
       type:'followup',
+      icon:'⏰',
       at:crm.followUpDate,
       text:'Follow-up agendado'
     });
@@ -6809,3 +6815,26 @@ function getLeadTimelineEvents(leadId){
 
   return events.reverse();
 }
+
+function renderLeadTimeline(leadId){
+  const box = document.getElementById('leadTimelineList');
+  if (!box || !leadId) return;
+
+  const events = getLeadTimelineEvents(leadId);
+
+  if (!events.length) {
+    box.innerHTML = '<div class="lead-timeline-empty">// nenhuma atividade registrada ainda</div>';
+    return;
+  }
+
+  box.innerHTML = events.map(ev => `
+    <div class="lead-timeline-item">
+      <div class="lead-timeline-icon">${ev.icon || '•'}</div>
+      <div>
+        <div class="lead-timeline-date">${escHtml(ev.at || '')}</div>
+        <div class="lead-timeline-text">${escHtml(ev.text || '')}</div>
+      </div>
+    </div>
+  `).join('');
+}
+

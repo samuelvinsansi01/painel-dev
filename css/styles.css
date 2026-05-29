@@ -752,3 +752,52 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 .crm-funnel-fill{height:100%;background:var(--accent);border-radius:100px;}
 @media(max-width:1100px){.crm-home-summary{grid-template-columns:repeat(2,minmax(0,1fr));}.crm-funnel-grid{grid-template-columns:1fr;}}
 @media(max-width:560px){.crm-home-summary{grid-template-columns:1fr;}}
+
+
+/* ══ LEAD TIMELINE V13.1 ══ */
+.lead-timeline{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.lead-timeline-item{
+  display:grid;
+  grid-template-columns:26px 1fr;
+  gap:10px;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px 12px;
+}
+.lead-timeline-icon{
+  width:26px;
+  height:26px;
+  border-radius:8px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  font-size:12px;
+}
+.lead-timeline-date{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  margin-bottom:4px;
+}
+.lead-timeline-text{
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  line-height:1.6;
+  color:var(--text2);
+}
+.lead-timeline-empty{
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  color:var(--muted);
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:14px;
+}
