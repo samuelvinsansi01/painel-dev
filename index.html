@@ -62,6 +62,12 @@
     </div>
 
     <div class="nav-section-label">Resultados</div>
+    
+    <div class="nav-item" onclick="switchPanel('followups')" data-label="Follow-ups">
+      <div class="nav-icon">⏰</div>
+      <span class="nav-label">Follow-ups</span>
+      <span class="nav-badge" id="badge-followups">0</span>
+    </div>
     <div class="nav-item" onclick="switchPanel('acompanhamento')" data-label="Acompanhamento">
       <div class="nav-icon">📈</div>
       <span class="nav-label">Acompanhamento</span>
@@ -561,6 +567,29 @@
         </div>
       </div>
     </div>
+  </div>
+</div>
+
+
+<!-- ── FOLLOW-UPS ── -->
+<div class="panel" id="panel-followups">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Central de <span>Follow-ups.</span></div>
+    <div class="page-sub">// hoje · atrasados · próximos 7 dias</div>
+  </div>
+
+  <div class="followup-dashboard" id="followupDashboard"></div>
+
+  <div class="followup-tabs">
+    <button class="followup-tab active" id="fuTabHoje" onclick="setFollowupFilter('hoje')">Hoje</button>
+    <button class="followup-tab" id="fuTabAtrasados" onclick="setFollowupFilter('atrasados')">Atrasados</button>
+    <button class="followup-tab" id="fuTabProximos" onclick="setFollowupFilter('proximos')">Próximos 7 dias</button>
+    <button class="followup-tab" id="fuTabTodos" onclick="setFollowupFilter('todos')">Todos</button>
+  </div>
+
+  <div class="stretch-card">
+    <div class="card-title" style="flex-shrink:0">Leads para retorno</div>
+    <div id="followupList" class="followup-list"></div>
   </div>
 </div>
 
