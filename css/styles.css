@@ -1158,3 +1158,48 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 .kanban-card{background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:10px;cursor:pointer;}
 .kanban-card-title{font-weight:800;font-size:12px;margin-bottom:6px;}
 .kanban-card-meta{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);}
+
+
+/* ══ PRESENTATION METRICS V19 ══ */
+.presentation-metrics-mini{
+  display:grid;
+  grid-template-columns:repeat(3,minmax(0,1fr));
+  gap:8px;
+  margin-bottom:10px;
+}
+.presentation-metric{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:9px;
+}
+.presentation-metric-label{
+  font-family:'DM Mono',monospace;
+  font-size:7px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+}
+.presentation-metric-value{
+  font-size:18px;
+  font-weight:800;
+  margin-top:5px;
+}
+.presentation-status-pill{
+  display:inline-flex;
+  align-items:center;
+  gap:5px;
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  padding:3px 7px;
+  border-radius:100px;
+  border:1px solid var(--border2);
+}
+.presentation-status-pill.viewed{
+  color:var(--ok);
+  border-color:rgba(78,203,113,.35);
+  background:rgba(78,203,113,.06);
+}
+.presentation-status-pill.not-viewed{
+  color:var(--muted);
+}

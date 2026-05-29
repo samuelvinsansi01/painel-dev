@@ -1052,6 +1052,16 @@ function ensureCrmHomeHost() {
   return host;
 }
 
+
+function getPresentationHomeStats() {
+  const presentations = getAllLeadPresentations();
+  return {
+    sent: presentations.length,
+    viewed: presentations.filter(p => Number(p.views || 0) > 0).length,
+    views: presentations.reduce((sum, p) => sum + Number(p.views || 0), 0)
+  };
+}
+
 function renderCrmHomeDashboard() {
   const host = ensureCrmHomeHost();
   if (!host) return;
@@ -1419,11 +1429,11 @@ function renderLeadPresentations() {
   const presentations = ensureLeadPresentations(activeLeadDrawerId);
 
   if (!presentations.length) {
-    list.innerHTML = '<div class="lead-presentation-empty">// nenhuma apresentação vinculada a este lead</div>';
+    list.innerHTML = renderPresentationMetricsHeader() + '<div class="lead-presentation-empty">// nenhuma apresentação vinculada a este lead</div>';
     return;
   }
 
-  list.innerHTML = presentations.slice().reverse().map(p => {
+  list.innerHTML = renderPresentationMetricsHeader() + presentations.slice().reverse().map(p => {
     const url = presentationPublicUrl(p);
     return `
       <div class="lead-presentation-item">
@@ -1431,13 +1441,13 @@ function renderLeadPresentations() {
         <div class="lead-presentation-meta">
           <span>${escHtml(p.createdAtLabel || p.createdAt || '')}</span>
           ${p.alias ? `<span>alias: ${escHtml(p.alias)}</span>` : ''}
-          ${p.views ? `<span>${p.views} visualizações</span>` : '<span>0 visualizações</span>'}
+          ${p.views ? `<span>${p.views} visualizações</span>` : '<span>0 visualizações</span>'}${p.lastViewedAtLabel ? `<span>último acesso: ${escHtml(p.lastViewedAtLabel)}</span>` : ''}
         </div>
         ${url ? `<div class="lead-presentation-link">${escHtml(url)}</div>` : ''}
         <div class="lead-presentation-actions">
           ${url ? `<a class="btn btn-ghost" style="font-size:10px;padding:7px 12px;text-decoration:none" href="${escHtml(url)}" target="_blank" rel="noopener">Abrir</a>` : ''}
           ${url ? `<button class="btn btn-ghost" style="font-size:10px;padding:7px 12px" onclick="copyLeadPresentationUrl('${escHtml(url)}')">Copiar link</button>` : ''}
-          <button class="btn btn-danger" style="font-size:10px;padding:7px 12px" onclick="removeLeadPresentation('${escHtml(p.id)}')">Remover</button>
+          <button class="btn btn-ghost" style="font-size:10px;padding:7px 12px" onclick="markLeadPresentationViewed(\'${escHtml(p.id)}\')">Registrar visualização</button>\n          <button class="btn btn-danger" style="font-size:10px;padding:7px 12px" onclick="removeLeadPresentation('${escHtml(p.id)}')">Remover</button>
         </div>
       </div>
     `;
@@ -1651,6 +1661,77 @@ function renderKanban() {
       </div>
     `;
   }).join('');
+}
+
+
+/* ════════════════════════════
+   PRESENTATION METRICS V19
+════════════════════════════ */
+function getAllLeadPresentations() {
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  const list = [];
+
+  Object.entries(crm || {}).forEach(([leadId, data]) => {
+    (data.presentations || []).forEach(p => {
+      list.push({ leadId, ...p });
+    });
+  });
+
+  return list;
+}
+
+function getPresentationStatsForLead(leadId) {
+  const crm = ensureLeadCrm(leadId, activeLeadDrawerData || {});
+  const presentations = Array.isArray(crm.presentations) ? crm.presentations : [];
+
+  const total = presentations.length;
+  const viewed = presentations.filter(p => Number(p.views || 0) > 0).length;
+  const totalViews = presentations.reduce((sum, p) => sum + Number(p.views || 0), 0);
+
+  return { total, viewed, totalViews };
+}
+
+function markLeadPresentationViewed(presentationId) {
+  if (!activeLeadDrawerId) return;
+
+  const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+  const p = (crm.presentations || []).find(item => item.id === presentationId);
+  if (!p) return;
+
+  p.views = Number(p.views || 0) + 1;
+  p.lastViewedAt = new Date().toISOString();
+  p.lastViewedAtLabel = crmNowLabel();
+
+  saveLeadCrm(activeLeadDrawerId, crm);
+  addLeadHistory(activeLeadDrawerId, `Apresentação visualizada: ${p.title || 'Apresentação'}`, activeLeadDrawerData || {});
+
+  renderLeadPresentations();
+  if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+  notify('Visualização registrada.');
+}
+
+function renderPresentationMetricsHeader() {
+  const list = document.getElementById('leadPresentationsList');
+  if (!list || !activeLeadDrawerId) return '';
+
+  const stats = getPresentationStatsForLead(activeLeadDrawerId);
+
+  return `
+    <div class="presentation-metrics-mini">
+      <div class="presentation-metric">
+        <div class="presentation-metric-label">Apresentações</div>
+        <div class="presentation-metric-value">${stats.total}</div>
+      </div>
+      <div class="presentation-metric">
+        <div class="presentation-metric-label">Visualizadas</div>
+        <div class="presentation-metric-value">${stats.viewed}</div>
+      </div>
+      <div class="presentation-metric">
+        <div class="presentation-metric-label">Acessos</div>
+        <div class="presentation-metric-value">${stats.totalViews}</div>
+      </div>
+    </div>
+  `;
 }
 
 /* ════════════════════════════
