@@ -6779,3 +6779,33 @@ document.addEventListener('DOMContentLoaded', () => {
     loadLeadsFromSupabase();
   }, 1500);
 });
+
+
+/* ===== V13 TIMELINE ===== */
+function getLeadTimelineEvents(leadId){
+  const store = (typeof getLeadCrmStore === 'function') ? getLeadCrmStore() : {};
+  const crm = store[leadId] || {};
+  const events = [];
+
+  (crm.notes || []).forEach(n => events.push({
+    type:'note',
+    at:n.at || '',
+    text:n.text || ''
+  }));
+
+  (crm.history || []).forEach(h => events.push({
+    type:'history',
+    at:h.at || '',
+    text:h.text || ''
+  }));
+
+  if (crm.followUpDate) {
+    events.push({
+      type:'followup',
+      at:crm.followUpDate,
+      text:'Follow-up agendado'
+    });
+  }
+
+  return events.reverse();
+}
