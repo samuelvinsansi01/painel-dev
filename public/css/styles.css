@@ -1382,3 +1382,84 @@ body.auth-locked .app{
     font-size:28px!important;
   }
 }
+
+
+/* ══ EVOLUTION API V24 ══ */
+.evo-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  min-height:0;
+}
+.evo-form{
+  display:flex;
+  flex-direction:column;
+  gap:9px;
+}
+.evo-label{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.evo-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:8px;
+}
+.evo-status-card{
+  display:flex;
+  gap:12px;
+  align-items:center;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  padding:16px;
+  margin-bottom:14px;
+}
+.evo-status-card.ok{border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06);}
+.evo-status-card.err{border-color:rgba(255,92,92,.35);background:rgba(255,92,92,.06);}
+.evo-status-card.warn{border-color:rgba(240,164,41,.35);background:rgba(240,164,41,.07);}
+.evo-status-icon{
+  width:40px;
+  height:40px;
+  border-radius:13px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--surface2);
+  border:1px solid var(--border);
+}
+.evo-status-title{
+  font-weight:800;
+  font-size:14px;
+  margin-bottom:4px;
+}
+.evo-status-text{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+}
+.evo-quick-test{
+  display:flex;
+  gap:8px;
+  margin-top:10px;
+}
+.evo-quick-test input{flex:1;}
+.evo-test-result{
+  margin-top:10px;
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+  color:var(--muted);
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px;
+  min-height:38px;
+}
+@media(max-width:900px){
+  .evo-grid{grid-template-columns:1fr;}
+  .evo-quick-test{flex-direction:column;}
+}

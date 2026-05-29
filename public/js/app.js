@@ -1827,6 +1827,150 @@ function renderProductionReadyNote() {
   box.insertAdjacentHTML('beforeend', '<br><span id="productionReadyNote" class="production-ready-note">CRM DEV estável</span>');
 }
 
+
+/* ════════════════════════════
+   EVOLUTION API V24
+════════════════════════════ */
+const EVOLUTION_SETTINGS_KEY = 'vs_evolution_settings_v1';
+
+function getEvolutionSettings() {
+  try {
+    return JSON.parse(localStorage.getItem(EVOLUTION_SETTINGS_KEY) || '{}');
+  } catch {
+    return {};
+  }
+}
+
+function saveEvolutionSettings() {
+  const settings = {
+    url: (document.getElementById('evoUrl')?.value || '').trim().replace(/\/$/, ''),
+    instance: (document.getElementById('evoInstance')?.value || '').trim(),
+    apiKey: (document.getElementById('evoApiKey')?.value || '').trim()
+  };
+
+  localStorage.setItem(EVOLUTION_SETTINGS_KEY, JSON.stringify(settings));
+  renderEvolutionSettings();
+  notify('Configuração da Evolution salva.');
+}
+
+function renderEvolutionSettings() {
+  const settings = getEvolutionSettings();
+
+  const url = document.getElementById('evoUrl');
+  const instance = document.getElementById('evoInstance');
+  const key = document.getElementById('evoApiKey');
+
+  if (url) url.value = settings.url || '';
+  if (instance) instance.value = settings.instance || '';
+  if (key) key.value = settings.apiKey || '';
+
+  updateEvolutionStatusCard('warn', 'Não testado', settings.url ? '// configuração carregada' : '// salve os dados da Evolution');
+}
+
+function updateEvolutionStatusCard(type, title, text) {
+  const card = document.getElementById('evoStatusCard');
+  if (!card) return;
+
+  card.classList.remove('ok','err','warn');
+  if (type) card.classList.add(type);
+
+  card.innerHTML = `
+    <div class="evo-status-icon">${type === 'ok' ? '✅' : type === 'err' ? '⚠️' : '⚡'}</div>
+    <div>
+      <div class="evo-status-title">${escHtml(title || 'Status')}</div>
+      <div class="evo-status-text">${escHtml(text || '')}</div>
+    </div>
+  `;
+}
+
+function getEvolutionHeaders(settings) {
+  const headers = { 'Content-Type': 'application/json' };
+  if (settings.apiKey) headers.apikey = settings.apiKey;
+  return headers;
+}
+
+async function testEvolutionConnection() {
+  const settings = getEvolutionSettings();
+
+  if (!settings.url || !settings.instance || !settings.apiKey) {
+    updateEvolutionStatusCard('err', 'Configuração incompleta', 'Preencha URL, instância e API Key.');
+    notify('Preencha URL, instância e API Key.', 'warn');
+    return;
+  }
+
+  updateEvolutionStatusCard('warn', 'Testando...', 'Consultando status da instância.');
+
+  try {
+    const endpoint = `${settings.url}/instance/connectionState/${encodeURIComponent(settings.instance)}`;
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: getEvolutionHeaders(settings)
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      updateEvolutionStatusCard('err', 'Falha na conexão', data?.message || `HTTP ${res.status}`);
+      return;
+    }
+
+    const state = data?.instance?.state || data?.state || data?.status || 'conectado';
+    updateEvolutionStatusCard('ok', 'Evolution respondendo', `Status: ${state}`);
+    notify('Evolution conectada.');
+  } catch (err) {
+    updateEvolutionStatusCard('err', 'Erro ao conectar', err?.message || 'Falha desconhecida.');
+  }
+}
+
+async function validateEvolutionNumber() {
+  const settings = getEvolutionSettings();
+  const result = document.getElementById('evoTestResult');
+  const number = (document.getElementById('evoNumberTest')?.value || '').replace(/\D/g,'');
+
+  if (!settings.url || !settings.instance || !settings.apiKey) {
+    if (result) result.textContent = 'Configure a Evolution primeiro.';
+    return;
+  }
+
+  if (!number || number.length < 10) {
+    if (result) result.textContent = 'Informe um número com DDI + DDD.';
+    return;
+  }
+
+  if (result) result.textContent = 'Validando número...';
+
+  try {
+    const endpoint = `${settings.url}/chat/whatsappNumbers/${encodeURIComponent(settings.instance)}`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: getEvolutionHeaders(settings),
+      body: JSON.stringify({ numbers: [number] })
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      if (result) result.textContent = `Erro: ${data?.message || 'falha na validação'}`;
+      return;
+    }
+
+    const item = Array.isArray(data) ? data[0] : (data?.data?.[0] || data?.result?.[0] || data);
+    const exists = item?.exists ?? item?.isWhatsapp ?? item?.jid ?? item?.numberExists;
+
+    if (result) {
+      result.textContent = exists
+        ? `✅ Número válido no WhatsApp: ${number}`
+        : `⚠️ Número não confirmado: ${number}`;
+    }
+  } catch (err) {
+    if (result) result.textContent = `Erro: ${err?.message || 'falha desconhecida'}`;
+  }
+}
+
+function renderEvolutionPanel() {
+  renderEvolutionSettings();
+}
+
 /* ════════════════════════════
    DEFAULT RAMOS
 ════════════════════════════ */

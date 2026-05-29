@@ -805,6 +805,54 @@
   </div>
 </div>
 
+
+<!-- ── EVOLUTION API ── -->
+<div class="panel" id="panel-evolution">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Evolution <span>API.</span></div>
+    <div class="page-sub">// conexão WhatsApp · validação · disparo</div>
+  </div>
+
+  <div class="evo-grid">
+    <div class="stretch-card">
+      <div class="card-title">Configuração</div>
+      <div class="evo-form">
+        <label class="evo-label">URL da Evolution</label>
+        <input id="evoUrl" type="url" placeholder="https://sua-evolution.com">
+
+        <label class="evo-label">Instância</label>
+        <input id="evoInstance" type="text" placeholder="nome-da-instancia">
+
+        <label class="evo-label">API Key</label>
+        <input id="evoApiKey" type="password" placeholder="sua-api-key">
+
+        <div class="evo-actions">
+          <button class="btn btn-primary" onclick="saveEvolutionSettings()">Salvar configuração</button>
+          <button class="btn btn-ghost" onclick="testEvolutionConnection()">Testar conexão</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="card-title">Status da instância</div>
+      <div id="evoStatusCard" class="evo-status-card">
+        <div class="evo-status-icon">⚡</div>
+        <div>
+          <div class="evo-status-title">Não testado</div>
+          <div class="evo-status-text">// salve e teste a conexão</div>
+        </div>
+      </div>
+
+      <div class="evo-quick-test">
+        <input id="evoNumberTest" type="text" placeholder="5511999999999">
+        <button class="btn btn-ghost" onclick="validateEvolutionNumber()">Validar número</button>
+      </div>
+
+      <div id="evoTestResult" class="evo-test-result"></div>
+    </div>
+  </div>
+</div>
+
 </main>
 
 <!-- MODAIS -->
