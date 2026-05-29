@@ -23,6 +23,11 @@
   </div>
   <nav class="sidebar-nav">
     <div class="nav-section-label">Principal</div>
+    <div class="nav-item" onclick="openGlobalSearch()" data-label="Busca">
+      <div class="nav-icon">🔎</div>
+      <span class="nav-label">Busca</span>
+      <span class="nav-badge">⌘K</span>
+    </div>
     <div class="nav-item active" onclick="switchPanel('inicio')" data-label="Início">
       <div class="nav-icon">📊</div>
       <span class="nav-label">Início</span>
@@ -88,6 +93,24 @@
     </div>
   </div>
 </aside>
+
+
+<!-- GLOBAL SEARCH -->
+<div class="global-search-overlay" id="globalSearchOverlay" onclick="closeGlobalSearch(event)">
+  <div class="global-search-modal" onclick="event.stopPropagation()">
+    <div class="global-search-head">
+      <div>
+        <div class="global-search-title">Busca global</div>
+        <div class="global-search-sub">// pesquise por empresa, telefone, site ou Instagram</div>
+      </div>
+      <button class="global-search-close" onclick="closeGlobalSearch()">×</button>
+    </div>
+    <input id="globalSearchInput" class="global-search-input" type="text" placeholder="Digite para buscar..." oninput="renderGlobalSearchResults()" />
+    <div id="globalSearchResults" class="global-search-results">
+      <div class="global-search-empty">// comece a digitar para pesquisar</div>
+    </div>
+  </div>
+</div>
 
 <main class="main">
 
