@@ -1697,3 +1697,73 @@ body.auth-locked .app{
   .queue-v27-row{grid-template-columns:1fr;}
   .queue-v27-inline,.lead-queue-form{grid-template-columns:1fr;}
 }
+
+
+/* ══ CONTROLE DE FILA V28 ══ */
+.queue-control-bar{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:12px;
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:12px 14px;
+  margin-bottom:16px;
+}
+.queue-control-left{
+  display:flex;
+  align-items:center;
+  gap:10px;
+}
+.queue-control-icon{
+  width:34px;
+  height:34px;
+  border-radius:11px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--bg);
+  border:1px solid var(--border2);
+}
+.queue-control-title{
+  font-weight:800;
+  font-size:13px;
+}
+.queue-control-text{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  margin-top:3px;
+}
+.queue-control-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.queue-state-pill{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  border:1px solid var(--border2);
+  border-radius:999px;
+  padding:4px 8px;
+}
+.queue-state-pill.running{
+  color:var(--ok);
+  border-color:rgba(78,203,113,.35);
+  background:rgba(78,203,113,.06);
+}
+.queue-state-pill.paused{
+  color:var(--warning);
+  border-color:rgba(240,164,41,.35);
+  background:rgba(240,164,41,.07);
+}
+.queue-v28-template{
+  color:var(--accent);
+}
+@media(max-width:760px){
+  .queue-control-bar{
+    align-items:flex-start;
+    flex-direction:column;
+  }
+}
