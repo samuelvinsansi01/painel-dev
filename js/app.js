@@ -1,4 +1,72 @@
 
+function renderCommercialDashboard() {
+  const s = getDashboardStats();
+  return `
+  <section class="dashboard-commercial">
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-title">Leads Ativos</div><div class="dash-value">${s.total}</div></div>
+      <div class="dash-card"><div class="dash-title">Notas</div><div class="dash-value">${s.notes}</div></div>
+      <div class="dash-card"><div class="dash-title">Atividades</div><div class="dash-value">${s.history}</div></div>
+      <div class="dash-card"><div class="dash-title">Follow-ups Hoje</div><div class="dash-value">${s.followToday}</div></div>
+    </div>
+    <div class="dash-grid">
+      <div class="dash-card"><div class="dash-title">Contato</div><div class="dash-value">${s.contato}</div></div>
+      <div class="dash-card"><div class="dash-title">Responderam</div><div class="dash-value">${s.respondeu}</div></div>
+      <div class="dash-card"><div class="dash-title">Reunião</div><div class="dash-value">${s.reuniao}</div></div>
+      <div class="dash-card"><div class="dash-title">Proposta</div><div class="dash-value">${s.proposta}</div></div>
+      <div class="dash-card"><div class="dash-title">Fechados</div><div class="dash-value">${s.fechado}</div></div>
+    </div>
+  </section>`;
+}
+
+
+/* DASHBOARD COMMERCIAL */
+function getDashboardStats() {
+  const crmStore = JSON.parse(localStorage.getItem('vs_lead_crm_v1') || '{}');
+  const stats = {
+    total: 0,
+    contato: 0,
+    respondeu: 0,
+    reuniao: 0,
+    proposta: 0,
+    fechado: 0,
+    perdido: 0,
+    notes: 0,
+    history: 0,
+    followToday: 0,
+    followLate: 0,
+    followNext7: 0
+  };
+
+  const today = new Date();
+  const end7 = new Date();
+  end7.setDate(end7.getDate()+7);
+
+  Object.values(crmStore).forEach(crm => {
+    stats.total++;
+    const p = crm.pipelineStatus || 'contato_enviado';
+    if (p.includes('contato')) stats.contato++;
+    else if (p.includes('responde')) stats.respondeu++;
+    else if (p.includes('reun')) stats.reuniao++;
+    else if (p.includes('proposta')) stats.proposta++;
+    else if (p.includes('fechado')) stats.fechado++;
+    else if (p.includes('perdido')) stats.perdido++;
+
+    stats.notes += (crm.notes||[]).length;
+    stats.history += (crm.history||[]).length;
+
+    if (crm.followUpDate){
+      const d=new Date(crm.followUpDate+'T00:00:00');
+      const ds=d.toDateString();
+      if(ds===today.toDateString()) stats.followToday++;
+      else if(d<today) stats.followLate++;
+      else if(d<=end7) stats.followNext7++;
+    }
+  });
+  return stats;
+}
+
+
 /* V9 DATA LAYER */
 class LocalStorageAdapter {
   load(key){ try { return JSON.parse(localStorage.getItem(key)); } catch(e){ return null; } }
@@ -2006,7 +2074,7 @@ function renderInicio() {
 
   const tbody = document.getElementById('inicioTbody');
   if (!totalItems) {
-    tbody.innerHTML = `<tr><td colspan="7" class="table-empty">${inicioBuscaQ ? `Nenhum resultado para "${inicioBuscaEl.value}"` : `Nenhuma empresa com status "${selectedStatus}" neste dia`}</td></tr>`;
+    tbody.innerHTML = `${renderCommercialDashboard()}<tr><td colspan="7" class="table-empty">${inicioBuscaQ ? `Nenhum resultado para "${inicioBuscaEl.value}"` : `Nenhuma empresa com status "${selectedStatus}" neste dia`}</td></tr>`;
   } else {
     tbody.innerHTML = pageItems.map(e => {
       const googleUrl = e.googleUrl || '';

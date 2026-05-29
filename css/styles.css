@@ -720,3 +720,9 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   .global-search-result{align-items:flex-start;}
   .global-search-result-status{display:none;}
 }
+
+.dashboard-commercial{margin-bottom:20px}
+.dash-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:12px;margin-bottom:12px}
+.dash-card{padding:14px;border:1px solid var(--border,#2a2a2a);border-radius:14px;background:var(--surface,#111)}
+.dash-title{font-size:11px;opacity:.7}
+.dash-value{font-size:28px;font-weight:800;margin-top:6px}
