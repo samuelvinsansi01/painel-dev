@@ -963,6 +963,119 @@ document.addEventListener('keydown', (event) => {
   }
 });
 
+
+/* ════════════════════════════
+   HOME PRO DASHBOARD V12.1
+════════════════════════════ */
+function getHomeProStats() {
+  const data = ensureWeekData();
+  const leads = flattenWeekData(data);
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  const crmItems = Object.values(crm || {});
+
+  const todayIso = new Date().toISOString().slice(0,10);
+  const followHoje = crmItems.filter(item => item && item.followUpDate === todayIso).length;
+  const followAtrasados = crmItems.filter(item => item && item.followUpDate && item.followUpDate < todayIso).length;
+
+  const pipelineCounts = {
+    contato_enviado: 0,
+    respondeu: 0,
+    reuniao: 0,
+    proposta: 0,
+    fechado: 0,
+    perdido: 0
+  };
+
+  crmItems.forEach(item => {
+    const key = item?.pipelineStatus || 'contato_enviado';
+    if (pipelineCounts[key] !== undefined) pipelineCounts[key]++;
+  });
+
+  const aguardandoResposta = leads.filter(l => {
+    const st = l.status || 'Não enviada';
+    return st === 'Enviada' || st === 'Em fila';
+  }).length;
+
+  return {
+    totalLeads: leads.length,
+    followHoje,
+    followAtrasados,
+    aguardandoResposta,
+    fechados: pipelineCounts.fechado || leads.filter(l => (l.status || '') === 'Fechada').length,
+    pipelineCounts
+  };
+}
+
+function renderHomeProDashboard() {
+  const host = document.getElementById('homeProDashboardHost');
+  if (!host) return;
+
+  const s = getHomeProStats();
+  const max = Math.max(
+    s.pipelineCounts.contato_enviado,
+    s.pipelineCounts.respondeu,
+    s.pipelineCounts.reuniao,
+    s.pipelineCounts.proposta,
+    s.pipelineCounts.fechado,
+    1
+  );
+
+  const pct = (n) => Math.max(4, Math.round((n / max) * 100));
+
+  const stages = [
+    ['Contato', s.pipelineCounts.contato_enviado],
+    ['Respondeu', s.pipelineCounts.respondeu],
+    ['Reunião', s.pipelineCounts.reuniao],
+    ['Proposta', s.pipelineCounts.proposta],
+    ['Fechado', s.pipelineCounts.fechado],
+  ];
+
+  host.innerHTML = `
+    <div class="home-pro-dashboard">
+      <div class="home-pro-card">
+        <div class="home-pro-label">Leads ativos</div>
+        <div class="home-pro-value acc">${s.totalLeads}</div>
+        <div class="home-pro-hint">// base carregada</div>
+      </div>
+      <div class="home-pro-card">
+        <div class="home-pro-label">Follow-ups hoje</div>
+        <div class="home-pro-value ${s.followHoje ? 'warn' : ''}">${s.followHoje}</div>
+        <div class="home-pro-hint">${s.followAtrasados ? `${s.followAtrasados} atrasado(s)` : '// nada atrasado'}</div>
+      </div>
+      <div class="home-pro-card">
+        <div class="home-pro-label">Aguardando resposta</div>
+        <div class="home-pro-value">${s.aguardandoResposta}</div>
+        <div class="home-pro-hint">// enviados ou em fila</div>
+      </div>
+      <div class="home-pro-card">
+        <div class="home-pro-label">Fechados</div>
+        <div class="home-pro-value ok">${s.fechados}</div>
+        <div class="home-pro-hint">// pipeline comercial</div>
+      </div>
+    </div>
+
+    <div class="home-pro-funnel">
+      <div class="home-pro-funnel-head">
+        <div class="home-pro-funnel-title">Funil comercial</div>
+        <div class="home-pro-funnel-sub">// visão resumida do pipeline</div>
+      </div>
+      <div class="home-pro-funnel-grid">
+        ${stages.map(([label,count]) => `
+          <div class="home-pro-stage">
+            <div class="home-pro-stage-top">
+              <div class="home-pro-stage-name">${escHtml(label)}</div>
+              <div class="home-pro-stage-count">${count}</div>
+            </div>
+            <div class="home-pro-bar">
+              <div class="home-pro-bar-fill" style="width:${pct(count)}%"></div>
+            </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 /* ════════════════════════════
    DEFAULT RAMOS
 ════════════════════════════ */
@@ -2035,6 +2148,7 @@ function renderRamoSelect() {
    INÍCIO — RENDER
 ════════════════════════════ */
 function renderInicio() {
+  renderHomeProDashboard();
   const data = ensureWeekData();
   const weekDays = currentWeekDays();
   const today = todayStr();
