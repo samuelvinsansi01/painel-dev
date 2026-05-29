@@ -515,3 +515,26 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   .zapLeft { height: 60vh; }
   .chip-accordion.open { max-height: 60vh; }
 }
+
+/* ══ LEAD DETAIL — ficha individual do lead ══ */
+.lead-detail-header{display:flex;align-items:flex-start;justify-content:space-between;gap:16px;flex-wrap:wrap;}
+.lead-detail-grid{display:grid;grid-template-columns:minmax(0,1.1fr) minmax(320px,0.9fr);gap:16px;align-items:start;}
+.lead-hero{display:flex;align-items:flex-start;justify-content:space-between;gap:14px;flex-wrap:wrap;margin-bottom:16px;}
+.lead-name{font-size:26px;font-weight:800;letter-spacing:-0.04em;line-height:1.05;}
+.lead-meta{display:flex;gap:6px;flex-wrap:wrap;margin-top:10px;}
+.lead-kv{display:grid;grid-template-columns:120px 1fr;gap:8px 12px;font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);align-items:start;}
+.lead-kv strong{color:var(--muted);font-weight:500;text-transform:uppercase;letter-spacing:0.08em;font-size:8px;}
+.lead-action-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:8px;margin-top:16px;}
+.lead-timeline{display:flex;flex-direction:column;gap:10px;}
+.lead-timeline-item{background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:12px 14px;}
+.lead-timeline-date{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.08em;text-transform:uppercase;margin-bottom:5px;}
+.lead-timeline-title{font-size:12px;font-weight:700;color:var(--text);}
+.lead-empty-note{font-family:'DM Mono',monospace;font-size:10px;color:var(--muted);line-height:1.7;}
+.pipeline-preview{display:flex;flex-direction:column;gap:6px;}
+.pipeline-step{display:flex;align-items:center;gap:8px;font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);}
+.pipeline-dot{width:8px;height:8px;border-radius:50%;background:var(--border2);flex-shrink:0;}
+.pipeline-step.active{color:var(--accent);}
+.pipeline-step.active .pipeline-dot{background:var(--accent);box-shadow:0 0 8px rgba(184,240,89,0.45);}
+.lead-mini-btn{background:none;border:1px solid var(--border2);color:var(--text2);border-radius:6px;font-family:'DM Mono',monospace;font-size:8px;padding:4px 8px;cursor:pointer;transition:all 0.18s;}
+.lead-mini-btn:hover{border-color:var(--accent);color:var(--accent);background:var(--accent-dim);}
+@media(max-width:900px){.lead-detail-grid{grid-template-columns:1fr}.lead-kv{grid-template-columns:1fr}.lead-name{font-size:22px}}

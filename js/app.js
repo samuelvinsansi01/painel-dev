@@ -891,8 +891,10 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
-const PANELS = ['inicio','importar','validacao','atribuicao','instagram','fila-zap','acompanhamento','redirecionamentos','configuracoes'];
+const PANELS = ['inicio','lead','importar','validacao','atribuicao','instagram','fila-zap','acompanhamento','redirecionamentos','configuracoes'];
+let previousPanelBeforeLead = 'inicio';
 function switchPanel(name) {
+  if (name !== 'lead') previousPanelBeforeLead = name;
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
     if (el) el.classList.toggle('active', p===name);
@@ -903,6 +905,7 @@ function switchPanel(name) {
     el.classList.toggle('active', panelMap[label] === name);
   });
   if (name==='inicio')         renderInicio();
+  if (name==='lead')           renderLeadDetail();
   if (name==='importar')       renderImportarPanel();
   if (name==='validacao')      renderValidacao();
   if (name==='atribuicao')     { renderAtribuicao(); updateAtribTabCounts(); if (atribActiveTab==='insta') { renderAtribInstaFila(); updateAtribInstaCorteInfo(); } }
@@ -1265,6 +1268,7 @@ function renderInicio() {
         <td><select class="status-select" onchange="updateStatus('${e.id}','${selectedDay}',this.value)">${getStatusOptions(e.status||'Não enviada').map(s=>`<option value="${s}"${(e.status||'Não enviada')===s?' selected':''}>${s}</option>`).join('')}</select></td>
         <td><button class="btn btn-ghost" style="font-size:9px;padding:4px 9px" onclick="showMsg('${e.id}','${selectedDay}')">Msg</button></td>
         <td style="white-space:nowrap">
+          <button class="lead-mini-btn" onclick="openLeadDetail('${e.id}','semana','${selectedDay}')" title="Abrir ficha do lead">Ficha</button>
           <button onclick="moverParaBacklogZapDoDia('${e.id}','${selectedDay}')" title="Mover para Backlog Zap"
             style="background:none;border:1px solid var(--border2);color:var(--muted);border-radius:5px;font-family:'DM Mono',monospace;font-size:9px;padding:3px 8px;cursor:pointer;margin-right:4px;transition:all 0.15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
@@ -1284,6 +1288,134 @@ function renderInicio() {
 
 function setDay(day)    { selectedDay = day; selectedStatus = 'Não enviada'; inicioPage = 1; const b=document.getElementById('inicioBusca'); if(b) b.value=''; renderInicio(); }
 function setStatus(st)  { selectedStatus = st; inicioPage = 1; const b=document.getElementById('inicioBusca'); if(b) b.value=''; renderInicio(); }
+
+
+/* ════════════════════════════
+   LEAD DETAIL — FICHA INDIVIDUAL
+   Primeira camada estrutural: visualiza o lead sem alterar dados.
+════════════════════════════ */
+let activeLeadContext = null;
+const PIPELINE_STEPS = ['Novo','Validado','Atribuído','Contato enviado','Respondeu','Reunião','Proposta','Fechado'];
+
+function getLeadStatusPipeline(lead, source) {
+  const st = lead?.status || '';
+  if (['Fechada','Fechou'].includes(st)) return 'Fechado';
+  if (['Respondida','Respondeu'].includes(st)) return 'Respondeu';
+  if (['Enviada','DM Enviada','Em fila'].includes(st)) return 'Contato enviado';
+  if (source === 'semana') return 'Atribuído';
+  if (source === 'atribuicao' || source === 'insta-fila') return 'Validado';
+  if (source === 'validacao') return 'Novo';
+  if (source === 'acompanhamento') return st || 'Contato enviado';
+  return st || 'Novo';
+}
+
+function findLeadById(id, preferredSource, preferredDay) {
+  const week = ensureWeekData();
+  if (preferredSource === 'semana' && preferredDay && week.days?.[preferredDay]) {
+    const lead = week.days[preferredDay].find(e => String(e.id) === String(id));
+    if (lead) return { lead, source: 'semana', day: preferredDay };
+  }
+  for (const [day, items] of Object.entries(week.days || {})) {
+    const lead = (items || []).find(e => String(e.id) === String(id));
+    if (lead) return { lead, source: 'semana', day };
+  }
+  const atrib = getAtribuicaoData().find(e => String(e.id) === String(id));
+  if (atrib) return { lead: atrib, source: 'atribuicao', day: null };
+  const val = getValData().find(e => String(e.id) === String(id));
+  if (val) return { lead: val, source: 'validacao', day: null };
+  const insta = getInstaFila().find(e => String(e.id) === String(id));
+  if (insta) return { lead: insta, source: 'insta-fila', day: null };
+  const acomp = getAcompData();
+  for (const [month, items] of Object.entries(acomp || {})) {
+    const lead = (items || []).find(e => String(e.id) === String(id));
+    if (lead) return { lead, source: 'acompanhamento', day: month };
+  }
+  return null;
+}
+
+function openLeadDetail(id, source = '', day = '') {
+  activeLeadContext = { id, source, day };
+  switchPanel('lead');
+}
+
+function backFromLeadDetail() {
+  switchPanel(previousPanelBeforeLead || 'inicio');
+}
+
+function renderLeadDetail() {
+  const wrap = document.getElementById('leadDetailContent');
+  const sub = document.getElementById('leadDetailSub');
+  if (!wrap) return;
+
+  const found = activeLeadContext ? findLeadById(activeLeadContext.id, activeLeadContext.source, activeLeadContext.day) : null;
+  if (!found) {
+    if (sub) sub.textContent = '// lead não encontrado na base atual';
+    wrap.innerHTML = `<div class="card"><div class="table-empty">Lead não encontrado. Ele pode ter sido movido, excluído ou migrado de etapa.</div></div>`;
+    return;
+  }
+
+  const { lead, source, day } = found;
+  const nome = lead.nome || lead.title || lead.name || 'Lead sem nome';
+  const site = lead.site || lead.website || '';
+  const instagram = lead.instagram || lead.instagramUrl || '';
+  const whatsapp = lead.whatsapp || lead.phone || lead.telefone || '';
+  const status = lead.status || getLeadStatusPipeline(lead, source);
+  const pipelineStatus = getLeadStatusPipeline(lead, source);
+  const canal = lead.canal || (whatsapp ? 'WhatsApp' : instagram ? 'Instagram' : 'Sem canal');
+  const origem = source === 'semana' ? `Semana · ${dayLabel(day)}` : source;
+  if (sub) sub.textContent = `// ${origem} · ${canal}`;
+
+  const pipelineHtml = PIPELINE_STEPS.map(step => `
+    <div class="pipeline-step${step === pipelineStatus ? ' active' : ''}">
+      <span class="pipeline-dot"></span><span>${escHtml(step)}</span>
+    </div>`).join('');
+
+  const historyHtml = `
+    <div class="lead-timeline-item">
+      <div class="lead-timeline-date">${escHtml(lead.createdAt || lead.importadoEm || lead.atribuidoEm || todayStr())}</div>
+      <div class="lead-timeline-title">Lead entrou no fluxo</div>
+      <div class="lead-empty-note">Origem atual: ${escHtml(origem)}.</div>
+    </div>
+    ${status ? `<div class="lead-timeline-item"><div class="lead-timeline-date">status atual</div><div class="lead-timeline-title">${escHtml(status)}</div></div>` : ''}
+  `;
+
+  wrap.innerHTML = `
+    <div class="lead-detail-grid">
+      <div class="card">
+        <div class="lead-hero">
+          <div>
+            <div class="lead-name">${escHtml(nome)}</div>
+            <div class="lead-meta">
+              <span class="q-badge info">${escHtml(origem)}</span>
+              <span class="q-badge ${whatsapp ? 'ok' : 'warn'}">${escHtml(canal)}</span>
+              <span class="q-badge ok">${escHtml(pipelineStatus)}</span>
+            </div>
+          </div>
+          <button class="btn btn-ghost" onclick="backFromLeadDetail()">← Voltar</button>
+        </div>
+        <div class="card-title">Dados da empresa</div>
+        <div class="lead-kv">
+          <strong>Empresa</strong><div>${escHtml(nome)}</div>
+          <strong>WhatsApp</strong><div>${whatsapp ? `<a href="${buildWaLink(whatsapp)}" target="_blank" style="color:var(--ok);text-decoration:none">${escHtml(whatsapp)}</a>` : '<span class="td-missing">—</span>'}</div>
+          <strong>Instagram</strong><div>${instagram ? `<a href="${escHtml(instagram)}" target="_blank" style="color:var(--insta);text-decoration:none">${escHtml(instagram)}</a>` : '<span class="td-missing">—</span>'}</div>
+          <strong>Site</strong><div>${site ? `<a href="${escHtml(site)}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml(site)}</a>` : '<span class="td-missing">—</span>'}</div>
+          <strong>Status</strong><div>${escHtml(status || 'Sem status')}</div>
+          <strong>Canal</strong><div>${escHtml(canal)}</div>
+        </div>
+        <div class="lead-action-grid">
+          ${whatsapp ? `<a class="btn btn-primary" href="${buildWaLink(whatsapp)}" target="_blank">Abrir WhatsApp</a>` : `<button class="btn btn-ghost" disabled>Sem WhatsApp</button>`}
+          ${instagram ? `<a class="btn btn-ghost" href="${escHtml(instagram)}" target="_blank">Abrir Instagram</a>` : `<button class="btn btn-ghost" disabled>Sem Instagram</button>`}
+          ${site ? `<a class="btn btn-ghost" href="${escHtml(site)}" target="_blank">Abrir site</a>` : `<button class="btn btn-ghost" disabled>Sem site</button>`}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:16px">
+        <div class="card"><div class="card-title">Pipeline</div><div class="pipeline-preview">${pipelineHtml}</div></div>
+        <div class="card"><div class="card-title">Próximas melhorias</div><div class="lead-empty-note">Esta primeira versão é só a ficha visual do lead. As próximas etapas serão: notas, histórico real, follow-up, oportunidades e apresentações vinculadas ao lead.</div></div>
+      </div>
+      <div class="card"><div class="card-title">Histórico</div><div class="lead-timeline">${historyHtml}</div></div>
+      <div class="card"><div class="card-title">Notas</div><div class="lead-empty-note">Ainda não salvamos notas nesta versão. Primeiro estamos criando a estrutura visual sem alterar os dados atuais.</div></div>
+    </div>`;
+}
 
 /* ════════════════════════════
    PAGINAÇÃO — HELPERS

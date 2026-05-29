@@ -1,20 +1,32 @@
-# Refatoração v1
+# Refactor v2 — Ficha individual do Lead
 
-Esta versão apenas separa a aplicação em arquivos externos, sem mudar o fluxo da plataforma.
+Esta versão mantém a estrutura separada em:
 
-## Arquivos
+- `index.html`
+- `css/styles.css`
+- `js/app.js`
 
-- `index.html`: estrutura HTML principal.
-- `css/styles.css`: todo o CSS que antes estava dentro da tag `<style>`.
-- `js/app.js`: todo o JavaScript que antes estava no final do HTML.
+## O que foi adicionado
 
-## O que foi mantido
+- Nova tela interna: `panel-lead`
+- Função `openLeadDetail(id, source, day)`
+- Ficha visual do lead com:
+  - dados da empresa
+  - canais de contato
+  - pipeline visual
+  - histórico inicial
+  - área futura de notas
+- Botão `Ficha` na lista de Leads Ativos da tela Início
 
-- Fluxo atual da plataforma.
-- LocalStorage/IndexedDB.
-- Login Supabase/Google.
-- Design e layout atuais.
+## O que NÃO foi alterado
 
-## Observação
+- Importação
+- Validação
+- Atribuição
+- Fila WhatsApp
+- Instagram
+- Redirecionamentos
+- localStorage / IndexedDB
+- Banco Supabase
 
-Foi adicionada a função `escapeHtml()` porque ela estava sendo usada pelo bloco de autenticação e estava causando erro no navegador.
+Esta versão ainda não salva notas nem altera o modelo de dados. Ela cria apenas a primeira camada visual para centralizar o lead.
