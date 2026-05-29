@@ -62,12 +62,17 @@ const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
    Não salva leads no banco ainda.
 ════════════════════════════ */
 function getAuthRedirectUrl() {
-  if (window.location.protocol === 'file:') {
-    notify('Abra pelo domínio publicado, não pelo arquivo direto.', 'warn');
-    return 'https://painel-dev-six.vercel.app';
+  // Mantém o retorno simples e igual às URLs cadastradas no Supabase.
+  // Evita voltar para /index.html, /alguma-rota ou file:// por engano.
+  const origin = window.location.origin;
+
+  if (origin === 'null' || window.location.protocol === 'file:') {
+    notify('Abra pelo localhost ou domínio publicado, não pelo arquivo direto.', 'warn');
+    return 'http://localhost:3000';
   }
 
-  return window.location.origin;
+  if (origin.includes('localhost')) return 'http://localhost:3000';
+  return 'https://painel.samuelvinsansi.com.br';
 }
 
 function getUserDisplayName(user) {
@@ -6288,3 +6293,34 @@ function getPipelineConversionMetrics() {
     closed: stats.closed || 0
   };
 }
+
+
+async function loadLeadsFromSupabase() {
+  try {
+    if (!window.supabaseAdapter || !window.sbClient) return;
+    const userRes = await sbClient.auth.getUser();
+    const user = userRes?.data?.user;
+    if (!user) return;
+
+    const { data, error } = await sbClient
+      .from('leads')
+      .select('*')
+      .eq('user_id', user.id);
+
+    if (error) {
+      console.error('Erro carregando leads', error);
+      return;
+    }
+
+    window.__supabaseLeads = data || [];
+    console.log('Leads carregados do Supabase:', window.__supabaseLeads.length);
+  } catch (e) {
+    console.error(e);
+  }
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(() => {
+    loadLeadsFromSupabase();
+  }, 1500);
+});
