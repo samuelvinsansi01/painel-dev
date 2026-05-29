@@ -2795,7 +2795,7 @@ function addWhatsappChip(){
   const dailyLimit = Number(document.getElementById('chipDailyLimit')?.value || 120);
   const blockSize = Number(document.getElementById('chipBlockSize')?.value || 30);
   const intervalSeconds = Number(document.getElementById('chipInterval')?.value || 120);
-  const blocks = (document.getElementById('chipBlocks')?.value || '08:00,10:00,14:00,16:00')
+  const blocks = (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00')
     .split(',')
     .map(v => v.trim())
     .filter(Boolean);
@@ -2901,7 +2901,7 @@ function assignChipsToReadyQueue(){
     item.chipInstance = selected.instance;
     item.intervalSeconds = Number(selected.intervalSeconds || 120);
     item.blockSize = Number(selected.blockSize || 30);
-    item.blocks = selected.blocks || ['08:00','10:00','14:00','16:00'];
+    item.blocks = selected.blocks || ['08:00','10:00','12:00','14:00'];
     item.updatedAt = new Date().toISOString();
 
     setChipUsedToday(selected.id, getChipUsedToday(selected.id) + 1);
@@ -2932,7 +2932,7 @@ function renderChipsOperationSummary(){
     Chips ativos: ${active.length}<br>
     Capacidade diária total: ${totalDaily}<br>
     Capacidade restante hoje: ${totalCapacity}<br>
-    Padrão recomendado: 120 por chip · 4 blocos de 30 · 120s
+    Padrão recomendado: 120 por chip · 4 blocos de 30 · 120s · espera 1h entre blocos
   `;
 }
 
@@ -3058,7 +3058,7 @@ function renderDispatchV30Panel() {
             <span class="dispatch-v30-pill">${ready.length} pronto(s)</span>
           </div>
           <div class="dispatch-v30-sub">
-            120 mensagens por chip · 4 lotes de 30 · 120s entre envios
+            120 mensagens por chip · 4 lotes de 30 · 120s entre envios · espera 1h
           </div>
         </div>
         <div class="dispatch-v30-actions">
@@ -3222,7 +3222,7 @@ function setChipBlockUsageV31(chipId, block, count) {
 }
 
 function getCurrentDispatchBlockV31(chip) {
-  const blocks = chip?.blocks?.length ? chip.blocks : ['08:00','10:00','14:00','16:00'];
+  const blocks = chip?.blocks?.length ? chip.blocks : ['08:00','10:00','12:00','14:00'];
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -3308,7 +3308,7 @@ function renderDispatchScheduleV31() {
       </div>
     </div>
     <div class="dispatch-v31-warning">
-      Regra ativa: 120 mensagens por chip · 4 blocos de 30 · 120 segundos entre envios.
+      Regra ativa: 120 mensagens por chip · 4 blocos de 30 · 120 segundos entre envios · espera 1h entre blocos.
     </div>
   `;
 }
@@ -3520,7 +3520,7 @@ function renderDispatchRuntimeV32() {
     <div class="dispatch-v32-runtime ${cls}">
       Estado: ${dispatchRunningV32 || runtime.running ? 'em execução' : 'parado'}<br>
       Próximo envio: ${next}<br>
-      Regra: 120s entre envios por chip · 30 por bloco · 120 por dia
+      Regra: 120s entre envios · 30 por bloco · 4 blocos · 120 por chip/dia
     </div>
   `;
 }
@@ -9321,3 +9321,18 @@ function authGateSelfTest() {
 // V27 panel hook fallback
 
 // chips panel fallback
+
+
+/* CONFIG DISPARO V33 */
+function getDispatchConfigTextV33() {
+  return {
+    dailyLimitTitle: 'LIMITE DIÁRIO POR CHIP',
+    dailyLimitValue: '120 msg',
+    dailyLimitHint: '4 lotes × 30 · espera 1h',
+    batchValue: '30 msg',
+    batchHint: 'por chip · 4 lotes por dia',
+    intervalValue: '2 min',
+    intervalHint: '120 seg fixo entre cada envio',
+    blocks: ['08:00', '10:00', '12:00', '14:00']
+  };
+}
