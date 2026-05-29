@@ -1,32 +1,30 @@
-# Refactor v2 — Ficha individual do Lead
+# Refactor V3 — Drawer/Ficha do Lead
 
-Esta versão mantém a estrutura separada em:
-
-- `index.html`
-- `css/styles.css`
-- `js/app.js`
+Esta versão adiciona a primeira base de CRM sem mexer no fluxo atual da plataforma.
 
 ## O que foi adicionado
 
-- Nova tela interna: `panel-lead`
-- Função `openLeadDetail(id, source, day)`
-- Ficha visual do lead com:
-  - dados da empresa
-  - canais de contato
-  - pipeline visual
-  - histórico inicial
-  - área futura de notas
-- Botão `Ficha` na lista de Leads Ativos da tela Início
+- Drawer lateral da Ficha do Lead.
+- Botão **Ficha** na Fila WhatsApp e na lista de empresas do disparo.
+- Pipeline comercial separado do status operacional.
+- Notas por lead.
+- Histórico simples por lead.
+- Persistência local em `vs_lead_crm_v1`.
 
-## O que NÃO foi alterado
+## O que não foi alterado
 
-- Importação
-- Validação
-- Atribuição
-- Fila WhatsApp
-- Instagram
-- Redirecionamentos
-- localStorage / IndexedDB
-- Banco Supabase
+- Importação.
+- Validação.
+- Atribuição.
+- Redis.
+- Supabase/banco.
+- Fluxo de disparo atual.
 
-Esta versão ainda não salva notas nem altera o modelo de dados. Ela cria apenas a primeira camada visual para centralizar o lead.
+## Teste recomendado
+
+1. Abrir Fila WhatsApp.
+2. Clicar em **Ficha** em um lead.
+3. Alterar pipeline.
+4. Adicionar uma nota.
+5. Fechar e abrir a ficha novamente.
+6. Recarregar a página e confirmar que nota/pipeline continuam salvos.

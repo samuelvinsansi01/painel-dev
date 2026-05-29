@@ -17,6 +17,7 @@ const INSTA_KEY      = 'vs_insta_fila_v2';  // fila instagram aguardando atribui
 const INSTA_WEEK_KEY = 'vs_insta_week_v1';  // leads instagram atribuídos por dia
 const INSTA_SCHED_KEY = 'vs_insta_sched_v1'; // cronograma instagram
 const FILA_DISPARO_KEY = 'vs_fila_disparo_v1'; // fila de disparo WhatsApp
+const LEAD_CRM_KEY   = 'vs_lead_crm_v1'; // notas, histórico e pipeline comercial
 
 // Supabase — usado primeiro apenas para login Google.
 // Ainda não mexe nos leads e ainda não substitui o localStorage.
@@ -129,6 +130,213 @@ async function logoutSupabase() {
   renderAuthUser(null);
   notify('Conta desconectada');
 }
+
+
+
+/* ════════════════════════════
+   CRM — FICHA DO LEAD
+   V1: drawer lateral com pipeline, notas e histórico.
+   Salva somente metadados no localStorage, sem mexer no fluxo atual.
+════════════════════════════ */
+const PIPELINE_STEPS = [
+  { id: 'contato_enviado', label: 'Contato enviado' },
+  { id: 'respondeu', label: 'Respondeu' },
+  { id: 'reuniao', label: 'Reunião' },
+  { id: 'proposta', label: 'Proposta' },
+  { id: 'fechado', label: 'Fechado' },
+  { id: 'perdido', label: 'Perdido' },
+];
+let activeLeadDrawerId = null;
+let activeLeadDrawerData = null;
+
+function getLeadCrmStore() {
+  try { return JSON.parse(localStorage.getItem(LEAD_CRM_KEY) || '{}'); }
+  catch { return {}; }
+}
+
+function saveLeadCrmStore(store) {
+  localStorage.setItem(LEAD_CRM_KEY, JSON.stringify(store || {}));
+}
+
+function crmNowLabel() {
+  return new Date().toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' });
+}
+
+function ensureLeadCrm(id, baseLead = {}) {
+  const store = getLeadCrmStore();
+  if (!store[id]) {
+    store[id] = {
+      pipelineStatus: baseLead.pipelineStatus || 'contato_enviado',
+      notes: [],
+      history: [{ at: crmNowLabel(), text: 'Ficha do lead criada' }],
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    };
+    saveLeadCrmStore(store);
+  } else {
+    store[id].notes = Array.isArray(store[id].notes) ? store[id].notes : [];
+    store[id].history = Array.isArray(store[id].history) ? store[id].history : [];
+    store[id].pipelineStatus = store[id].pipelineStatus || 'contato_enviado';
+  }
+  return store[id];
+}
+
+function saveLeadCrm(id, crm) {
+  const store = getLeadCrmStore();
+  store[id] = { ...crm, updatedAt: new Date().toISOString() };
+  saveLeadCrmStore(store);
+}
+
+function findLeadEverywhere(id) {
+  const data = ensureWeekData();
+  const weekLead = Object.values(data.days || {}).flat().find(e => e.id === id);
+  if (weekLead) return weekLead;
+
+  const atrib = getAtribuicaoData().find(e => e.id === id);
+  if (atrib) return atrib;
+
+  const val = getValData().find(e => e.id === id);
+  if (val) return val;
+
+  const insta = getInstaFila().find(e => e.id === id);
+  if (insta) return insta;
+
+  const mk = currentMonthKey();
+  const acomp = getAcompData();
+  const acompLead = (acomp[mk] || []).find(e => e.id === id);
+  if (acompLead) return acompLead;
+
+  for (const fila of Object.values(filaDisparo || {})) {
+    const f = (fila || []).find(e => e.id === id);
+    if (f) return f;
+  }
+  return null;
+}
+
+function normalizeLeadForDrawer(lead = {}) {
+  return {
+    id: lead.id,
+    nome: lead.nome || lead.companyName || lead.title || 'Lead sem nome',
+    categoria: lead.categoria || lead.categoryName || lead.ramo || lead.segmento || '',
+    cidade: lead.cidade || lead.city || lead.address?.city || '',
+    estado: lead.estado || lead.state || lead.address?.state || '',
+    whatsapp: lead.whatsapp || lead.phone || lead.telefone || '',
+    instagram: lead.instagram || lead.instagramUrl || '',
+    site: lead.site || lead.website || '',
+    googleUrl: lead.googleUrl || lead.mapsUrl || lead.url || '',
+    status: lead.status || 'Não enviada',
+    criadoEm: lead.criadoEm || lead.importadoEm || '',
+  };
+}
+
+function leadDrawerLink(label, value, href, missingText = 'não informado') {
+  if (!value) return `<div class="lead-channel missing"><strong>${label}</strong><span>${missingText}</span></div>`;
+  return `<a class="lead-channel" href="${escHtml(href || value)}" target="_blank" rel="noopener"><strong>${label}</strong><span>${escHtml(value)}</span></a>`;
+}
+
+function renderLeadDrawer() {
+  if (!activeLeadDrawerData) return;
+  const lead = activeLeadDrawerData;
+  const crm = ensureLeadCrm(lead.id, lead);
+
+  const nameEl = document.getElementById('leadDrawerName');
+  const metaEl = document.getElementById('leadDrawerMeta');
+  const channelsEl = document.getElementById('leadDrawerChannels');
+  const pipelineEl = document.getElementById('leadDrawerPipeline');
+  const notesEl = document.getElementById('leadNotesList');
+  const historyEl = document.getElementById('leadHistoryList');
+  if (!nameEl || !metaEl || !channelsEl || !pipelineEl || !notesEl || !historyEl) return;
+
+  const local = [lead.cidade, lead.estado].filter(Boolean).join(' - ');
+  nameEl.textContent = lead.nome;
+  metaEl.textContent = [lead.categoria, local, `Status: ${lead.status}`].filter(Boolean).join(' · ') || 'sem detalhes adicionais';
+
+  const wa = String(lead.whatsapp || '').replace(/\D/g, '');
+  channelsEl.innerHTML = [
+    leadDrawerLink('WhatsApp', wa ? `+${wa}` : '', wa ? `https://wa.me/${wa}` : ''),
+    leadDrawerLink('Instagram', lead.instagram, lead.instagram),
+    leadDrawerLink('Site', lead.site, lead.site),
+    leadDrawerLink('Maps', lead.googleUrl, lead.googleUrl),
+  ].join('');
+
+  pipelineEl.innerHTML = PIPELINE_STEPS.map(step => `
+    <button class="lead-pipeline-step ${crm.pipelineStatus === step.id ? 'active' : ''}" onclick="updateLeadPipeline('${step.id}')">
+      ${escHtml(step.label)}
+    </button>
+  `).join('');
+
+  notesEl.innerHTML = crm.notes.length
+    ? crm.notes.slice().reverse().map(note => `
+      <div class="lead-note">
+        <div class="lead-note-date">${escHtml(note.at)}</div>
+        <div class="lead-note-text">${escHtml(note.text)}</div>
+      </div>
+    `).join('')
+    : '<div class="lead-note"><div class="lead-note-text" style="color:var(--muted)">// nenhuma nota ainda</div></div>';
+
+  historyEl.innerHTML = crm.history.length
+    ? crm.history.slice().reverse().map(item => `
+      <div class="lead-history-item">
+        <div class="lead-history-date">${escHtml(item.at)}</div>
+        <div class="lead-history-text">${escHtml(item.text)}</div>
+      </div>
+    `).join('')
+    : '<div class="lead-history-item"><div class="lead-history-text" style="color:var(--muted)">// sem histórico</div></div>';
+}
+
+function openLeadDrawer(id) {
+  const raw = findLeadEverywhere(id);
+  if (!raw) {
+    notify('Lead não encontrado para abrir a ficha.', 'warn');
+    return;
+  }
+  activeLeadDrawerId = id;
+  activeLeadDrawerData = normalizeLeadForDrawer(raw);
+  ensureLeadCrm(id, activeLeadDrawerData);
+  renderLeadDrawer();
+  const overlay = document.getElementById('leadDrawerOverlay');
+  const drawer = document.getElementById('leadDrawer');
+  if (overlay) overlay.classList.add('open');
+  if (drawer) drawer.setAttribute('aria-hidden', 'false');
+}
+
+function closeLeadDrawer() {
+  const overlay = document.getElementById('leadDrawerOverlay');
+  const drawer = document.getElementById('leadDrawer');
+  if (overlay) overlay.classList.remove('open');
+  if (drawer) drawer.setAttribute('aria-hidden', 'true');
+}
+
+function addLeadNote() {
+  if (!activeLeadDrawerId) return;
+  const input = document.getElementById('leadNoteInput');
+  const text = (input?.value || '').trim();
+  if (!text) { notify('Escreva uma nota antes de adicionar.', 'warn'); return; }
+  const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+  crm.notes.push({ at: crmNowLabel(), text });
+  crm.history.push({ at: crmNowLabel(), text: 'Nota adicionada' });
+  saveLeadCrm(activeLeadDrawerId, crm);
+  if (input) input.value = '';
+  renderLeadDrawer();
+  notify('Nota adicionada ao lead.');
+}
+
+function updateLeadPipeline(status) {
+  if (!activeLeadDrawerId) return;
+  const step = PIPELINE_STEPS.find(s => s.id === status);
+  if (!step) return;
+  const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+  const old = PIPELINE_STEPS.find(s => s.id === crm.pipelineStatus)?.label || 'Sem status';
+  crm.pipelineStatus = status;
+  crm.history.push({ at: crmNowLabel(), text: `Pipeline alterado: ${old} → ${step.label}` });
+  saveLeadCrm(activeLeadDrawerId, crm);
+  renderLeadDrawer();
+  notify(`Pipeline: ${step.label}`);
+}
+
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeLeadDrawer();
+});
 
 /* ════════════════════════════
    DEFAULT RAMOS
@@ -891,10 +1099,8 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
-const PANELS = ['inicio','lead','importar','validacao','atribuicao','instagram','fila-zap','acompanhamento','redirecionamentos','configuracoes'];
-let previousPanelBeforeLead = 'inicio';
+const PANELS = ['inicio','importar','validacao','atribuicao','instagram','fila-zap','acompanhamento','redirecionamentos','configuracoes'];
 function switchPanel(name) {
-  if (name !== 'lead') previousPanelBeforeLead = name;
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
     if (el) el.classList.toggle('active', p===name);
@@ -905,7 +1111,6 @@ function switchPanel(name) {
     el.classList.toggle('active', panelMap[label] === name);
   });
   if (name==='inicio')         renderInicio();
-  if (name==='lead')           renderLeadDetail();
   if (name==='importar')       renderImportarPanel();
   if (name==='validacao')      renderValidacao();
   if (name==='atribuicao')     { renderAtribuicao(); updateAtribTabCounts(); if (atribActiveTab==='insta') { renderAtribInstaFila(); updateAtribInstaCorteInfo(); } }
@@ -1268,7 +1473,6 @@ function renderInicio() {
         <td><select class="status-select" onchange="updateStatus('${e.id}','${selectedDay}',this.value)">${getStatusOptions(e.status||'Não enviada').map(s=>`<option value="${s}"${(e.status||'Não enviada')===s?' selected':''}>${s}</option>`).join('')}</select></td>
         <td><button class="btn btn-ghost" style="font-size:9px;padding:4px 9px" onclick="showMsg('${e.id}','${selectedDay}')">Msg</button></td>
         <td style="white-space:nowrap">
-          <button class="lead-mini-btn" onclick="openLeadDetail('${e.id}','semana','${selectedDay}')" title="Abrir ficha do lead">Ficha</button>
           <button onclick="moverParaBacklogZapDoDia('${e.id}','${selectedDay}')" title="Mover para Backlog Zap"
             style="background:none;border:1px solid var(--border2);color:var(--muted);border-radius:5px;font-family:'DM Mono',monospace;font-size:9px;padding:3px 8px;cursor:pointer;margin-right:4px;transition:all 0.15s"
             onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
@@ -1288,134 +1492,6 @@ function renderInicio() {
 
 function setDay(day)    { selectedDay = day; selectedStatus = 'Não enviada'; inicioPage = 1; const b=document.getElementById('inicioBusca'); if(b) b.value=''; renderInicio(); }
 function setStatus(st)  { selectedStatus = st; inicioPage = 1; const b=document.getElementById('inicioBusca'); if(b) b.value=''; renderInicio(); }
-
-
-/* ════════════════════════════
-   LEAD DETAIL — FICHA INDIVIDUAL
-   Primeira camada estrutural: visualiza o lead sem alterar dados.
-════════════════════════════ */
-let activeLeadContext = null;
-const PIPELINE_STEPS = ['Novo','Validado','Atribuído','Contato enviado','Respondeu','Reunião','Proposta','Fechado'];
-
-function getLeadStatusPipeline(lead, source) {
-  const st = lead?.status || '';
-  if (['Fechada','Fechou'].includes(st)) return 'Fechado';
-  if (['Respondida','Respondeu'].includes(st)) return 'Respondeu';
-  if (['Enviada','DM Enviada','Em fila'].includes(st)) return 'Contato enviado';
-  if (source === 'semana') return 'Atribuído';
-  if (source === 'atribuicao' || source === 'insta-fila') return 'Validado';
-  if (source === 'validacao') return 'Novo';
-  if (source === 'acompanhamento') return st || 'Contato enviado';
-  return st || 'Novo';
-}
-
-function findLeadById(id, preferredSource, preferredDay) {
-  const week = ensureWeekData();
-  if (preferredSource === 'semana' && preferredDay && week.days?.[preferredDay]) {
-    const lead = week.days[preferredDay].find(e => String(e.id) === String(id));
-    if (lead) return { lead, source: 'semana', day: preferredDay };
-  }
-  for (const [day, items] of Object.entries(week.days || {})) {
-    const lead = (items || []).find(e => String(e.id) === String(id));
-    if (lead) return { lead, source: 'semana', day };
-  }
-  const atrib = getAtribuicaoData().find(e => String(e.id) === String(id));
-  if (atrib) return { lead: atrib, source: 'atribuicao', day: null };
-  const val = getValData().find(e => String(e.id) === String(id));
-  if (val) return { lead: val, source: 'validacao', day: null };
-  const insta = getInstaFila().find(e => String(e.id) === String(id));
-  if (insta) return { lead: insta, source: 'insta-fila', day: null };
-  const acomp = getAcompData();
-  for (const [month, items] of Object.entries(acomp || {})) {
-    const lead = (items || []).find(e => String(e.id) === String(id));
-    if (lead) return { lead, source: 'acompanhamento', day: month };
-  }
-  return null;
-}
-
-function openLeadDetail(id, source = '', day = '') {
-  activeLeadContext = { id, source, day };
-  switchPanel('lead');
-}
-
-function backFromLeadDetail() {
-  switchPanel(previousPanelBeforeLead || 'inicio');
-}
-
-function renderLeadDetail() {
-  const wrap = document.getElementById('leadDetailContent');
-  const sub = document.getElementById('leadDetailSub');
-  if (!wrap) return;
-
-  const found = activeLeadContext ? findLeadById(activeLeadContext.id, activeLeadContext.source, activeLeadContext.day) : null;
-  if (!found) {
-    if (sub) sub.textContent = '// lead não encontrado na base atual';
-    wrap.innerHTML = `<div class="card"><div class="table-empty">Lead não encontrado. Ele pode ter sido movido, excluído ou migrado de etapa.</div></div>`;
-    return;
-  }
-
-  const { lead, source, day } = found;
-  const nome = lead.nome || lead.title || lead.name || 'Lead sem nome';
-  const site = lead.site || lead.website || '';
-  const instagram = lead.instagram || lead.instagramUrl || '';
-  const whatsapp = lead.whatsapp || lead.phone || lead.telefone || '';
-  const status = lead.status || getLeadStatusPipeline(lead, source);
-  const pipelineStatus = getLeadStatusPipeline(lead, source);
-  const canal = lead.canal || (whatsapp ? 'WhatsApp' : instagram ? 'Instagram' : 'Sem canal');
-  const origem = source === 'semana' ? `Semana · ${dayLabel(day)}` : source;
-  if (sub) sub.textContent = `// ${origem} · ${canal}`;
-
-  const pipelineHtml = PIPELINE_STEPS.map(step => `
-    <div class="pipeline-step${step === pipelineStatus ? ' active' : ''}">
-      <span class="pipeline-dot"></span><span>${escHtml(step)}</span>
-    </div>`).join('');
-
-  const historyHtml = `
-    <div class="lead-timeline-item">
-      <div class="lead-timeline-date">${escHtml(lead.createdAt || lead.importadoEm || lead.atribuidoEm || todayStr())}</div>
-      <div class="lead-timeline-title">Lead entrou no fluxo</div>
-      <div class="lead-empty-note">Origem atual: ${escHtml(origem)}.</div>
-    </div>
-    ${status ? `<div class="lead-timeline-item"><div class="lead-timeline-date">status atual</div><div class="lead-timeline-title">${escHtml(status)}</div></div>` : ''}
-  `;
-
-  wrap.innerHTML = `
-    <div class="lead-detail-grid">
-      <div class="card">
-        <div class="lead-hero">
-          <div>
-            <div class="lead-name">${escHtml(nome)}</div>
-            <div class="lead-meta">
-              <span class="q-badge info">${escHtml(origem)}</span>
-              <span class="q-badge ${whatsapp ? 'ok' : 'warn'}">${escHtml(canal)}</span>
-              <span class="q-badge ok">${escHtml(pipelineStatus)}</span>
-            </div>
-          </div>
-          <button class="btn btn-ghost" onclick="backFromLeadDetail()">← Voltar</button>
-        </div>
-        <div class="card-title">Dados da empresa</div>
-        <div class="lead-kv">
-          <strong>Empresa</strong><div>${escHtml(nome)}</div>
-          <strong>WhatsApp</strong><div>${whatsapp ? `<a href="${buildWaLink(whatsapp)}" target="_blank" style="color:var(--ok);text-decoration:none">${escHtml(whatsapp)}</a>` : '<span class="td-missing">—</span>'}</div>
-          <strong>Instagram</strong><div>${instagram ? `<a href="${escHtml(instagram)}" target="_blank" style="color:var(--insta);text-decoration:none">${escHtml(instagram)}</a>` : '<span class="td-missing">—</span>'}</div>
-          <strong>Site</strong><div>${site ? `<a href="${escHtml(site)}" target="_blank" style="color:var(--accent);text-decoration:none">${escHtml(site)}</a>` : '<span class="td-missing">—</span>'}</div>
-          <strong>Status</strong><div>${escHtml(status || 'Sem status')}</div>
-          <strong>Canal</strong><div>${escHtml(canal)}</div>
-        </div>
-        <div class="lead-action-grid">
-          ${whatsapp ? `<a class="btn btn-primary" href="${buildWaLink(whatsapp)}" target="_blank">Abrir WhatsApp</a>` : `<button class="btn btn-ghost" disabled>Sem WhatsApp</button>`}
-          ${instagram ? `<a class="btn btn-ghost" href="${escHtml(instagram)}" target="_blank">Abrir Instagram</a>` : `<button class="btn btn-ghost" disabled>Sem Instagram</button>`}
-          ${site ? `<a class="btn btn-ghost" href="${escHtml(site)}" target="_blank">Abrir site</a>` : `<button class="btn btn-ghost" disabled>Sem site</button>`}
-        </div>
-      </div>
-      <div style="display:flex;flex-direction:column;gap:16px">
-        <div class="card"><div class="card-title">Pipeline</div><div class="pipeline-preview">${pipelineHtml}</div></div>
-        <div class="card"><div class="card-title">Próximas melhorias</div><div class="lead-empty-note">Esta primeira versão é só a ficha visual do lead. As próximas etapas serão: notas, histórico real, follow-up, oportunidades e apresentações vinculadas ao lead.</div></div>
-      </div>
-      <div class="card"><div class="card-title">Histórico</div><div class="lead-timeline">${historyHtml}</div></div>
-      <div class="card"><div class="card-title">Notas</div><div class="lead-empty-note">Ainda não salvamos notas nesta versão. Primeiro estamos criando a estrutura visual sem alterar os dados atuais.</div></div>
-    </div>`;
-}
 
 /* ════════════════════════════
    PAGINAÇÃO — HELPERS
@@ -3151,6 +3227,7 @@ function renderDisparoEmpresas() {
         </div>
       </div>
       <div style="display:flex;gap:4px;flex-shrink:0;align-items:center">
+        <button class="lead-drawer-open-btn" onclick="openLeadDrawer('${e.id}')">Ficha</button>
         ${isEnviada
           ? `<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">✓ enviado</span>`
           : semChip
@@ -3367,6 +3444,7 @@ function renderFilaSlot(slot, filterDay) {
             <div class="fila-item-nome" style="color:var(--muted)">${escHtml(item.nome)}</div>
             <div class="fila-item-wa" style="color:var(--muted)">+${waNum}</div>
             <div class="fila-item-status enviado">✓ enviado</div>
+            <button class="lead-drawer-open-btn" onclick="event.stopPropagation();openLeadDrawer('${item.id}')">Ficha</button>
           </div>
         </div>`;
       } else {
@@ -3376,6 +3454,7 @@ function renderFilaSlot(slot, filterDay) {
             <div class="fila-item-nome">${item.site ? `<a href="${escHtml(item.site)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" title="${escHtml(item.site)}" onclick="event.stopPropagation()">${escHtml(item.nome)}</a>` : escHtml(item.nome)}</div>
             <div class="fila-item-wa">+${waNum}</div>
             <div class="fila-item-status ${item.status}">${labels[item.status]||item.status}</div>
+            <button class="lead-drawer-open-btn" onclick="event.stopPropagation();openLeadDrawer('${item.id}')">Ficha</button>
             <div style="color:var(--muted);font-size:12px;margin-left:4px;transition:transform 0.2s;transform:rotate(${aberto?'90':'0'}deg)">▶</div>
             ${!isErro?`<button class="fila-remove-btn" style="position:static;top:auto;right:auto;width:22px;height:22px" onclick="event.stopPropagation();removerFilaSlot(${slot},'${item.id}')">×</button>`:''}
           </div>
@@ -3807,6 +3886,7 @@ function renderFila() {
         <div class="fila-item-num">${i+1}</div>
         <div class="fila-item-nome">${item.site ? `<a href="${escHtml(item.site)}" target="_blank" rel="noopener" style="color:inherit;text-decoration:none" title="${escHtml(item.site)}" onclick="event.stopPropagation()">${escHtml(item.nome)}</a>` : escHtml(item.nome)}</div>
         <div class="fila-item-wa">+${waNum}${chipBadge}</div>
+        <button class="lead-drawer-open-btn" onclick="event.stopPropagation();openLeadDrawer('${item.id}')">Ficha</button>
         <div style="color:var(--muted);font-size:12px;margin-left:4px;transition:transform 0.2s;transform:rotate(${aberto?'90':'0'}deg)">▶</div>
         <button class="fila-remove-btn" style="position:static;top:auto;right:auto;width:22px;height:22px" onclick="event.stopPropagation();removerFila('${item.id}')">×</button>
       </div>

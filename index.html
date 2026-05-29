@@ -160,24 +160,6 @@
   </div>
 </div>
 
-
-<!-- ── LEAD DETAIL ── -->
-<div class="panel" id="panel-lead">
-  <div class="page-header lead-detail-header">
-    <div>
-      <div class="page-title">Ficha do <span>Lead.</span></div>
-      <div class="page-sub" id="leadDetailSub">// visão central da empresa · histórico · próximos passos</div>
-    </div>
-    <button class="btn btn-ghost" onclick="backFromLeadDetail()">← Voltar</button>
-  </div>
-
-  <div id="leadDetailContent">
-    <div class="card">
-      <div class="table-empty">Selecione um lead para visualizar a ficha.</div>
-    </div>
-  </div>
-</div>
-
 <!-- ── IMPORTAR ── -->
 <div class="panel" id="panel-importar">
   <div class="page-header" style="flex-shrink:0">
@@ -888,6 +870,45 @@
       <button class="modal-btn-cancel" onclick="document.getElementById('excluirLeadModal').classList.remove('open')">Cancelar</button>
     </div>
   </div>
+</div>
+
+
+<!-- DRAWER FICHA DO LEAD -->
+<div class="lead-drawer-overlay" id="leadDrawerOverlay" onclick="if(event.target===this)closeLeadDrawer()">
+  <aside class="lead-drawer" id="leadDrawer" aria-hidden="true">
+    <div class="lead-drawer-header">
+      <div>
+        <div class="lead-drawer-kicker">// ficha do lead</div>
+        <h2 id="leadDrawerName">Lead</h2>
+        <p id="leadDrawerMeta">dados da empresa</p>
+      </div>
+      <button class="lead-drawer-close" onclick="closeLeadDrawer()" aria-label="Fechar ficha">×</button>
+    </div>
+
+    <div class="lead-drawer-body">
+      <section class="lead-drawer-section">
+        <div class="lead-drawer-section-title">Canais</div>
+        <div class="lead-channel-grid" id="leadDrawerChannels"></div>
+      </section>
+
+      <section class="lead-drawer-section">
+        <div class="lead-drawer-section-title">Pipeline comercial</div>
+        <div class="lead-pipeline" id="leadDrawerPipeline"></div>
+      </section>
+
+      <section class="lead-drawer-section">
+        <div class="lead-drawer-section-title">Notas</div>
+        <textarea id="leadNoteInput" class="lead-note-input" placeholder="Escreva uma observação sobre este lead..."></textarea>
+        <button class="btn btn-primary" style="width:100%;margin-top:8px" onclick="addLeadNote()">+ Adicionar nota</button>
+        <div class="lead-notes-list" id="leadNotesList"></div>
+      </section>
+
+      <section class="lead-drawer-section">
+        <div class="lead-drawer-section-title">Histórico</div>
+        <div class="lead-history-list" id="leadHistoryList"></div>
+      </section>
+    </div>
+  </aside>
 </div>
 
 <div class="notify" id="notify"></div>
