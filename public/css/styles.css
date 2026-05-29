@@ -1843,3 +1843,39 @@ body.auth-locked .app{
   border-radius:999px;
   padding:4px 8px;
 }
+
+
+/* ══ RITMO E BLOCOS V31 ══ */
+.dispatch-v31-schedule{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:8px;
+  margin-top:12px;
+}
+.dispatch-v31-slot{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px;
+}
+.dispatch-v31-slot-title{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.1em;
+}
+.dispatch-v31-slot-value{
+  font-size:18px;
+  font-weight:800;
+  margin-top:5px;
+}
+.dispatch-v31-warning{
+  margin-top:10px;
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--warning);
+}
+@media(max-width:760px){
+  .dispatch-v31-schedule{grid-template-columns:1fr 1fr;}
+}
