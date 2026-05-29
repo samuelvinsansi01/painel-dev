@@ -183,6 +183,89 @@ function getFollowUpInfo(dateIso) {
   return { className: 'future', label: `Futuro · ${formatIsoDateBR(dateIso)}` };
 }
 
+function getFollowUpBucket(dateIso) {
+  if (!dateIso) return 'none';
+  const today = todayIsoDate();
+  if (dateIso === today) return 'today';
+  if (dateIso < today) return 'late';
+  return 'upcoming';
+}
+
+function getAllFollowUps() {
+  const store = getLeadCrmStore();
+  return Object.entries(store)
+    .filter(([, crm]) => crm && crm.followUpDate)
+    .map(([id, crm]) => {
+      const raw = findLeadEverywhere(id) || {};
+      const lead = normalizeLeadForDrawer({ id, ...raw });
+      const info = getFollowUpInfo(crm.followUpDate);
+      return {
+        id,
+        date: crm.followUpDate,
+        bucket: getFollowUpBucket(crm.followUpDate),
+        label: info.label,
+        className: info.className,
+        lead,
+        crm
+      };
+    })
+    .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+function getTodayFollowUps() {
+  return getAllFollowUps().filter(item => item.bucket === 'today');
+}
+
+function getLateFollowUps() {
+  return getAllFollowUps().filter(item => item.bucket === 'late');
+}
+
+function getUpcomingFollowUps() {
+  return getAllFollowUps().filter(item => item.bucket === 'upcoming');
+}
+
+function renderFollowUpsHome() {
+  const box = document.getElementById('followUpsHomeCard');
+  if (!box) return;
+
+  const today = getTodayFollowUps();
+  const late = getLateFollowUps();
+  const upcoming = getUpcomingFollowUps();
+  const priority = [...late, ...today, ...upcoming].slice(0, 8);
+
+  const itemHtml = priority.length
+    ? priority.map(item => `
+      <button class="followup-mini-item ${item.bucket}" onclick="openLeadDrawer('${item.id}')">
+        <span>
+          <strong>${escHtml(item.lead.nome || 'Lead')}</strong>
+          <small>${escHtml(item.lead.whatsapp || item.lead.instagram || item.lead.site || 'sem canal')}</small>
+        </span>
+        <em>${escHtml(formatIsoDateBR(item.date))}</em>
+      </button>
+    `).join('')
+    : `<div class="followup-empty">// nenhum follow-up agendado</div>`;
+
+  box.innerHTML = `
+    <div class="followup-card-head">
+      <div>
+        <div class="card-title" style="margin-bottom:4px">Follow-ups</div>
+        <div class="followup-sub">// próximos contatos agendados</div>
+      </div>
+      <div class="followup-summary">
+        <span class="late">${late.length} atrasado${late.length!==1?'s':''}</span>
+        <span class="today">${today.length} hoje</span>
+      </div>
+    </div>
+    <div class="followup-stats-row">
+      <div><strong>${today.length}</strong><small>Hoje</small></div>
+      <div><strong>${late.length}</strong><small>Atrasados</small></div>
+      <div><strong>${upcoming.length}</strong><small>Próximos</small></div>
+    </div>
+    <div class="followup-mini-list">${itemHtml}</div>
+  `;
+}
+
+
 
 function ensureLeadCrm(id, baseLead = {}) {
   const store = getLeadCrmStore();
@@ -398,6 +481,8 @@ function saveLeadFollowUp() {
 
   addLeadHistory(activeLeadDrawerId, message, activeLeadDrawerData || {});
   renderLeadDrawer();
+  renderFollowUpsHome();
+  if (acompTab === 'lista') renderAcompLista();
   notify('Follow-up salvo.');
 }
 
@@ -414,6 +499,8 @@ function clearLeadFollowUp() {
   saveLeadCrm(activeLeadDrawerId, crm);
   addLeadHistory(activeLeadDrawerId, `Follow-up removido: ${formatIsoDateBR(oldDate)}`, activeLeadDrawerData || {});
   renderLeadDrawer();
+  renderFollowUpsHome();
+  if (acompTab === 'lista') renderAcompLista();
   notify('Follow-up removido.');
 }
 
@@ -1574,6 +1661,7 @@ function renderInicio() {
   if (sel) sel.innerHTML = '<option value="">Exportar dia...</option>' + weekDays.map(d => `<option value="${d}">${dayLabel(d)}</option>`).join('');
   renderHistory();
   renderExcluidos();
+  renderFollowUpsHome();
 }
 
 function setDay(day)    { selectedDay = day; selectedStatus = 'Não enviada'; inicioPage = 1; const b=document.getElementById('inicioBusca'); if(b) b.value=''; renderInicio(); }
@@ -5537,6 +5625,7 @@ let acompTab        = 'lista';
 let acompMes        = currentMonthKey();
 let acompMesMetricas = currentMonthKey();
 let acompFiltroSt   = null; // null = todos
+let acompFollowFiltro = 'todos'; // todos | hoje | atrasados | proximos
 let acompPage       = 1; let ACOMP_PG = 20;
 
 function setAcompTab(tab) {
@@ -5621,6 +5710,7 @@ function renderAcompMesesTabs(containerId, activeMes, onClickFn) {
 function setAcompMes(m) {
   acompMes = m;
   acompFiltroSt = null;
+  acompFollowFiltro = 'todos';
   acompPage = 1;
   const b = document.getElementById('acompBusca'); if (b) b.value = '';
   renderAcompLista();
@@ -5635,6 +5725,39 @@ function setAcompFiltro(st) {
   acompFiltroSt = (acompFiltroSt === st) ? null : st;
   acompPage = 1;
   renderAcompLista();
+}
+
+function setAcompFollowFiltro(filtro) {
+  acompFollowFiltro = filtro || 'todos';
+  acompPage = 1;
+  renderAcompLista();
+}
+
+function renderAcompFollowTabs(leads) {
+  const el = document.getElementById('acompFollowTabs');
+  if (!el) return;
+
+  const counts = { todos: leads.length, hoje: 0, atrasados: 0, proximos: 0 };
+  leads.forEach(lead => {
+    const crm = ensureLeadCrm(lead.id, lead);
+    const bucket = getFollowUpBucket(crm.followUpDate || '');
+    if (bucket === 'today') counts.hoje++;
+    if (bucket === 'late') counts.atrasados++;
+    if (bucket === 'upcoming') counts.proximos++;
+  });
+
+  const tabs = [
+    ['todos', 'Todos', counts.todos],
+    ['hoje', 'Hoje', counts.hoje],
+    ['atrasados', 'Atrasados', counts.atrasados],
+    ['proximos', 'Próximos', counts.proximos],
+  ];
+
+  el.innerHTML = tabs.map(([id, label, count]) => `
+    <div class="status-tab${acompFollowFiltro===id?' active':''}" onclick="setAcompFollowFiltro('${id}')" style="font-size:8px;padding:3px 10px">
+      ${label} <span class="st-count">${count}</span>
+    </div>
+  `).join('');
 }
 
 function renderAcompLista() {
@@ -5652,7 +5775,20 @@ function renderAcompLista() {
     </div>`
   ).join('');
 
-  const filtered = acompFiltroSt ? leads.filter(e => (e.status||'Enviada')===acompFiltroSt) : leads;
+  let filtered = acompFiltroSt ? leads.filter(e => (e.status||'Enviada')===acompFiltroSt) : leads;
+
+  renderAcompFollowTabs(leads);
+
+  if (acompFollowFiltro && acompFollowFiltro !== 'todos') {
+    filtered = filtered.filter(e => {
+      const crm = ensureLeadCrm(e.id, e);
+      const bucket = getFollowUpBucket(crm.followUpDate || '');
+      if (acompFollowFiltro === 'hoje') return bucket === 'today';
+      if (acompFollowFiltro === 'atrasados') return bucket === 'late';
+      if (acompFollowFiltro === 'proximos') return bucket === 'upcoming';
+      return true;
+    });
+  }
 
   // busca
   const buscaEl = document.getElementById('acompBusca');
@@ -5677,10 +5813,14 @@ function renderAcompLista() {
         <td class="td-link">${e.site?`<a href="${escHtml(e.site)}" target="_blank">${escHtml(e.site.replace(/^https?:\/\/(www\.)?/,'').split('/')[0])}</a>`:'<span class="td-missing">—</span>'}</td>
         <td style="font-family:'DM Mono',monospace;font-size:9px">${e.whatsapp?`<a href="${buildWaLink(e.whatsapp)}" target="_blank" style="color:var(--ok);text-decoration:none">${escHtml(e.whatsapp)}</a>`:'—'}</td>
         <td style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">${e.enviadoEm||e.migradoEm||'—'}</td>
+        <td>${(() => { const crm = ensureLeadCrm(e.id, e); const info = getFollowUpInfo(crm.followUpDate || ''); return `<span class="lead-followup-status ${info.className}" style="display:inline-flex">${escHtml(info.label)}</span>`; })()}</td>
         <td><select class="status-select" onchange="updateAcompStatus('${e.id}','${acompMes}',this.value)">
           ${statusOpts.map(s=>`<option value="${s}"${(e.status||'Enviada')===s?' selected':''}>${s}</option>`).join('')}
         </select></td>
-        <td><button class="del-btn" title="Remover do acompanhamento" onclick="deleteAcompLead('${e.id}','${acompMes}')">✕</button></td>
+        <td style="white-space:nowrap">
+          <button class="lead-drawer-open-btn" onclick="openLeadDrawer('${e.id}')">Ficha</button>
+          <button class="del-btn" title="Remover do acompanhamento" onclick="deleteAcompLead('${e.id}','${acompMes}')">✕</button>
+        </td>
       </tr>`;
     }).join('');
   }
