@@ -1,3 +1,25 @@
+
+/* V9 DATA LAYER */
+class LocalStorageAdapter {
+  load(key){ try { return JSON.parse(localStorage.getItem(key)); } catch(e){ return null; } }
+  save(key,data){ localStorage.setItem(key, JSON.stringify(data)); }
+  remove(key){ localStorage.removeItem(key); }
+}
+const Storage = new LocalStorageAdapter();
+
+const LeadService = {
+  load(key){ return Storage.load(key); },
+  save(key,data){ return Storage.save(key,data); },
+  remove(key){ return Storage.remove(key); },
+  getLeadCrmStore(){
+    return this.load(LEAD_CRM_KEY) || {};
+  },
+  saveLeadCrmStore(store){
+    this.save(LEAD_CRM_KEY, store);
+  }
+};
+/* END V9 DATA LAYER */
+
 /* ════════════════════════════
    CONSTANTS & KEYS
 ════════════════════════════ */
@@ -150,7 +172,7 @@ let activeLeadDrawerId = null;
 let activeLeadDrawerData = null;
 
 function getLeadCrmStore() {
-  try { return JSON.parse(localStorage.getItem(LEAD_CRM_KEY) || '{}'); }
+  try { return LeadService.getLeadCrmStore(); }
   catch { return {}; }
 }
 
