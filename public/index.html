@@ -807,6 +807,41 @@
 
 
 <!-- ── EVOLUTION API ── -->
+
+<!-- ── FILA WHATSAPP V27 ── -->
+<div class="panel" id="panel-whatsappQueue">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Fila <span>WhatsApp.</span></div>
+    <div class="page-sub">// campanhas · templates · leads aguardando envio</div>
+  </div>
+
+  <div class="queue-v27-grid">
+    <div class="stretch-card">
+      <div class="card-title">Campanhas</div>
+      <div class="queue-v27-inline">
+        <input id="queueCampaignName" type="text" placeholder="Nova campanha">
+        <button class="btn btn-primary" onclick="addQueueCampaign()">Adicionar</button>
+      </div>
+      <div id="queueCampaignList" class="queue-v27-list"></div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="card-title">Templates</div>
+      <div class="queue-v27-inline">
+        <input id="queueTemplateName" type="text" placeholder="Nome do template">
+        <button class="btn btn-primary" onclick="addQueueTemplate()">Adicionar</button>
+      </div>
+      <textarea id="queueTemplateText" placeholder="Texto do template..."></textarea>
+      <div id="queueTemplateList" class="queue-v27-list"></div>
+    </div>
+  </div>
+
+  <div class="stretch-card">
+    <div class="card-title" style="flex-shrink:0">Leads na fila</div>
+    <div id="whatsappQueueList" class="queue-v27-table"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-evolution">
   <div class="page-header" style="flex-shrink:0">
     <div class="page-title">Evolution <span>API.</span></div>
