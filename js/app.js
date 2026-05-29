@@ -34,6 +34,27 @@ const supabaseDataAdapter = (sbClient && window.SupabaseAdapter)
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
+
+/* ════════════════════════════
+   AUTH GATE V20.1
+════════════════════════════ */
+function showAuthGate() {
+  const gate = document.getElementById('authGate');
+  if (gate) gate.classList.add('open');
+  document.body.classList.add('auth-locked');
+}
+
+function hideAuthGate() {
+  const gate = document.getElementById('authGate');
+  if (gate) gate.classList.remove('open');
+  document.body.classList.remove('auth-locked');
+}
+
+function updateAuthGate() {
+  if (currentUser) hideAuthGate();
+  else showAuthGate();
+}
+
 /* ════════════════════════════
    AUTH — SUPABASE / GOOGLE
    Por enquanto só identifica o usuário.
@@ -91,6 +112,7 @@ async function initAuth() {
   if (!sbClient) {
     console.warn('[auth] Supabase SDK não carregou.');
     renderAuthUser(null);
+    showAuthGate();
     return;
   }
 
@@ -162,6 +184,7 @@ async function logoutSupabase() {
   if (typeof renderInicio === 'function') renderInicio();
   if (typeof updateBadges === 'function') updateBadges();
 
+  showAuthGate();
   notify('Conta desconectada');
 }
 
