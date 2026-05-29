@@ -49,6 +49,9 @@ const sbClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 let currentUser = null;
+const supabaseDataAdapter = (sbClient && window.SupabaseAdapter)
+  ? new window.SupabaseAdapter(sbClient)
+  : null;
 
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -315,6 +318,62 @@ function saveLeadCrm(id, crm) {
   saveLeadCrmStore(store);
 }
 
+function getLeadForCloud(id, baseLead = {}) {
+  const raw = findLeadEverywhere(id) || baseLead || {};
+  const lead = normalizeLeadForDrawer({ ...raw, ...baseLead, id });
+  const crm = ensureLeadCrm(id, lead);
+  return {
+    ...lead,
+    id,
+    pipelineStatus: crm.pipelineStatus || 'contato_enviado'
+  };
+}
+
+async function syncLeadToCloud(id, baseLead = {}) {
+  if (!supabaseDataAdapter || !currentUser || !id) return;
+  try {
+    await supabaseDataAdapter.saveLead(getLeadForCloud(id, baseLead));
+  } catch (error) {
+    console.warn('[cloud] saveLead:', error);
+  }
+}
+
+async function syncLeadNoteToCloud(id, noteText, baseLead = {}) {
+  if (!supabaseDataAdapter || !currentUser || !id) return;
+  try {
+    await supabaseDataAdapter.saveNote(getLeadForCloud(id, baseLead), noteText);
+  } catch (error) {
+    console.warn('[cloud] saveNote:', error);
+  }
+}
+
+async function syncLeadHistoryToCloud(id, eventText, baseLead = {}) {
+  if (!supabaseDataAdapter || !currentUser || !id) return;
+  try {
+    await supabaseDataAdapter.saveHistory(getLeadForCloud(id, baseLead), eventText);
+  } catch (error) {
+    console.warn('[cloud] saveHistory:', error);
+  }
+}
+
+async function syncLeadFollowUpToCloud(id, dateIso, baseLead = {}) {
+  if (!supabaseDataAdapter || !currentUser || !id) return;
+  try {
+    await supabaseDataAdapter.saveFollowUp(getLeadForCloud(id, baseLead), dateIso);
+  } catch (error) {
+    console.warn('[cloud] saveFollowUp:', error);
+  }
+}
+
+async function clearLeadFollowUpFromCloud(id, baseLead = {}) {
+  if (!supabaseDataAdapter || !currentUser || !id) return;
+  try {
+    await supabaseDataAdapter.clearFollowUp(getLeadForCloud(id, baseLead));
+  } catch (error) {
+    console.warn('[cloud] clearFollowUp:', error);
+  }
+}
+
 function addLeadHistory(id, text, baseLead = {}) {
   const crm = ensureLeadCrm(id, baseLead);
   crm.history.push({
@@ -322,6 +381,7 @@ function addLeadHistory(id, text, baseLead = {}) {
     text
   });
   saveLeadCrm(id, crm);
+  syncLeadHistoryToCloud(id, text, baseLead);
 }
 
 
@@ -463,7 +523,8 @@ function addLeadNote() {
   crm.notes.push({ at: crmNowLabel(), text });
   saveLeadCrm(activeLeadDrawerId, crm);
 
-  addLeadHistory(activeLeadDrawerId, 'Nota adicionada');
+  syncLeadNoteToCloud(activeLeadDrawerId, text, activeLeadDrawerData || {});
+  addLeadHistory(activeLeadDrawerId, 'Nota adicionada', activeLeadDrawerData || {});
   if (input) input.value = '';
   renderLeadDrawer();
   notify('Nota adicionada ao lead.');
@@ -478,7 +539,8 @@ function updateLeadPipeline(status) {
   crm.pipelineStatus = status;
   saveLeadCrm(activeLeadDrawerId, crm);
 
-  addLeadHistory(activeLeadDrawerId, `Pipeline alterado: ${old} → ${step.label}`);
+  syncLeadToCloud(activeLeadDrawerId, activeLeadDrawerData || {});
+  addLeadHistory(activeLeadDrawerId, `Pipeline alterado: ${old} → ${step.label}`, activeLeadDrawerData || {});
   renderLeadDrawer();
   notify(`Pipeline: ${step.label}`);
 }
@@ -501,6 +563,7 @@ function saveLeadFollowUp() {
     ? `Follow-up reagendado: ${formatIsoDateBR(oldDate)} → ${formatIsoDateBR(dateIso)}`
     : `Follow-up agendado para ${formatIsoDateBR(dateIso)}`;
 
+  syncLeadFollowUpToCloud(activeLeadDrawerId, dateIso, activeLeadDrawerData || {});
   addLeadHistory(activeLeadDrawerId, message, activeLeadDrawerData || {});
   renderLeadDrawer();
   renderFollowUpsHome();
@@ -519,6 +582,7 @@ function clearLeadFollowUp() {
   const oldDate = crm.followUpDate;
   crm.followUpDate = '';
   saveLeadCrm(activeLeadDrawerId, crm);
+  clearLeadFollowUpFromCloud(activeLeadDrawerId, activeLeadDrawerData || {});
   addLeadHistory(activeLeadDrawerId, `Follow-up removido: ${formatIsoDateBR(oldDate)}`, activeLeadDrawerData || {});
   renderLeadDrawer();
   renderFollowUpsHome();
