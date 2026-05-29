@@ -103,6 +103,11 @@ function renderAuthUser(user) {
   }
 }
 
+function clearLocalSessionData() {
+  localStorage.removeItem('vs_empresas_v2');
+  localStorage.removeItem('vs_lead_crm_v1');
+}
+
 async function initAuth() {
   if (!sbClient) {
     console.warn('[auth] Supabase SDK não carregou.');
@@ -113,14 +118,24 @@ async function initAuth() {
   const { data, error } = await sbClient.auth.getSession();
   if (error) console.warn('[auth] getSession:', error.message);
   currentUser = data?.session?.user || null;
-  renderAuthUser(currentUser);
+  
+  if (!currentUser) {
+    clearLocalSessionData();
+  }
+renderAuthUser(currentUser);
 
   sbClient.auth.onAuthStateChange(async (_event, session) => {
     currentUser = session?.user || null;
     renderAuthUser(currentUser);
-  
+
     if (currentUser) {
-      await loadSupabaseLeadsToLocalState();
+      if (typeof loadSupabaseLeadsToLocalState === 'function') {
+        await loadSupabaseLeadsToLocalState();
+      }
+    } else {
+      clearLocalSessionData();
+      if (typeof renderInicio === 'function') renderInicio();
+      if (typeof updateBadges === 'function') updateBadges();
     }
   });
 
@@ -148,14 +163,25 @@ async function loginGoogle() {
 
 async function logoutSupabase() {
   if (!sbClient) return;
+
   const { error } = await sbClient.auth.signOut();
+
   if (error) {
     console.error('[auth] logout:', error);
     notify('Erro ao sair da conta', 'err');
     return;
   }
+
+  localStorage.removeItem('vs_empresas_v2');
+  localStorage.removeItem('vs_lead_crm_v1');
+
   currentUser = null;
+
   renderAuthUser(null);
+
+  if (typeof renderInicio === 'function') renderInicio();
+  if (typeof updateBadges === 'function') updateBadges();
+
   notify('Conta desconectada');
 }
 
@@ -240,6 +266,77 @@ function getAllFollowUps() {
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
 }
 
+
+async function loadSupabaseLeadCrmToLocalState() {
+  if (!sbClient || !currentUser) return;
+
+  const [notesRes, historyRes, followupsRes] = await Promise.all([
+    sbClient.from('lead_notes').select('*').eq('user_id', currentUser.id),
+    sbClient.from('lead_history').select('*').eq('user_id', currentUser.id),
+    sbClient.from('lead_followups').select('*').eq('user_id', currentUser.id)
+  ]);
+
+  if (notesRes.error) console.warn('[supabase] notes:', notesRes.error.message);
+  if (historyRes.error) console.warn('[supabase] history:', historyRes.error.message);
+  if (followupsRes.error) console.warn('[supabase] followups:', followupsRes.error.message);
+
+  const store = getLeadCrmStore ? getLeadCrmStore() : {};
+
+  (notesRes.data || []).forEach(note => {
+    if (!store[note.lead_id]) {
+      store[note.lead_id] = {
+        pipelineStatus: 'contato_enviado',
+        notes: [],
+        history: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    store[note.lead_id].notes = Array.isArray(store[note.lead_id].notes) ? store[note.lead_id].notes : [];
+    store[note.lead_id].notes.push({
+      at: note.created_at ? new Date(note.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel(),
+      text: note.note || ''
+    });
+  });
+
+  (historyRes.data || []).forEach(item => {
+    if (!store[item.lead_id]) {
+      store[item.lead_id] = {
+        pipelineStatus: 'contato_enviado',
+        notes: [],
+        history: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    store[item.lead_id].history = Array.isArray(store[item.lead_id].history) ? store[item.lead_id].history : [];
+    store[item.lead_id].history.push({
+      at: item.created_at ? new Date(item.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel(),
+      text: item.event || ''
+    });
+  });
+
+  (followupsRes.data || []).forEach(fu => {
+    if (!store[fu.lead_id]) {
+      store[fu.lead_id] = {
+        pipelineStatus: 'contato_enviado',
+        notes: [],
+        history: [],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString()
+      };
+    }
+
+    store[fu.lead_id].followUpDate = fu.followup_date || '';
+    store[fu.lead_id].followUpStatus = fu.status || 'future';
+  });
+
+  saveLeadCrmStore(store);
+  console.log(`[supabase] CRM carregado: ${(notesRes.data || []).length} notas, ${(historyRes.data || []).length} eventos, ${(followupsRes.data || []).length} follow-ups`);
+}
+
 async function loadSupabaseLeadsToLocalState() {
   if (!sbClient || !currentUser) return;
 
@@ -279,6 +376,8 @@ async function loadSupabaseLeadsToLocalState() {
   saveWeekData(weekData);
   renderInicio();
   updateBadges();
+
+  await loadSupabaseLeadCrmToLocalState();
 
   console.log(`[supabase] Leads carregados: ${leads.length}`);
 }
