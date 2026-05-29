@@ -1203,3 +1203,62 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 .presentation-status-pill.not-viewed{
   color:var(--muted);
 }
+
+
+/* ══ V20 POLIMENTO FINAL CRM ══ */
+.empty-state-pro{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  justify-content:center;
+  gap:8px;
+  min-height:180px;
+  padding:28px;
+  text-align:center;
+  background:var(--bg);
+  border:1px dashed var(--border2);
+  border-radius:14px;
+}
+.empty-state-pro-icon{
+  width:38px;
+  height:38px;
+  border-radius:12px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  background:var(--surface2);
+  border:1px solid var(--border);
+  font-size:18px;
+}
+.empty-state-pro-title{font-size:13px;font-weight:800;color:var(--text2);}
+.empty-state-pro-text{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  max-width:420px;
+  line-height:1.6;
+}
+.dev-tools-card{
+  border:1px solid rgba(240,164,41,.25)!important;
+  background:rgba(240,164,41,.05)!important;
+}
+.production-ready-note{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--ok);
+  border:1px solid rgba(78,203,113,.32);
+  background:rgba(78,203,113,.06);
+  border-radius:999px;
+  padding:4px 8px;
+}
+@media(max-width:900px){
+  .lead-drawer,#leadDrawer{width:min(100vw,520px)!important;}
+  .global-search-modal{max-height:82vh;}
+}
+@media(max-width:640px){
+  .page-title{font-size:28px!important;}
+  .crm-home-summary,.exec-metrics,.followup-dashboard{grid-template-columns:1fr!important;}
+}

@@ -102,6 +102,7 @@ async function initAuth() {
     clearLocalSessionData();
   }
 renderAuthUser(currentUser);
+  renderProductionReadyNote();
 
   sbClient.auth.onAuthStateChange(async (_event, session) => {
     currentUser = session?.user || null;
@@ -1079,6 +1080,10 @@ function renderCrmHomeDashboard() {
   const pct = (value) => Math.max(value > 0 ? 8 : 0, Math.round((value / max) * 100));
 
   host.innerHTML = `
+    <div id="devToolsHost" class="crm-home-card dev-tools-card" style="margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:12px;grid-column:1/-1">
+      <div><div class="crm-home-card-label">Ambiente DEV</div><div class="crm-home-card-hint">// use apenas para limpeza de testes locais</div></div>
+      <button class="btn btn-ghost" onclick="clearDevTestLeads()">Limpar testes locais</button>
+    </div>
     <div class="crm-home-summary">
       <div class="crm-home-card"><div class="crm-home-card-label">Leads ativos</div><div class="crm-home-card-value acc">${s.totalLeads}</div><div class="crm-home-card-hint">// base carregada</div></div>
       <div class="crm-home-card"><div class="crm-home-card-label">Follow-ups hoje</div><div class="crm-home-card-value ${s.followHoje ? 'warn' : ''}">${s.followHoje}</div><div class="crm-home-card-hint">${s.followAtrasados ? `${s.followAtrasados} atrasado(s)` : '// nada atrasado'}</div></div>
@@ -1210,7 +1215,7 @@ function renderFollowupList() {
   const items = getFilteredFollowups();
 
   if (!items.length) {
-    list.innerHTML = '<div class="followup-empty">// nenhum follow-up nesta visão</div>';
+    list.innerHTML = emptyStatePro('⏰','Nenhum follow-up nesta visão','Quando você agendar retornos na ficha do lead, eles aparecerão aqui.');
     return;
   }
 
@@ -1732,6 +1737,53 @@ function renderPresentationMetricsHeader() {
       </div>
     </div>
   `;
+}
+
+
+/* ════════════════════════════
+   V20 POLIMENTO FINAL CRM
+════════════════════════════ */
+function emptyStatePro(icon, title, text) {
+  return `
+    <div class="empty-state-pro">
+      <div class="empty-state-pro-icon">${icon || '∅'}</div>
+      <div class="empty-state-pro-title">${escHtml(title || 'Nada por aqui')}</div>
+      <div class="empty-state-pro-text">${escHtml(text || 'Quando houver dados, eles aparecerão nesta área.')}</div>
+    </div>
+  `;
+}
+
+function clearDevTestLeads() {
+  const data = ensureWeekData();
+  const days = data.days || {};
+
+  Object.keys(days).forEach(day => {
+    days[day] = (days[day] || []).filter(lead => {
+      const id = String(lead.id || '').toLowerCase();
+      const nome = String(lead.nome || '').toLowerCase();
+      return !id.includes('test') && !nome.includes('teste');
+    });
+  });
+
+  saveWeekData(data);
+
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  Object.keys(crm).forEach(id => {
+    if (String(id).toLowerCase().includes('test')) delete crm[id];
+  });
+
+  saveLeadCrmStore(crm);
+
+  if (typeof renderInicio === 'function') renderInicio();
+  if (typeof updateBadges === 'function') updateBadges();
+
+  notify('Leads de teste removidos do cache local.');
+}
+
+function renderProductionReadyNote() {
+  const box = document.getElementById('authUserBox');
+  if (!box || document.getElementById('productionReadyNote')) return;
+  box.insertAdjacentHTML('beforeend', '<br><span id="productionReadyNote" class="production-ready-note">CRM DEV estável</span>');
 }
 
 /* ════════════════════════════
