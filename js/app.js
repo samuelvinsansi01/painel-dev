@@ -1,93 +1,3 @@
-
-function renderCommercialDashboard() {
-  const s = getDashboardStats();
-  return `
-  <section class="dashboard-commercial">
-    <div class="dash-grid">
-      <div class="dash-card"><div class="dash-title">Leads Ativos</div><div class="dash-value">${s.total}</div></div>
-      <div class="dash-card"><div class="dash-title">Notas</div><div class="dash-value">${s.notes}</div></div>
-      <div class="dash-card"><div class="dash-title">Atividades</div><div class="dash-value">${s.history}</div></div>
-      <div class="dash-card"><div class="dash-title">Follow-ups Hoje</div><div class="dash-value">${s.followToday}</div></div>
-    </div>
-    <div class="dash-grid">
-      <div class="dash-card"><div class="dash-title">Contato</div><div class="dash-value">${s.contato}</div></div>
-      <div class="dash-card"><div class="dash-title">Responderam</div><div class="dash-value">${s.respondeu}</div></div>
-      <div class="dash-card"><div class="dash-title">Reunião</div><div class="dash-value">${s.reuniao}</div></div>
-      <div class="dash-card"><div class="dash-title">Proposta</div><div class="dash-value">${s.proposta}</div></div>
-      <div class="dash-card"><div class="dash-title">Fechados</div><div class="dash-value">${s.fechado}</div></div>
-    </div>
-  </section>`;
-}
-
-
-/* DASHBOARD COMMERCIAL */
-function getDashboardStats() {
-  const crmStore = JSON.parse(localStorage.getItem('vs_lead_crm_v1') || '{}');
-  const stats = {
-    total: 0,
-    contato: 0,
-    respondeu: 0,
-    reuniao: 0,
-    proposta: 0,
-    fechado: 0,
-    perdido: 0,
-    notes: 0,
-    history: 0,
-    followToday: 0,
-    followLate: 0,
-    followNext7: 0
-  };
-
-  const today = new Date();
-  const end7 = new Date();
-  end7.setDate(end7.getDate()+7);
-
-  Object.values(crmStore).forEach(crm => {
-    stats.total++;
-    const p = crm.pipelineStatus || 'contato_enviado';
-    if (p.includes('contato')) stats.contato++;
-    else if (p.includes('responde')) stats.respondeu++;
-    else if (p.includes('reun')) stats.reuniao++;
-    else if (p.includes('proposta')) stats.proposta++;
-    else if (p.includes('fechado')) stats.fechado++;
-    else if (p.includes('perdido')) stats.perdido++;
-
-    stats.notes += (crm.notes||[]).length;
-    stats.history += (crm.history||[]).length;
-
-    if (crm.followUpDate){
-      const d=new Date(crm.followUpDate+'T00:00:00');
-      const ds=d.toDateString();
-      if(ds===today.toDateString()) stats.followToday++;
-      else if(d<today) stats.followLate++;
-      else if(d<=end7) stats.followNext7++;
-    }
-  });
-  return stats;
-}
-
-
-/* V9 DATA LAYER */
-class LocalStorageAdapter {
-  load(key){ try { return JSON.parse(localStorage.getItem(key)); } catch(e){ return null; } }
-  save(key,data){ localStorage.setItem(key, JSON.stringify(data)); }
-  remove(key){ localStorage.removeItem(key); }
-}
-const Storage = new LocalStorageAdapter();
-
-const LeadService = {
-  load(key){ return Storage.load(key); },
-  save(key,data){ return Storage.save(key,data); },
-  remove(key){ return Storage.remove(key); },
-  getLeadCrmStore(){
-    return this.load(LEAD_CRM_KEY) || {};
-  },
-  saveLeadCrmStore(store){
-    this.save(LEAD_CRM_KEY, store);
-  }
-};
-/* END V9 DATA LAYER */
-
 /* ════════════════════════════
    CONSTANTS & KEYS
 ════════════════════════════ */
@@ -444,6 +354,7 @@ async function loadSupabaseLeadsToLocalState() {
   saveWeekData(weekData);
   renderInicio();
   updateBadges();
+  renderCrmHomeDashboard();
 
   await loadSupabaseLeadCrmToLocalState();
 
@@ -1069,6 +980,100 @@ function renderHomeProDashboard() {
             <div class="home-pro-bar">
               <div class="home-pro-bar-fill" style="width:${pct(count)}%"></div>
             </div>
+          </div>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
+
+/* ════════════════════════════
+   HOME CRM CLEAN V12.2
+════════════════════════════ */
+function getCrmHomeStats() {
+  const data = ensureWeekData();
+  const leads = flattenWeekData(data);
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  const crmItems = Object.values(crm || {});
+  const todayIso = new Date().toISOString().slice(0,10);
+
+  const pipelineCounts = {
+    contato_enviado: 0,
+    respondeu: 0,
+    reuniao: 0,
+    proposta: 0,
+    fechado: 0,
+    perdido: 0
+  };
+
+  crmItems.forEach(item => {
+    const key = item?.pipelineStatus || 'contato_enviado';
+    if (pipelineCounts[key] !== undefined) pipelineCounts[key]++;
+  });
+
+  const followHoje = crmItems.filter(item => item?.followUpDate === todayIso).length;
+  const followAtrasados = crmItems.filter(item => item?.followUpDate && item.followUpDate < todayIso).length;
+  const aguardandoResposta = leads.filter(lead => ['Enviada','Em fila'].includes(lead.status || '')).length;
+  const fechadosStatus = leads.filter(lead => (lead.status || '') === 'Fechada').length;
+
+  return {
+    totalLeads: leads.length,
+    followHoje,
+    followAtrasados,
+    aguardandoResposta,
+    fechados: Math.max(pipelineCounts.fechado || 0, fechadosStatus),
+    pipelineCounts
+  };
+}
+
+function ensureCrmHomeHost() {
+  const panel = document.getElementById('panel-inicio');
+  if (!panel) return null;
+
+  let host = document.getElementById('crmHomeDashboardHost');
+  if (host) return host;
+
+  const header = panel.querySelector('.page-header');
+  if (!header) return null;
+
+  host = document.createElement('div');
+  host.id = 'crmHomeDashboardHost';
+  host.style.flexShrink = '0';
+  header.insertAdjacentElement('afterend', host);
+  return host;
+}
+
+function renderCrmHomeDashboard() {
+  const host = ensureCrmHomeHost();
+  if (!host) return;
+
+  const s = getCrmHomeStats();
+  const stages = [
+    ['Contato', s.pipelineCounts.contato_enviado || 0],
+    ['Respondeu', s.pipelineCounts.respondeu || 0],
+    ['Reunião', s.pipelineCounts.reuniao || 0],
+    ['Proposta', s.pipelineCounts.proposta || 0],
+    ['Fechado', s.fechados || 0],
+  ];
+
+  const max = Math.max(...stages.map(([, count]) => count), 1);
+  const pct = (value) => Math.max(value > 0 ? 8 : 0, Math.round((value / max) * 100));
+
+  host.innerHTML = `
+    <div class="crm-home-summary">
+      <div class="crm-home-card"><div class="crm-home-card-label">Leads ativos</div><div class="crm-home-card-value acc">${s.totalLeads}</div><div class="crm-home-card-hint">// base carregada</div></div>
+      <div class="crm-home-card"><div class="crm-home-card-label">Follow-ups hoje</div><div class="crm-home-card-value ${s.followHoje ? 'warn' : ''}">${s.followHoje}</div><div class="crm-home-card-hint">${s.followAtrasados ? `${s.followAtrasados} atrasado(s)` : '// nada atrasado'}</div></div>
+      <div class="crm-home-card"><div class="crm-home-card-label">Aguardando resposta</div><div class="crm-home-card-value">${s.aguardandoResposta}</div><div class="crm-home-card-hint">// enviados ou em fila</div></div>
+      <div class="crm-home-card"><div class="crm-home-card-label">Fechados</div><div class="crm-home-card-value ok">${s.fechados}</div><div class="crm-home-card-hint">// pipeline comercial</div></div>
+    </div>
+    <div class="crm-funnel-card">
+      <div class="crm-funnel-header"><div><div class="crm-funnel-title">Funil comercial</div><div class="crm-funnel-sub">// visão rápida do relacionamento com os leads</div></div></div>
+      <div class="crm-funnel-grid">
+        ${stages.map(([label, count]) => `
+          <div class="crm-funnel-stage">
+            <div class="crm-funnel-stage-top"><div class="crm-funnel-stage-name">${escHtml(label)}</div><div class="crm-funnel-stage-count">${count}</div></div>
+            <div class="crm-funnel-bar"><div class="crm-funnel-fill" style="width:${pct(count)}%"></div></div>
           </div>
         `).join('')}
       </div>
@@ -2148,6 +2153,7 @@ function renderRamoSelect() {
    INÍCIO — RENDER
 ════════════════════════════ */
 function renderInicio() {
+  renderCrmHomeDashboard();
   renderHomeProDashboard();
   const data = ensureWeekData();
   const weekDays = currentWeekDays();
