@@ -6160,3 +6160,16 @@ function getPipelineStats() {
   });
   return stats;
 }
+
+
+function getPipelineConversionMetrics() {
+  const stats = getPipelineStats();
+  const total = Object.values(stats).reduce((a,b)=>a+b,0);
+  return {
+    total,
+    responded: stats.responded || 0,
+    meetings: stats.meeting || 0,
+    proposals: stats.proposal || 0,
+    closed: stats.closed || 0
+  };
+}
