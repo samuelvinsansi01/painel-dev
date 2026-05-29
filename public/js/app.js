@@ -674,6 +674,7 @@ function openLeadDrawer(id) {
   ensureLeadCrm(id, activeLeadDrawerData);
   renderLeadDrawer();
   renderLeadWhatsappValidation();
+  renderLeadMessageBox();
   const overlay = document.getElementById('leadDrawerOverlay');
   const drawer = document.getElementById('leadDrawer');
   if (overlay) overlay.classList.add('open');
@@ -2149,6 +2150,187 @@ function getWhatsappMiniBadge(leadId) {
   const cls = status.status === 'valid' ? 'valid' : status.status === 'invalid' ? 'invalid' : 'pending';
   const label = status.status === 'valid' ? 'WA válido' : status.status === 'invalid' ? 'WA inválido' : 'WA pendente';
   return `<span class="wa-mini-badge ${cls}">${label}</span>`;
+}
+
+
+/* ════════════════════════════
+   EVOLUTION SEND V26
+════════════════════════════ */
+function buildLeadMessageTemplate(type = 'primeiro_contato') {
+  const lead = activeLeadDrawerData || {};
+  const nome = lead.nome || lead.companyName || 'tudo bem';
+
+  const templates = {
+    primeiro_contato:
+`Olá, tudo bem?
+
+Vi a empresa ${nome} e acredito que posso te ajudar com uma presença digital mais profissional.
+
+Posso te enviar uma apresentação rápida?`,
+
+    followup:
+`Olá, tudo bem?
+
+Passando para retomar nosso contato sobre a apresentação que te enviei.
+
+Conseguiu dar uma olhada?`,
+
+    apresentacao:
+`Olá, tudo bem?
+
+Preparei uma apresentação rápida para mostrar uma possibilidade para a ${nome}.
+
+Segue o link:
+[COLE_O_LINK_AQUI]`
+  };
+
+  return templates[type] || templates.primeiro_contato;
+}
+
+function ensureLeadMessageContainer() {
+  if (document.getElementById('leadMessageBox')) return true;
+
+  const drawer = document.getElementById('leadDrawer');
+  if (!drawer) return false;
+
+  const target =
+    document.getElementById('leadWhatsappValidationBox') ||
+    document.getElementById('leadPresentationsList') ||
+    document.getElementById('leadTimelineList') ||
+    document.getElementById('leadNotesList');
+
+  const block = document.createElement('div');
+  block.id = 'leadMessageBox';
+
+  if (target && target.parentElement) {
+    target.parentElement.insertAdjacentElement('afterend', block);
+  } else {
+    drawer.appendChild(block);
+  }
+
+  return true;
+}
+
+function renderLeadMessageBox() {
+  ensureLeadMessageContainer();
+
+  const box = document.getElementById('leadMessageBox');
+  if (!box || !activeLeadDrawerId) return;
+
+  const lead = activeLeadDrawerData || {};
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+  const waStatus = getLeadWhatsappStatus(activeLeadDrawerId);
+
+  box.innerHTML = `
+    <div class="lead-message-block">
+      <div class="lead-message-title">Enviar mensagem</div>
+
+      <div class="lead-message-template">
+        <select id="leadMessageTemplate" onchange="applyLeadMessageTemplate()">
+          <option value="primeiro_contato">Primeiro contato</option>
+          <option value="followup">Follow-up</option>
+          <option value="apresentacao">Apresentação</option>
+        </select>
+        <button class="btn btn-ghost" style="font-size:10px;padding:7px 12px" onclick="applyLeadMessageTemplate()">Usar modelo</button>
+      </div>
+
+      <textarea id="leadMessageText" placeholder="Digite a mensagem para enviar no WhatsApp...">${escHtml(buildLeadMessageTemplate('primeiro_contato'))}</textarea>
+
+      <div class="lead-message-actions">
+        <button class="btn btn-primary" style="font-size:10px;padding:7px 12px" onclick="sendActiveLeadWhatsappMessage()">Enviar pela Evolution</button>
+        ${phone ? `<a class="btn btn-ghost" style="font-size:10px;padding:7px 12px;text-decoration:none" target="_blank" rel="noopener" href="https://wa.me/${escHtml(phone)}?text=${encodeURIComponent(buildLeadMessageTemplate('primeiro_contato'))}">Abrir no WhatsApp</a>` : ''}
+      </div>
+
+      <div class="lead-message-result" id="leadMessageResult">
+        ${phone ? `Número: ${escHtml(phone)} · Status: ${escHtml(waStatus.label || 'Não validado')}` : 'Lead sem telefone.'}
+      </div>
+    </div>
+  `;
+}
+
+function applyLeadMessageTemplate() {
+  const select = document.getElementById('leadMessageTemplate');
+  const text = document.getElementById('leadMessageText');
+  if (!text) return;
+
+  text.value = buildLeadMessageTemplate(select?.value || 'primeiro_contato');
+}
+
+async function sendActiveLeadWhatsappMessage() {
+  if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+
+  const settings = getEvolutionSettings ? getEvolutionSettings() : {};
+  const result = document.getElementById('leadMessageResult');
+  const text = (document.getElementById('leadMessageText')?.value || '').trim();
+  const phone = normalizePhoneForEvolution(activeLeadDrawerData.whatsapp || activeLeadDrawerData.phone || activeLeadDrawerData.telefone || '');
+
+  if (!settings.url || !settings.instance || !settings.apiKey) {
+    notify('Configure a Evolution API antes de enviar.', 'warn');
+    if (result) result.textContent = 'Configuração da Evolution incompleta.';
+    return;
+  }
+
+  if (!phone || phone.length < 10) {
+    notify('Telefone inválido para envio.', 'warn');
+    if (result) result.textContent = 'Telefone inválido.';
+    return;
+  }
+
+  if (!text) {
+    notify('Digite uma mensagem antes de enviar.', 'warn');
+    if (result) result.textContent = 'Mensagem vazia.';
+    return;
+  }
+
+  if (result) result.textContent = 'Enviando mensagem...';
+
+  try {
+    const endpoint = `${settings.url}/message/sendText/${encodeURIComponent(settings.instance)}`;
+
+    const payload = {
+      number: phone,
+      text
+    };
+
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: getEvolutionHeaders(settings),
+      body: JSON.stringify(payload)
+    });
+
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) {
+      const msg = data?.message || data?.error || `HTTP ${res.status}`;
+      addLeadHistory(activeLeadDrawerId, `WhatsApp: erro ao enviar mensagem (${msg})`, activeLeadDrawerData);
+      if (result) result.textContent = `Erro ao enviar: ${msg}`;
+      if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+      notify('Erro ao enviar mensagem.', 'err');
+      return;
+    }
+
+    const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+    crm.lastWhatsappMessage = {
+      text,
+      phone,
+      sentAt: new Date().toISOString(),
+      sentAtLabel: crmNowLabel(),
+      response: data
+    };
+    saveLeadCrm(activeLeadDrawerId, crm);
+
+    addLeadHistory(activeLeadDrawerId, `Mensagem enviada via WhatsApp para ${phone}`, activeLeadDrawerData);
+
+    if (result) result.textContent = `Mensagem enviada em ${crmNowLabel()}.`;
+    if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+
+    notify('Mensagem enviada via Evolution.');
+  } catch (err) {
+    addLeadHistory(activeLeadDrawerId, `WhatsApp: falha ao enviar mensagem (${err?.message || 'erro'})`, activeLeadDrawerData);
+    if (result) result.textContent = `Falha ao enviar: ${err?.message || 'erro desconhecido'}`;
+    if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+    notify('Falha ao conectar na Evolution.', 'err');
+  }
 }
 
 /* ════════════════════════════

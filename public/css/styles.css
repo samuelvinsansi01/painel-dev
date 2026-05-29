@@ -1536,3 +1536,47 @@ body.auth-locked .app{
 .wa-mini-badge.valid{color:var(--ok);border-color:rgba(78,203,113,.35);}
 .wa-mini-badge.invalid{color:var(--error);border-color:rgba(255,92,92,.35);}
 .wa-mini-badge.pending{color:var(--warning);border-color:rgba(240,164,41,.35);}
+
+
+/* ══ EVOLUTION SEND V26 ══ */
+.lead-message-block{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:12px;
+  margin-bottom:12px;
+}
+.lead-message-title{
+  font-size:11px;
+  font-weight:800;
+  letter-spacing:.08em;
+  text-transform:uppercase;
+  color:var(--text2);
+  margin-bottom:10px;
+}
+.lead-message-template{
+  display:grid;
+  grid-template-columns:1fr auto;
+  gap:8px;
+  margin-bottom:8px;
+}
+.lead-message-block textarea{
+  min-height:108px;
+  resize:vertical;
+}
+.lead-message-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.lead-message-result{
+  margin-top:10px;
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  line-height:1.6;
+}
+@media(max-width:700px){
+  .lead-message-template{grid-template-columns:1fr;}
+}
