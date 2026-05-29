@@ -115,10 +115,18 @@ async function initAuth() {
   currentUser = data?.session?.user || null;
   renderAuthUser(currentUser);
 
-  sbClient.auth.onAuthStateChange((_event, session) => {
+  sbClient.auth.onAuthStateChange(async (_event, session) => {
     currentUser = session?.user || null;
     renderAuthUser(currentUser);
+  
+    if (currentUser) {
+      await loadSupabaseLeadsToLocalState();
+    }
   });
+
+  if (currentUser) {
+    await loadSupabaseLeadsToLocalState();
+  }
 }
 
 async function loginGoogle() {
@@ -230,6 +238,49 @@ function getAllFollowUps() {
       };
     })
     .sort((a, b) => String(a.date).localeCompare(String(b.date)));
+}
+
+async function loadSupabaseLeadsToLocalState() {
+  if (!sbClient || !currentUser) return;
+
+  const { data, error } = await sbClient
+    .from('leads')
+    .select('*')
+    .eq('user_id', currentUser.id);
+
+  if (error) {
+    console.error('[supabase] load leads:', error);
+    notify('Erro ao carregar leads do Supabase', 'err');
+    return;
+  }
+
+  const today = todayStr();
+
+  const leads = (data || []).map(item => ({
+    id: item.id,
+    nome: item.company_name || 'Lead sem nome',
+    whatsapp: item.phone || '',
+    instagram: item.instagram || '',
+    site: item.website || '',
+    googleUrl: item.maps_url || '',
+    status: item.status || 'Não enviada',
+    criadoEm: item.created_at
+      ? new Date(item.created_at).toLocaleDateString('pt-BR')
+      : today
+  }));
+
+  const weekData = {
+    weekStart: currentWeekStartStr(),
+    days: {
+      [today]: leads
+    }
+  };
+
+  saveWeekData(weekData);
+  renderInicio();
+  updateBadges();
+
+  console.log(`[supabase] Leads carregados: ${leads.length}`);
 }
 
 function getTodayFollowUps() {
