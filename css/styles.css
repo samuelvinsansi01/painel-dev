@@ -920,3 +920,21 @@ tr:hover td{background:rgba(255,255,255,0.015);}
   .followup-dashboard{grid-template-columns:1fr;}
   .followup-item{align-items:flex-start;flex-direction:column;}
 }
+
+
+/* ══ SUPABASE PRIMARY V15 ══ */
+.sync-status{
+  display:inline-flex;
+  align-items:center;
+  gap:6px;
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  padding:4px 8px;
+  border-radius:100px;
+  border:1px solid var(--border2);
+  color:var(--muted);
+  background:var(--bg);
+}
+.sync-status.ok{border-color:rgba(78,203,113,.35);color:var(--ok);background:rgba(78,203,113,.06);}
+.sync-status.warn{border-color:rgba(240,164,41,.35);color:var(--warning);background:rgba(240,164,41,.07);}
+.sync-status.err{border-color:rgba(255,92,92,.35);color:var(--error);background:rgba(255,92,92,.06);}
