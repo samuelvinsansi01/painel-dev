@@ -590,6 +590,40 @@ function clearLeadFollowUp() {
   notify('Follow-up removido.');
 }
 
+
+function createDevTestLead() {
+  const data = ensureWeekData();
+  const day = selectedDay || todayStr();
+  if (!data.days[day]) data.days[day] = [];
+
+  const id = 'dev_test_' + Date.now();
+  const lead = {
+    id,
+    nome: 'Lead Teste DEV',
+    site: 'https://exemplo.com.br',
+    whatsapp: '5511999999999',
+    instagram: 'https://instagram.com/leadteste',
+    googleUrl: 'https://maps.google.com',
+    categoria: 'Teste / Validação',
+    status: 'Não enviada',
+    criadoEm: todayStr(),
+    ramoId: null
+  };
+
+  data.days[day].push(lead);
+  saveWeekData(data);
+  ensureLeadCrm(id, lead);
+  addLeadHistory(id, 'Lead teste criado no ambiente DEV', lead);
+  syncLeadToCloud(id, lead);
+
+  selectedDay = day;
+  selectedStatus = 'Não enviada';
+  renderInicio();
+  renderFollowUpsHome();
+  updateBadges();
+  notify('Lead teste criado. Abra a ficha na lista.');
+}
+
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeLeadDrawer();
 });
