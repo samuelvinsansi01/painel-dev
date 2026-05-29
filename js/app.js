@@ -356,6 +356,7 @@ async function loadSupabaseLeadsToLocalState() {
   renderInicio();
   updateBadges();
   renderCrmHomeDashboard();
+  renderExecutiveDashboard();
 
   await loadSupabaseLeadCrmToLocalState();
 
@@ -1538,6 +1539,67 @@ function removeLeadPresentation(id) {
 function copyLeadPresentationUrl(url) {
   navigator.clipboard?.writeText(url);
   notify('Link copiado.');
+}
+
+
+/* ════════════════════════════
+   EXEC DASHBOARD V17
+════════════════════════════ */
+function getExecutiveMetrics() {
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  const items = Object.values(crm || {});
+
+  const contato = items.filter(i => (i.pipelineStatus || 'contato_enviado') === 'contato_enviado').length;
+  const respondeu = items.filter(i => i.pipelineStatus === 'respondeu').length;
+  const reuniao = items.filter(i => i.pipelineStatus === 'reuniao').length;
+  const proposta = items.filter(i => i.pipelineStatus === 'proposta').length;
+  const fechado = items.filter(i => i.pipelineStatus === 'fechado').length;
+
+  const base = Math.max(contato + respondeu + reuniao + proposta + fechado, 1);
+
+  return {
+    contato,
+    respondeu,
+    reuniao,
+    proposta,
+    fechado,
+    respostaRate: Math.round((respondeu / base) * 100),
+    reuniaoRate: Math.round((reuniao / base) * 100),
+    propostaRate: Math.round((proposta / base) * 100),
+    fechamentoRate: Math.round((fechado / base) * 100)
+  };
+}
+
+function renderExecutiveDashboard() {
+  const host = document.getElementById('crmHomeDashboardHost');
+  if (!host) return;
+
+  const m = getExecutiveMetrics();
+  const max = Math.max(m.contato, m.respondeu, m.reuniao, m.proposta, m.fechado, 1);
+
+  host.insertAdjacentHTML('beforeend', `
+    <div class="exec-metrics">
+      <div class="exec-card"><div class="exec-label">Resposta</div><div class="exec-value">${m.respostaRate}%</div></div>
+      <div class="exec-card"><div class="exec-label">Reunião</div><div class="exec-value">${m.reuniaoRate}%</div></div>
+      <div class="exec-card"><div class="exec-label">Proposta</div><div class="exec-value">${m.propostaRate}%</div></div>
+      <div class="exec-card"><div class="exec-label">Fechamento</div><div class="exec-value">${m.fechamentoRate}%</div></div>
+    </div>
+
+    <div class="exec-funnel">
+      ${[
+        ['Contato',m.contato],
+        ['Respondeu',m.respondeu],
+        ['Reunião',m.reuniao],
+        ['Proposta',m.proposta],
+        ['Fechado',m.fechado]
+      ].map(([label,val])=>`
+        <div class="exec-stage">
+          <div class="exec-stage-top"><span>${label}</span><span>${val}</span></div>
+          <div class="exec-bar"><div class="exec-fill" style="width:${Math.round((val/max)*100)}%"></div></div>
+        </div>
+      `).join('')}
+    </div>
+  `);
 }
 
 /* ════════════════════════════

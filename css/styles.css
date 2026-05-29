@@ -1088,3 +1088,64 @@ tr:hover td{background:rgba(255,255,255,0.015);}
 @media(max-width:700px){
   .lead-presentation-row{grid-template-columns:1fr;}
 }
+
+
+/* ══ EXEC DASHBOARD V17 ══ */
+.exec-metrics{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:16px;
+}
+.exec-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
+}
+.exec-label{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.exec-value{
+  font-size:30px;
+  font-weight:800;
+  letter-spacing:-.05em;
+  margin-top:8px;
+}
+.exec-funnel{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:16px;
+  padding:16px;
+  margin-bottom:16px;
+}
+.exec-stage{
+  margin-bottom:12px;
+}
+.exec-stage-top{
+  display:flex;
+  justify-content:space-between;
+  margin-bottom:6px;
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+}
+.exec-bar{
+  height:8px;
+  border-radius:100px;
+  background:var(--surface3);
+  overflow:hidden;
+}
+.exec-fill{
+  height:100%;
+  background:var(--accent);
+}
+@media(max-width:900px){
+  .exec-metrics{grid-template-columns:1fr 1fr;}
+}
+@media(max-width:560px){
+  .exec-metrics{grid-template-columns:1fr;}
+}
