@@ -10618,3 +10618,56 @@ function addWhatsappChip(){
 function testEvolutionChipConnectionV406(){
   return testEvolutionChipConnectionV407();
 }
+
+
+/* ════════════════════════════
+   CHIP IDS FIX V40.8
+   Corrige campos duplicados:
+   chipNome, chipUrl, chipInstance preenchido, chipKey
+════════════════════════════ */
+function getInputValueSmartV408(candidates = [], terms = []) {
+  const inputs = Array.from(document.querySelectorAll('input'));
+
+  for (const id of candidates) {
+    const matches = inputs.filter(i => i.id === id);
+    const filled = matches.find(i => String(i.value || '').trim());
+    if (filled) return String(filled.value || '').trim();
+  }
+
+  const termFilled = inputs.find(input => {
+    const hay = `${input.id||''} ${input.name||''} ${input.placeholder||''}`.toLowerCase();
+    return terms.some(t => hay.includes(t)) && String(input.value || '').trim();
+  });
+  if (termFilled) return String(termFilled.value || '').trim();
+
+  for (const id of candidates) {
+    const el = inputs.find(i => i.id === id);
+    if (el) return String(el.value || '').trim();
+  }
+
+  return '';
+}
+
+function getChipFormValuesV407() {
+  const name = getInputValueSmartV408(['chipNome', 'chipName'], ['nome do chip', 'nome']);
+  const url = getInputValueSmartV408(['chipUrl', 'evoUrl'], ['url da evolution', 'url evolution', 'url']);
+  const instance = getInputValueSmartV408(['chipInstance', 'evoInstance'], ['instância', 'instancia', 'instance']);
+  const key = getInputValueSmartV408(['chipKey', 'chipApiKey', 'evoApiKey', 'evoKey'], ['api key', 'apikey', 'chave']);
+
+  return {
+    name,
+    url: String(url || '').trim().replace(/\/$/, ''),
+    instance,
+    key,
+    dailyLimit: Number(document.getElementById('chipDailyLimit')?.value || 120),
+    blockSize: Number(document.getElementById('chipBlockSize')?.value || 30),
+    intervalSeconds: Number(document.getElementById('chipInterval')?.value || 120),
+    blocks: (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00').split(',').map(v=>v.trim()).filter(Boolean),
+    found: {
+      name: !!document.querySelector('#chipNome, #chipName'),
+      url: !!document.querySelector('#chipUrl, #evoUrl'),
+      instance: !!document.querySelector('#chipInstance, #evoInstance'),
+      key: !!document.querySelector('#chipKey, #chipApiKey, #evoApiKey, #evoKey')
+    }
+  };
+}
