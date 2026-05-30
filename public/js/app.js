@@ -17,6 +17,7 @@ const INSTA_KEY      = 'vs_insta_fila_v2';  // fila instagram aguardando atribui
 const INSTA_WEEK_KEY = 'vs_insta_week_v1';  // leads instagram atribuídos por dia
 const INSTA_SCHED_KEY = 'vs_insta_sched_v1'; // cronograma instagram
 const FILA_DISPARO_KEY = 'vs_fila_disparo_v1'; // fila de disparo WhatsApp
+const RECUPERAR_VALIDACAO_ZAP_KEY = 'vs_recover_validacao_zap_v1';
 const LEAD_CRM_KEY   = 'vs_lead_crm_v1'; // notas, histórico e pipeline comercial
 
 // Supabase — usado primeiro apenas para login Google.
@@ -5359,6 +5360,40 @@ function saveAtribuicaoData(d){ localStorage.setItem(ATRIBUICAO_KEY, JSON.string
 function getInstaFila()  { try { return JSON.parse(localStorage.getItem(INSTA_KEY)||'[]'); } catch { return []; } }
 function saveInstaFila(d){ localStorage.setItem(INSTA_KEY, JSON.stringify(d)); }
 
+function recuperarValidacaoZapDoDia() {
+  if (localStorage.getItem(RECUPERAR_VALIDACAO_ZAP_KEY) === '1') return 0;
+
+  const hoje = todayStr();
+  const atribuicao = getAtribuicaoData();
+  const validacao = getValData();
+  const validacaoIds = new Set(validacao.map(lead => lead.id));
+  const devemVoltar = atribuicao.filter(lead =>
+    lead.canal === 'zap' &&
+    lead.validadoEm === hoje &&
+    (lead.status || 'Não enviada') === 'Não enviada' &&
+    !lead.diaDestino
+  );
+
+  if (devemVoltar.length) {
+    const recuperados = devemVoltar
+      .filter(lead => !validacaoIds.has(lead.id))
+      .map(lead => ({
+        ...lead,
+        canal: 'pendente',
+        numStatus: 'pendente',
+        importadoEm: lead.importadoEm || lead.criadoEm || hoje,
+        diaDestino: null,
+        recuperadoDaAtribuicaoEm: hoje,
+      }));
+    const recuperarIds = new Set(devemVoltar.map(lead => lead.id));
+    saveValData([...validacao, ...recuperados]);
+    saveAtribuicaoData(atribuicao.filter(lead => !recuperarIds.has(lead.id)));
+  }
+
+  localStorage.setItem(RECUPERAR_VALIDACAO_ZAP_KEY, '1');
+  return devemVoltar.length;
+}
+
 /* ════════════════════════════
    STORAGE — INSTA CRONOGRAMA
 ════════════════════════════ */
@@ -6175,7 +6210,10 @@ function renderValidacao() {
         <div class="empresa-actions">
           ${v.numStatus==='valido'
             ?`<button class="add-btn added" onclick="aprovarParaFila('${v.id}')">→ Atribuir</button>`
-            :`<button class="add-btn" onclick="validarNumeroUnico('${v.id}')">Validar</button>`
+            : v.numStatus==='invalido'
+              ?`<button class="add-btn added" onclick="aprovarParaInsta('${v.id}')">→ Instagram</button>
+                <button class="add-btn" onclick="validarNumeroUnico('${v.id}')">Validar novamente</button>`
+              :`<button class="add-btn" onclick="validarNumeroUnico('${v.id}')">Validar</button>`
           }
           <button class="del-btn" onclick="removerDaValidacao('${v.id}')">✕</button>
         </div>
@@ -6574,21 +6612,21 @@ function aprovarParaInsta(id) {
   const linkInput = document.getElementById(`insta-link-${id}`);
   if (linkInput) v.instagram = linkInput.value.trim();
 
-  // Manda para a Base de Atribuição com tag INSTA
-  const atrib = getAtribuicaoData();
-  if (!atrib.find(a => a.id === v.id)) {
-    atrib.push({
+  // Manda diretamente para a atribuição de Instagram.
+  const fila = getInstaFila();
+  if (!fila.find(a => a.id === v.id)) {
+    fila.push({
       id: v.id, nome: v.nome, site: '', whatsapp: v.whatsapp || '',
       instagram: v.instagram || '', googleUrl: v.googleUrl || '',
       canal: 'insta', // sem WhatsApp validado
       status: 'Não enviada', criadoEm: v.importadoEm || todayStr(),
       validadoEm: todayStr(), diaDestino: null,
     });
-    saveAtribuicaoData(atrib);
+    saveInstaFila(fila);
   }
 
   saveValData(getValData().filter(x => x.id !== id));
-  renderValidacao(); updateBadges();
+  renderValidacao(); updateBadges(); updateAtribTabCounts();
   notify(`✓ ${v.nome} → Atribuição (tag INSTA)`);
 }
 
@@ -6597,6 +6635,8 @@ function aprovarTodosParaAtribuicao() {
   const val = getValData();
   const atrib = getAtribuicaoData();
   const existIds = new Set(atrib.map(a => a.id));
+  const instaFila = getInstaFila();
+  const instaIds = new Set(instaFila.map(a => a.id));
   let addedZap = 0, addedInsta = 0;
 
   // Processa leads com número válido → tag ZAP
@@ -6613,25 +6653,26 @@ function aprovarTodosParaAtribuicao() {
   });
 
   // Processa leads sem número válido (invalido) → tag INSTA
-  val.filter(v => v.numStatus === 'invalido' && !existIds.has(v.id)).forEach(v => {
-    atrib.push({
+  val.filter(v => v.numStatus === 'invalido' && !instaIds.has(v.id)).forEach(v => {
+    instaFila.push({
       id: v.id, nome: v.nome, site: '', whatsapp: '',
       instagram: v.instagram || '', googleUrl: v.googleUrl || '',
       canal: 'insta',
       status: 'Não enviada', criadoEm: v.importadoEm || todayStr(),
       validadoEm: todayStr(), diaDestino: null,
     });
-    existIds.add(v.id);
+    instaIds.add(v.id);
     addedInsta++;
   });
 
   if (!addedZap && !addedInsta) { notify('// nenhum lead pronto para atribuição','warn'); return; }
 
   saveAtribuicaoData(atrib);
+  saveInstaFila(instaFila);
   // Remove os aprovados da validação
   const removedIds = new Set([...val.filter(v => v.numStatus === 'valido' || v.numStatus === 'invalido').map(v => v.id)]);
   saveValData(val.filter(v => !removedIds.has(v.id)));
-  renderValidacao(); updateBadges();
+  renderValidacao(); updateBadges(); updateAtribTabCounts();
   let msg = `✓ `;
   if (addedZap)   msg += `${addedZap} ZAP`;
   if (addedInsta) msg += `${addedZap?', ':''}${addedInsta} INSTA`;
@@ -10021,9 +10062,13 @@ function confirmarExcluirLead() {
   ensureWeekData();
   migrarChavesInstaWeek();
   sincronizarFilaComEnviados();
+  const recuperadosValidacao = recuperarValidacaoZapDoDia();
   renderInicio();
   renderExcluidos();
   updateBadges();
+  if (recuperadosValidacao) {
+    setTimeout(() => notify(`↩ ${recuperadosValidacao} lead(s) voltaram para Validação`), 0);
+  }
   // Migrar imagens antigas do localStorage para o IDB (executa uma vez)
   try {
     const oldCfg = JSON.parse(localStorage.getItem(LOTE_CFG_KEY)||'{}')||{};
