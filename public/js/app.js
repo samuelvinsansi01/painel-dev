@@ -10671,3 +10671,131 @@ function getChipFormValuesV407() {
     }
   };
 }
+
+
+/* ════════════════════════════
+   CHIP UNIFICADO V40.9
+   Salva chip no modelo antigo e no novo.
+════════════════════════════ */
+function getLegacyChipFormV409() {
+  const smart = (ids) => {
+    const inputs = Array.from(document.querySelectorAll('input'));
+    for (const id of ids) {
+      const filled = inputs.filter(i => i.id === id).find(i => String(i.value || '').trim());
+      if (filled) return String(filled.value || '').trim();
+    }
+    for (const id of ids) {
+      const el = inputs.find(i => i.id === id);
+      if (el) return String(el.value || '').trim();
+    }
+    return '';
+  };
+
+  return {
+    nome: smart(['chipNome', 'chipName']),
+    url: smart(['chipUrl', 'evoUrl']).replace(/\/$/, ''),
+    instance: smart(['chipInstance', 'evoInstance']),
+    key: smart(['chipKey', 'chipApiKey', 'evoApiKey'])
+  };
+}
+
+async function testarChipLegacyV409(chip) {
+  const endpoint = `${chip.url}/instance/connectionState/${encodeURIComponent(chip.instance)}`;
+
+  const res = await fetch(endpoint, {
+    method: 'GET',
+    headers: { apikey: chip.key }
+  });
+
+  const data = await res.json().catch(() => ({}));
+  const state = data?.instance?.state || data?.state || '';
+
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  if (!state) throw new Error('Evolution respondeu sem estado');
+
+  return { state, data };
+}
+
+function syncLegacyChipToV29V409(legacyChip) {
+  if (typeof getWhatsappChipsV29 !== 'function' || typeof saveWhatsappChipsV29 !== 'function') return;
+
+  const chipsV29 = getWhatsappChipsV29();
+  const existing = chipsV29.find(c => c.instance === legacyChip.instance || c.name === legacyChip.nome);
+
+  const mapped = {
+    id: existing?.id || legacyChip.id || 'chip_' + Date.now(),
+    name: legacyChip.nome,
+    nome: legacyChip.nome,
+    url: legacyChip.url,
+    instance: legacyChip.instance,
+    key: legacyChip.key,
+    apiKey: legacyChip.key,
+    dailyLimit: 120,
+    blockSize: 30,
+    intervalSeconds: 120,
+    blocks: ['08:00','10:00','12:00','14:00'],
+    status: 'active',
+    paused: false,
+    connectionState: legacyChip.status || 'open',
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existing) Object.assign(existing, mapped);
+  else chipsV29.push(mapped);
+
+  saveWhatsappChipsV29(chipsV29);
+}
+
+async function salvarChip() {
+  const form = getLegacyChipFormV409();
+
+  if (!form.nome || !form.url || !form.instance || !form.key) {
+    notify('// preencha todos os campos', 'err');
+    console.warn('[chip v40.9] campos lidos:', form);
+    return;
+  }
+
+  try {
+    notify('// testando conexão do chip...', 'warn');
+    const test = await testarChipLegacyV409(form);
+
+    const chips = typeof getChips === 'function' ? getChips() : [];
+    const existing = chips.find(c => c.instance === form.instance || c.nome === form.nome);
+
+    const chipPayload = {
+      id: existing?.id || (typeof genId === 'function' ? genId() : 'chip_' + Date.now()),
+      nome: form.nome,
+      url: form.url,
+      instance: form.instance,
+      key: form.key,
+      status: test.state === 'open' ? 'conectado' : test.state
+    };
+
+    if (existing) Object.assign(existing, chipPayload);
+    else {
+      if (chips.length >= 2) {
+        notify('// máximo de 2 chips', 'warn');
+        return;
+      }
+      chips.push(chipPayload);
+    }
+
+    if (typeof saveChips === 'function') saveChips(chips);
+    syncLegacyChipToV29V409(chipPayload);
+
+    if (typeof fecharChipModal === 'function') fecharChipModal();
+    if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
+    if (typeof renderChipsPanel === 'function') renderChipsPanel();
+    if (typeof updateBadges === 'function') updateBadges();
+
+    notify(`✓ Chip salvo e conectado: ${test.state}`);
+  } catch (err) {
+    console.error('[chip v40.9] erro ao salvar:', err);
+    notify('// erro ao conectar chip: ' + (err?.message || 'falha'), 'err');
+  }
+}
+
+function addWhatsappChip() {
+  return salvarChip();
+}
