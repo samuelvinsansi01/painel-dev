@@ -121,6 +121,12 @@
       </div>
     </div>
   </div>
+
+    <div class="nav-item" onclick="switchPanel('audit')" data-label="Auditoria">
+      <div class="nav-icon">📊</div>
+      <span class="nav-label">Auditoria</span>
+      <span class="nav-badge" id="badge-audit">LOG</span>
+    </div>
 </aside>
 
 
@@ -813,6 +819,34 @@
 <!-- ── CHIPS V29 ── -->
 
 <!-- ── RESPOSTAS WEBHOOK V34 ── -->
+
+<!-- ── AUDITORIA V35 ── -->
+<div class="panel" id="panel-audit">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Auditoria <span>de Disparos.</span></div>
+    <div class="page-sub">// envios · erros · chips · templates · campanhas</div>
+  </div>
+
+  <div class="audit-v35-cards" id="auditCardsV35"></div>
+
+  <div class="stretch-card">
+    <div class="audit-v35-toolbar">
+      <div class="card-title">Registros</div>
+      <div class="audit-v35-actions">
+        <select id="auditFilterV35" onchange="renderAuditV35()">
+          <option value="todos">Todos</option>
+          <option value="Enviado">Enviados</option>
+          <option value="Erro">Erros</option>
+          <option value="Pronto">Prontos</option>
+          <option value="Respondido">Respondidos</option>
+        </select>
+        <button class="btn btn-ghost" onclick="exportAuditCsvV35()">Exportar CSV</button>
+      </div>
+    </div>
+    <div id="auditListV35" class="audit-v35-list"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-responses">
   <div class="page-header" style="flex-shrink:0">
     <div class="page-title">Respostas <span>WhatsApp.</span></div>

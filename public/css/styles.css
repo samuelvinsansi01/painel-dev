@@ -1971,3 +1971,96 @@ body.auth-locked .app{
 @media(max-width:900px){
   .responses-v34-grid{grid-template-columns:1fr;}
 }
+
+
+/* ══ AUDITORIA V35 ══ */
+.audit-v35-cards{
+  display:grid;
+  grid-template-columns:repeat(4,minmax(0,1fr));
+  gap:12px;
+  margin-bottom:16px;
+  flex-shrink:0;
+}
+.audit-v35-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:14px;
+  padding:14px;
+}
+.audit-v35-label{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  text-transform:uppercase;
+  letter-spacing:.12em;
+}
+.audit-v35-value{
+  font-size:28px;
+  line-height:1;
+  font-weight:800;
+  margin-top:8px;
+}
+.audit-v35-toolbar{
+  display:flex;
+  justify-content:space-between;
+  gap:12px;
+  align-items:center;
+  flex-wrap:wrap;
+  margin-bottom:12px;
+  flex-shrink:0;
+}
+.audit-v35-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+}
+.audit-v35-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.audit-v35-row{
+  display:grid;
+  grid-template-columns:1.1fr .8fr .8fr .8fr .6fr;
+  gap:10px;
+  align-items:center;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:12px;
+}
+.audit-v35-title{
+  font-weight:800;
+  font-size:12px;
+}
+.audit-v35-meta{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+  line-height:1.6;
+}
+.audit-v35-status{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  padding:4px 8px;
+  border-radius:999px;
+  border:1px solid var(--border2);
+  width:max-content;
+}
+.audit-v35-status.enviado{color:var(--ok);border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06);}
+.audit-v35-status.erro{color:var(--error);border-color:rgba(255,92,92,.35);background:rgba(255,92,92,.06);}
+.audit-v35-status.pronto{color:var(--accent);border-color:var(--accent-border);background:var(--accent-dim);}
+.audit-v35-empty{
+  padding:28px;
+  text-align:center;
+  color:var(--muted);
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+}
+@media(max-width:1000px){
+  .audit-v35-cards{grid-template-columns:repeat(2,minmax(0,1fr));}
+  .audit-v35-row{grid-template-columns:1fr;}
+}
+@media(max-width:560px){
+  .audit-v35-cards{grid-template-columns:1fr;}
+}
