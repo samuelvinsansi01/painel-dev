@@ -2463,3 +2463,15 @@ body.auth-locked .app{
 .inbox-v41-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
 .import-summary-v41{margin-top:12px;background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:12px;font-family:'DM Mono',monospace;font-size:9px;line-height:1.7;color:var(--muted);white-space:pre-wrap}
 @media(max-width:900px){.inbox-v41-grid{grid-template-columns:1fr}.inbox-v41-item{grid-template-columns:1fr}}
+
+/* V41.1 MENU EXPANSÍVEL FIX */
+.sidebar-v41-hello{font-size:18px!important;line-height:1.15!important;font-weight:900!important}
+.sidebar-v41-sub{font-size:8px!important}
+.sidebar-v411-group-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;padding:10px 12px!important;margin:6px 0 2px!important;border-radius:10px!important;cursor:pointer!important;color:var(--muted)!important;font-family:'DM Mono',monospace!important;font-size:8px!important;letter-spacing:.14em!important;text-transform:uppercase!important}
+.sidebar-v411-group-head:hover{background:var(--surface)!important;color:var(--text)!important}
+.sidebar-v411-chevron{font-size:10px!important;transition:.18s ease!important}
+.sidebar-v411-group.open .sidebar-v411-chevron{transform:rotate(90deg)!important}
+.sidebar-v411-group-body{display:none!important;flex-direction:column!important;gap:4px!important}
+.sidebar-v411-group.open .sidebar-v411-group-body{display:flex!important}
+.sidebar-v41-subitem{padding-left:30px!important}
+.sidebar [data-label="Respostas"]{display:none!important}
