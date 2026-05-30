@@ -4523,12 +4523,12 @@ let tplTipo          = 'com-site';
 ════════════════════════════ */
 function todayStr() { return new Date().toLocaleDateString('pt-BR'); }
 function timeStr()  { return new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }); }
-function getWeekStart(d) { const dt = d ? new Date(d) : new Date(); dt.setHours(0,0,0,0); dt.setDate(dt.getDate() - dt.getDay()); return dt; }
+function getWeekStart(d) { const dt = d ? new Date(d) : new Date(); dt.setHours(0,0,0,0); const day = dt.getDay(); dt.setDate(dt.getDate() - (day === 0 ? 7 : day)); return dt; }
 function currentWeekStartStr() { return getWeekStart().toLocaleDateString('pt-BR'); }
 function currentWeekDays() {
   const days = [], start = getWeekStart();
-  for (let i = 0; i <= 6; i++) { const d = new Date(start); d.setDate(start.getDate() + i); days.push(d.toLocaleDateString('pt-BR')); }
-  return days; // dom a sáb
+  for (let i = 0; i <= 7; i++) { const d = new Date(start); d.setDate(start.getDate() + i); days.push(d.toLocaleDateString('pt-BR')); }
+  return days; // domingo a domingo
 }
 function dayLabel(dateStr) {
   const [d, m, y] = dateStr.split('/').map(Number);
@@ -4545,7 +4545,6 @@ function nextWeekday(dateStr) {
   const [d, m, y] = dateStr.split('/').map(Number);
   const dt = new Date(y, m - 1, d);
   dt.setDate(dt.getDate() + 1);
-  if (dt.getDay() === 0) dt.setDate(dt.getDate() + 1); // pula domingo
   return dt.toLocaleDateString('pt-BR');
 }
 
@@ -5258,8 +5257,8 @@ function ensureWeekData() {
   let d = getWeekData(); const ws = currentWeekStartStr();
   if (!d || d.weekStart !== ws) {
     // Virada de semana detectada
-    if (d && Object.values(d.days||{}).flat().length > 0) {
-      const flat = Object.values(d.days).flat();
+    if (d) {
+      const flat = Object.values(d.days||{}).flat();
 
       // Leads pós-envio (Enviada e além) → migrar para base mensal
       const STATUS_MENSAIS = ['Enviada','Respondida','Não respondida','Recusada','Fechada'];
