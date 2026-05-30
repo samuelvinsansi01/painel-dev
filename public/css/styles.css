@@ -2346,3 +2346,15 @@ body.auth-locked .app{
     padding-bottom:18px!important;
   }
 }
+
+/* V40.4 SIDEBAR SAFE */
+#sidebarToolsV40{
+  display:flex!important;
+  flex-direction:column!important;
+  gap:6px!important;
+}
+#sidebarAuthFooterV40{
+  margin-top:auto!important;
+  padding-top:14px!important;
+  border-top:1px solid var(--border2)!important;
+}

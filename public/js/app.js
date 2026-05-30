@@ -10104,44 +10104,17 @@ document.addEventListener('DOMContentLoaded',setupMobileMenuV37);
 /* ════════════════════════════
    MENU CLEANUP V39
 ════════════════════════════ */
-function cleanupSidebarMenuV39() {
-  const sidebar = document.querySelector('.sidebar');
-  if (!sidebar) return;
-
-  // Remove blocos de hora/data do rodapé, sem afetar usuário conectado.
-  Array.from(sidebar.querySelectorAll('*')).forEach(el => {
-    const txt = (el.textContent || '').trim().toLowerCase();
-    if (!txt) return;
-
-    const looksLikeClock =
-      /^\d{1,2}:\d{2}$/.test(txt) ||
-      /seg\.|ter\.|qua\.|qui\.|sex\.|sáb\.|sab\.|dom\./i.test(txt) ||
-      /de mai|de jun|de jul|de ago|de set|de out|de nov|de dez/i.test(txt);
-
-    if (looksLikeClock && !txt.includes('conectado') && !txt.includes('samuel')) {
-      el.style.display = 'none';
-    }
-  });
-
-  // Garante que Auditoria e Conversas fiquem antes do bloco de usuário/conectado.
-  const audit = sidebar.querySelector("[data-label='Auditoria']");
-  const conversations = sidebar.querySelector("[data-label='Conversas']");
-  const authBox =
-    sidebar.querySelector('#authUserBox') ||
-    Array.from(sidebar.children).find(el => (el.textContent || '').toLowerCase().includes('conectado'));
-
-  const insertionRef = authBox || null;
-
-  [audit, conversations].forEach(item => {
-    if (item && insertionRef && item.compareDocumentPosition(insertionRef) & Node.DOCUMENT_POSITION_FOLLOWING) {
-      sidebar.insertBefore(item, insertionRef);
-    }
-  });
+function cleanupSidebarMenuV39(){
+  try {
+    if (typeof rebuildSidebarV40 === 'function') rebuildSidebarV40();
+  } catch(e) {
+    console.warn('cleanupSidebarMenuV39 protegido:', e?.message || e);
+  }
 }
 
 document.addEventListener('DOMContentLoaded', cleanupSidebarMenuV39);
-setTimeout(cleanupSidebarMenuV39, 600);
-setTimeout(cleanupSidebarMenuV39, 1500);
+setTimeout(() => { try { cleanupSidebarMenuV39(); } catch(e){} }, 600);
+setTimeout(() => { try { cleanupSidebarMenuV39(); } catch(e){} }, 1500);
 
 
 /* ════════════════════════════
@@ -10256,3 +10229,74 @@ document.addEventListener('DOMContentLoaded', rebuildSidebarV40);
 setTimeout(rebuildSidebarV40, 300);
 setTimeout(rebuildSidebarV40, 1000);
 setTimeout(rebuildSidebarV40, 2000);
+
+
+/* SIDEBAR FINAL V40.4 SAFE */
+(function(){
+  const originalRebuildSidebarV40 = typeof rebuildSidebarV40 === 'function' ? rebuildSidebarV40 : null;
+
+  window.rebuildSidebarV40 = function(){
+    try {
+      if (originalRebuildSidebarV40) originalRebuildSidebarV40();
+    } catch(e) {
+      console.warn('rebuildSidebarV40 protegido:', e?.message || e);
+    }
+
+    const sidebar = document.querySelector('.sidebar');
+    if (!sidebar) return;
+
+    const authBox = sidebar.querySelector('#authUserBox');
+    let footer = document.getElementById('sidebarAuthFooterV40');
+
+    if (!footer) {
+      footer = document.createElement('div');
+      footer.id = 'sidebarAuthFooterV40';
+      sidebar.appendChild(footer);
+    }
+
+    if (authBox && authBox.parentElement !== footer) {
+      footer.appendChild(authBox);
+    }
+
+    let toolsGroup = document.getElementById('sidebarToolsV40');
+    if (!toolsGroup) {
+      toolsGroup = document.createElement('div');
+      toolsGroup.id = 'sidebarToolsV40';
+
+      const toolsTitle = Array.from(sidebar.querySelectorAll('*'))
+        .find(el => (el.textContent || '').trim().toLowerCase() === 'ferramentas');
+
+      if (toolsTitle && toolsTitle.parentElement) {
+        toolsTitle.insertAdjacentElement('afterend', toolsGroup);
+      } else if (footer.parentElement === sidebar) {
+        sidebar.insertBefore(toolsGroup, footer);
+      } else {
+        sidebar.appendChild(toolsGroup);
+      }
+    }
+
+    ['Redirecionamentos','Auditoria','Respostas','Conversas','Configurações'].forEach(label => {
+      const item = sidebar.querySelector(`[data-label="${label}"]`);
+      if (item && item.parentElement !== toolsGroup) {
+        toolsGroup.appendChild(item);
+      }
+    });
+
+    if (typeof updateResponsesBadgeV34 === 'function') updateResponsesBadgeV34();
+    if (typeof updateConversationsBadgeV38 === 'function') updateConversationsBadgeV38();
+    if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
+  };
+
+  document.addEventListener('DOMContentLoaded', () => { try { window.rebuildSidebarV40(); } catch(e){} });
+  setTimeout(() => { try { window.rebuildSidebarV40(); } catch(e){} }, 1200);
+})();
+
+
+/* V40.4 NotFoundError guard */
+window.addEventListener('error', function(e){
+  if (String(e.message || '').includes("insertBefore") || String(e.message || '').includes("NotFoundError")) {
+    console.warn('Erro de menu protegido:', e.message);
+    e.preventDefault?.();
+    try { rebuildSidebarV40(); } catch(err){}
+  }
+});
