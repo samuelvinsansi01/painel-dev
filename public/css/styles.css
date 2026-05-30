@@ -2266,3 +2266,45 @@ body.auth-locked .app{
   .message-bubble-v38{max-width:92%;}
   .conversation-reply-v38{grid-template-columns:1fr;}
 }
+
+/* V39 MENU CLEANUP */
+@media(max-width:980px){
+  #mobileMenuBtnV37{
+    top:16px!important;
+    left:16px!important;
+    width:44px!important;
+    height:44px!important;
+  }
+  .sidebar{
+    width:min(86vw,300px)!important;
+    max-width:300px!important;
+    overflow-y:auto!important;
+    overflow-x:hidden!important;
+    padding-bottom:22px!important;
+    box-shadow:24px 0 70px rgba(0,0,0,.55)!important;
+  }
+  body.mobile-menu-open #mobileMenuBtnV37{
+    left:calc(min(86vw,300px) + 12px)!important;
+  }
+  #mobileMenuOverlayV37{
+    backdrop-filter:blur(2px)!important;
+  }
+  .sidebar *{
+    box-sizing:border-box!important;
+  }
+}
+.sidebar .time,
+.sidebar .clock,
+.sidebar .current-time,
+.sidebar .date,
+.sidebar .current-date,
+.sidebar [data-time],
+.sidebar [data-date]{
+  display:none!important;
+}
+.sidebar-footer-time,
+.sidebar-time,
+.sidebar-date,
+.footer-time{
+  display:none!important;
+}

@@ -10059,6 +10059,7 @@ function setupMobileMenuV37(){
    document.body.classList.remove('mobile-menu-open');
  }
  function openMenu(){
+   try { cleanupSidebarMenuV39(); } catch(e){}
    sidebar.classList.add('mobile-open');
    overlay.classList.add('active');
    document.body.style.overflow='hidden';
@@ -10075,3 +10076,46 @@ function setupMobileMenuV37(){
 document.addEventListener('DOMContentLoaded',setupMobileMenuV37);
 
 // conversations fallback
+
+
+/* ════════════════════════════
+   MENU CLEANUP V39
+════════════════════════════ */
+function cleanupSidebarMenuV39() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+
+  // Remove blocos de hora/data do rodapé, sem afetar usuário conectado.
+  Array.from(sidebar.querySelectorAll('*')).forEach(el => {
+    const txt = (el.textContent || '').trim().toLowerCase();
+    if (!txt) return;
+
+    const looksLikeClock =
+      /^\d{1,2}:\d{2}$/.test(txt) ||
+      /seg\.|ter\.|qua\.|qui\.|sex\.|sáb\.|sab\.|dom\./i.test(txt) ||
+      /de mai|de jun|de jul|de ago|de set|de out|de nov|de dez/i.test(txt);
+
+    if (looksLikeClock && !txt.includes('conectado') && !txt.includes('samuel')) {
+      el.style.display = 'none';
+    }
+  });
+
+  // Garante que Auditoria e Conversas fiquem antes do bloco de usuário/conectado.
+  const audit = sidebar.querySelector("[data-label='Auditoria']");
+  const conversations = sidebar.querySelector("[data-label='Conversas']");
+  const authBox =
+    sidebar.querySelector('#authUserBox') ||
+    Array.from(sidebar.children).find(el => (el.textContent || '').toLowerCase().includes('conectado'));
+
+  const insertionRef = authBox || null;
+
+  [audit, conversations].forEach(item => {
+    if (item && insertionRef && item.compareDocumentPosition(insertionRef) & Node.DOCUMENT_POSITION_FOLLOWING) {
+      sidebar.insertBefore(item, insertionRef);
+    }
+  });
+}
+
+document.addEventListener('DOMContentLoaded', cleanupSidebarMenuV39);
+setTimeout(cleanupSidebarMenuV39, 600);
+setTimeout(cleanupSidebarMenuV39, 1500);
