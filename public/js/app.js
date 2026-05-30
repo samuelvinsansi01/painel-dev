@@ -6749,8 +6749,8 @@ const chipSlotState = [
   { filaLotes:[], loteAtual:0, lotesTotal:0, aguardandoLote:false, disparoEmAndamento:false, loteEsperaFim:null, loteEsperaTimer:null, loteCountdownInt:null, loteHistorico:[], retryItems:[], retryDisparado:false, ultimoLoteFimTs:null, pausado:false }
 ];
 
-/* ─── Limit por dia = 60 × nº de chips ─── */
-function getDailyLimit() { return Math.max(1, getChips().length) * 60; }
+/* ─── Limit por dia = 120 × nº de chips ─── */
+function getDailyLimit() { return Math.max(1, getChips().length) * 120; }
 
 /* ─── Helpers por slot ─── */
 function getChipBySlot(slot) { return getChips()[slot] || null; }
@@ -6876,7 +6876,7 @@ async function dispararLoteChip(slot) {
   if (!chip) return;
   st.loteAtual++;
   const lote = st.filaLotes.shift();
-  const esperaMin = Math.max(90, parseInt(document.getElementById('loteEsperaMin')?.value)||90);
+  const esperaMin = Math.max(60, parseInt(document.getElementById('loteEsperaMin')?.value)||60);
   const delayMin  = parseInt(document.getElementById('delayMin')?.value)||120;
   const delayMax  = parseInt(document.getElementById('delayMax')?.value)||180;
   const MSG_DELAY = 15000;
@@ -8044,7 +8044,7 @@ function saveFilaDisparo() {
   try { localStorage.setItem('vs_fila_disparo_v1', JSON.stringify(filaDisparo)); } catch(e) { console.warn('saveFilaDisparo error', e); }
 }
 
-const CHIP_LIMIT = 60; // máximo de leads por chip por dia
+const CHIP_LIMIT = 120; // máximo de leads por chip por dia
 
 function getFilaChipNoDia(chipId, day) {
   // Retorna apenas os itens da fila do chip que pertencem ao dia informado
@@ -8356,7 +8356,7 @@ function checkHorarioDisparo(now) {
 function loadEvoConfig() { try { return JSON.parse(localStorage.getItem(EVO_KEY)||'{}'); } catch { return {}; } }
 function atualizarStatsDisparo() {
   const tamanho  = parseInt(document.getElementById('loteTamanho')?.value)   || 30;
-  const esperaMin= parseInt(document.getElementById('loteEsperaMin')?.value) || 90;
+  const esperaMin= parseInt(document.getElementById('loteEsperaMin')?.value) || 60;
   const delayMin = parseInt(document.getElementById('delayMin')?.value)      || 120;
   const delayMax = parseInt(document.getElementById('delayMax')?.value)      || delayMin;
   const chips    = getChips();
@@ -8413,7 +8413,7 @@ function getLoteSize() {
 }
 function getLoteConfig() {
   const tam = Math.max(30, parseInt(document.getElementById('loteTamanho')?.value)||30);
-  const esp = Math.max(90, parseInt(document.getElementById('loteEsperaMin')?.value)||90);
+  const esp = Math.max(60, parseInt(document.getElementById('loteEsperaMin')?.value)||60);
   return { ativo: document.getElementById('loteAtivo')?.checked||false, tamanho: tam, esperaMin: esp };
 }
 
@@ -10209,11 +10209,9 @@ function confirmarExcluirLead() {
   const cfg = loadEvoConfig();
   if (cfg.delayMin)      document.getElementById('delayMin').value      = cfg.delayMin; else document.getElementById('delayMin').value = 120;
   if (cfg.delayMax)      document.getElementById('delayMax').value      = cfg.delayMax; else document.getElementById('delayMax').value = 120;
-  // Garante mínimo de 30 para lote e 90 para espera — corrige valores legados no localStorage
-  const loteTamanhoSalvo  = parseInt(cfg.loteTamanho)   || 0;
-  const loteEsperaSalvo   = parseInt(cfg.loteEsperaMin) || 0;
-  document.getElementById('loteTamanho').value   = loteTamanhoSalvo  >= 30 ? loteTamanhoSalvo  : 30;
-  document.getElementById('loteEsperaMin').value = loteEsperaSalvo   >= 90 ? loteEsperaSalvo   : 90;
+  // Parâmetros fixos da operação: 4 lotes de 30, com espera de 1h entre lotes.
+  document.getElementById('loteTamanho').value   = 30;
+  document.getElementById('loteEsperaMin').value = 60;
   if (cfg.horarioInicio) document.getElementById('horarioInicio').value = cfg.horarioInicio;
 
   atualizarStatsDisparo();
@@ -10446,13 +10444,13 @@ function authGateSelfTest() {
 function getDispatchConfigTextV33() {
   return {
     dailyLimitTitle: 'LIMITE DIÁRIO POR CHIP',
-    dailyLimitValue: '60 msg',
-    dailyLimitHint: '2 lotes × 30 · espera 1h30',
+    dailyLimitValue: '120 msg',
+    dailyLimitHint: '4 lotes × 30 · espera 1h',
     batchValue: '30 msg',
-    batchHint: 'por chip · 2 lotes por dia',
+    batchHint: 'por chip · 4 lotes por dia',
     intervalValue: '2 min',
     intervalHint: '120 seg fixo entre cada lead',
-    blocks: ['12:00']
+    blocks: ['08:00', '10:00', '12:00', '14:00']
   };
 }
 
