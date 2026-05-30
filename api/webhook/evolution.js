@@ -1,5 +1,7 @@
-
-let events = [];
+const SUPABASE_URL = process.env.SUPABASE_URL || 'https://txyknazfufashgzlxkqh.supabase.co';
+const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
+const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
+const EVOLUTION_WEBHOOK_SECRET = process.env.EVOLUTION_WEBHOOK_SECRET || '';
 
 function normalizePhone(value = '') {
   return String(value).replace(/\D/g, '');
@@ -18,7 +20,6 @@ function extractMessage(payload = {}) {
     '';
 
   const phone = normalizePhone(String(remoteJid).split('@')[0]);
-
   const text =
     msg.conversation ||
     msg.extendedTextMessage?.text ||
@@ -29,49 +30,106 @@ function extractMessage(payload = {}) {
     data.message?.conversation ||
     '';
 
-  const fromMe = Boolean(key.fromMe || data.fromMe);
+  const messageType =
+    msg.imageMessage ? 'image' :
+    msg.videoMessage ? 'video' :
+    msg.audioMessage ? 'audio' :
+    msg.documentMessage ? 'document' :
+    'text';
 
   return {
-    id: key.id || data.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-    event: payload.event || payload.type || 'messages.upsert',
-    instance: payload.instance || data.instance || '',
+    externalId: key.id || data.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    instance: String(payload.instance || data.instance || '').trim(),
     phone,
-    remoteJid,
-    text,
-    fromMe,
-    receivedAt: new Date().toISOString(),
-    raw: payload
+    direction: Boolean(key.fromMe || data.fromMe) ? 'out' : 'in',
+    messageType,
+    body: text,
+    occurredAt: new Date().toISOString()
   };
 }
 
+function getProvidedSecret(req) {
+  const authorization = String(req.headers.authorization || '');
+  return String(
+    req.headers['x-webhook-secret'] ||
+    req.query?.secret ||
+    authorization.replace(/^Bearer\s+/i, '') ||
+    ''
+  );
+}
+
+async function persistMessage(message) {
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!backendKey) {
+    throw new Error('SUPABASE_SECRET_KEY ausente na Vercel');
+  }
+
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages?on_conflict=instance,external_id`;
+  const headers = {
+    apikey: backendKey,
+    'Content-Type': 'application/json',
+    Prefer: 'resolution=merge-duplicates,return=representation'
+  };
+  if (!backendKey.startsWith('sb_secret_')) {
+    headers.Authorization = `Bearer ${backendKey}`;
+  }
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({
+      external_id: message.externalId,
+      instance: message.instance,
+      phone: message.phone,
+      direction: message.direction,
+      message_type: message.messageType,
+      body: message.body,
+      status: message.direction === 'in' ? 'received' : 'sent',
+      occurred_at: message.occurredAt
+    })
+  });
+
+  const raw = await res.text();
+  let data = null;
+  try { data = JSON.parse(raw); } catch { data = raw; }
+
+  if (!res.ok) {
+    throw new Error(`Supabase HTTP ${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`);
+  }
+
+  return Array.isArray(data) ? data[0] : data;
+}
+
 export default async function handler(req, res) {
-  if (req.method === 'GET') {
-    const limit = Number(req.query.limit || 100);
-    return res.status(200).json({
-      success: true,
-      count: events.length,
-      events: events.slice(0, limit)
+  if (req.method !== 'POST') {
+    return res.status(405).json({
+      success: false,
+      error: 'Consulta pública desativada. Use o CRM autenticado.'
     });
   }
 
-  if (req.method !== 'POST') {
-    return res.status(405).json({ success: false, error: 'Method not allowed' });
+  if (EVOLUTION_WEBHOOK_SECRET && getProvidedSecret(req) !== EVOLUTION_WEBHOOK_SECRET) {
+    return res.status(401).json({ success: false, error: 'Webhook não autorizado' });
   }
 
   try {
-    const payload = req.body || {};
-    const event = extractMessage(payload);
+    const message = extractMessage(req.body || {});
 
-    // Ignore outbound messages by default; CRM wants lead replies.
-    if (!event.fromMe && event.phone) {
-      events.unshift(event);
-      events = events.slice(0, 500);
+    if (!message.phone || !message.instance) {
+      return res.status(200).json({
+        success: true,
+        stored: false,
+        ignored: 'Evento sem telefone ou instância'
+      });
     }
+
+    const stored = await persistMessage(message);
 
     return res.status(200).json({
       success: true,
-      stored: !event.fromMe && !!event.phone,
-      event
+      stored: true,
+      id: stored?.id || null,
+      externalId: message.externalId
     });
   } catch (error) {
     return res.status(500).json({
