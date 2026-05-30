@@ -8320,22 +8320,31 @@ let horarioJaDisparado = false;
 let horarioUltimoDisparo = '';
 
 function checkHorarioDisparo(now) {
-  const filaAtual = disparoChipId ? getFilaChip(disparoChipId) : [];
-  if (disparoEmAndamento || aguardandoLote || !filaAtual.length) return;
   const cfg = loadEvoConfig();
   if (!cfg.horarioInicio) return;
   const [hh, mm] = cfg.horarioInicio.split(':').map(Number);
   const nowH = now.getHours(), nowM = now.getMinutes();
   const key = `${todayStr()}_${cfg.horarioInicio}`;
-  if (nowH === hh && nowM === mm && horarioUltimoDisparo !== key) {
+  const slotsProntos = getChips()
+    .map((chip, slot) => ({ chip, slot, st: chipSlotState[slot] }))
+    .filter(({ chip, st }) =>
+      st &&
+      !st.disparoEmAndamento &&
+      !st.aguardandoLote &&
+      getFilaChip(chip.id).some(item => item.status === 'aguardando')
+    );
+
+  if (nowH === hh && nowM === mm && horarioUltimoDisparo !== key && slotsProntos.length) {
     horarioUltimoDisparo = key;
     notify(`⏰ Disparo automático iniciado — ${cfg.horarioInicio}`);
-    iniciarDisparo();
+    slotsProntos.forEach(({ slot }) => {
+      iniciarDisparoChip(slot).catch(e => notify(`// falha no disparo automático: ${e.message}`, 'err'));
+    });
   }
   const el = document.getElementById('horarioStatus');
   if (el) {
     el.textContent = `próximo: ${cfg.horarioInicio}`;
-    el.className = 'horario-status' + (disparoEmAndamento?' ativo':'');
+    el.className = 'horario-status' + (chipSlotState.some(st => st.disparoEmAndamento || st.aguardandoLote) ? ' ativo' : '');
   }
   const el2 = document.getElementById('horarioStatusInline');
   if (el2) el2.textContent = cfg.horarioInicio || '--:--';
@@ -8348,22 +8357,36 @@ function loadEvoConfig() { try { return JSON.parse(localStorage.getItem(EVO_KEY)
 function atualizarStatsDisparo() {
   const tamanho  = parseInt(document.getElementById('loteTamanho')?.value)   || 30;
   const esperaMin= parseInt(document.getElementById('loteEsperaMin')?.value) || 90;
+  const delayMin = parseInt(document.getElementById('delayMin')?.value)      || 120;
+  const delayMax = parseInt(document.getElementById('delayMax')?.value)      || delayMin;
   const chips    = getChips();
   const nChips   = chips.length || 1;
   const lotesDay = Math.floor(CHIP_LIMIT / tamanho);
   const esperaH  = esperaMin >= 60
     ? (esperaMin % 60 === 0 ? `${esperaMin/60}h` : `${Math.floor(esperaMin/60)}h${esperaMin%60}`)
     : `${esperaMin}min`;
+  const intervaloVal = delayMin === delayMax
+    ? (delayMin % 60 === 0 ? `${delayMin/60} min` : `${delayMin} seg`)
+    : `${delayMin}-${delayMax} seg`;
+  const intervaloSub = delayMin === delayMax
+    ? `${delayMin} seg fixo entre cada lead`
+    : `${delayMin}-${delayMax} seg entre cada lead`;
 
-  const subEl    = document.getElementById('filaZapSub');
-  const loteVal  = document.getElementById('statLoteVal');
-  const loteSub  = document.getElementById('statLoteSub');
-  const diaSub   = document.getElementById('statDiaSub');
+  const subEl       = document.getElementById('filaZapSub');
+  const intervaloEl = document.getElementById('statIntervalVal');
+  const intervaloSb = document.getElementById('statIntervalSub');
+  const loteVal     = document.getElementById('statLoteVal');
+  const loteSub     = document.getElementById('statLoteSub');
+  const diaVal      = document.getElementById('statDiaVal');
+  const diaSub      = document.getElementById('statDiaSub');
 
-  if (subEl)   subEl.textContent   = `// ${nChips} chip${nChips!==1?'s':''} · disparo paralelo · ${tamanho} por lote · ${esperaH} de delay`;
-  if (loteVal) loteVal.textContent = `${tamanho} msg`;
-  if (loteSub) loteSub.textContent = `por chip · ${lotesDay} lote${lotesDay!==1?'s':''} por dia`;
-  if (diaSub)  diaSub.textContent  = `${lotesDay} lote${lotesDay!==1?'s':''} × ${tamanho} · espera ${esperaH}`;
+  if (subEl)       subEl.textContent       = `// ${nChips} chip${nChips!==1?'s':''} · disparo paralelo · ${tamanho} por lote · ${esperaH} de delay`;
+  if (intervaloEl) intervaloEl.textContent = intervaloVal;
+  if (intervaloSb) intervaloSb.textContent = intervaloSub;
+  if (loteVal)     loteVal.textContent     = `${tamanho} msg`;
+  if (loteSub)     loteSub.textContent     = `por chip · ${lotesDay} lote${lotesDay!==1?'s':''} por dia`;
+  if (diaVal)      diaVal.textContent      = `${CHIP_LIMIT} msg`;
+  if (diaSub)      diaSub.textContent      = `${lotesDay} lote${lotesDay!==1?'s':''} × ${tamanho} · espera ${esperaH}`;
 }
 
 function saveEvoConfig() {
@@ -10202,6 +10225,8 @@ function confirmarExcluirLead() {
     disparoChipId = chipPriority.id;
     activeChipId = chipPriority.id;
   }
+  checkHorarioDisparo(new Date());
+  setInterval(() => checkHorarioDisparo(new Date()), 30000);
 
   renderRamoSelect();
   ensureWeekData();
@@ -10421,13 +10446,13 @@ function authGateSelfTest() {
 function getDispatchConfigTextV33() {
   return {
     dailyLimitTitle: 'LIMITE DIÁRIO POR CHIP',
-    dailyLimitValue: '120 msg',
-    dailyLimitHint: '4 lotes × 30 · espera 1h',
+    dailyLimitValue: '60 msg',
+    dailyLimitHint: '2 lotes × 30 · espera 1h30',
     batchValue: '30 msg',
-    batchHint: 'por chip · 4 lotes por dia',
+    batchHint: 'por chip · 2 lotes por dia',
     intervalValue: '2 min',
-    intervalHint: '120 seg fixo entre cada envio',
-    blocks: ['08:00', '10:00', '12:00', '14:00']
+    intervalHint: '120 seg fixo entre cada lead',
+    blocks: ['12:00']
   };
 }
 

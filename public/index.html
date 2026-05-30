@@ -762,23 +762,23 @@
 
       <!-- bloco 1: delay -->
       <div style="background:var(--bg);border:1px solid var(--accent-border);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
-        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">INTERVALO ENTRE MENSAGENS</div>
-        <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);line-height:1">2 min</div>
-        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">120 seg fixo entre cada envio</div>
+        <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">INTERVALO ENTRE LEADS</div>
+        <div id="statIntervalVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--accent);line-height:1">2 min</div>
+        <div id="statIntervalSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">120 seg fixo entre cada lead</div>
       </div>
 
       <!-- bloco 2: por hora -->
       <div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
         <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">MENSAGENS POR LOTE</div>
         <div id="statLoteVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">30 msg</div>
-        <div id="statLoteSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">por chip · 4 lotes por dia</div>
+        <div id="statLoteSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">por chip · 2 lotes por dia</div>
       </div>
 
       <!-- bloco 3: por dia -->
       <div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
         <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">LIMITE DIÁRIO POR CHIP <span class="tag">ANTI-BAN</span></div>
-        <div style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">120 msg</div>
-        <div id="statDiaSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">4 lotes × 30 · espera 90 min</div>
+        <div id="statDiaVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">60 msg</div>
+        <div id="statDiaSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">2 lotes × 30 · espera 1h30</div>
       </div>
 
     </div>
