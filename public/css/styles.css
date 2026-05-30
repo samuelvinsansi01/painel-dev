@@ -2442,3 +2442,24 @@ body.auth-locked .app{
   color:var(--muted)!important;
   margin-top:7px!important;
 }
+
+/* V41 MENU + INBOX + IMPORT RULES */
+.sidebar-v41-header{padding:14px 12px 16px!important;border-bottom:1px solid var(--border2)!important;margin-bottom:10px!important}
+.sidebar-v41-hello{font-size:18px!important;font-weight:900!important;color:var(--text)!important}
+.sidebar-v41-sub{font-family:'DM Mono',monospace!important;font-size:9px!important;color:var(--muted)!important;margin-top:4px!important}
+.sidebar-v41-group{margin:10px 0 4px!important;font-family:'DM Mono',monospace!important;font-size:8px!important;letter-spacing:.14em!important;text-transform:uppercase!important;color:var(--muted)!important;padding:0 12px!important}
+.sidebar-v41-subitem{padding-left:28px!important}
+.sidebar-v41-subitem .nav-icon{opacity:.82!important}
+#sidebarExitV41{margin-top:8px!important}
+.inbox-v41-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-bottom:16px}
+.inbox-v41-card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:14px}
+.inbox-v41-label{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);text-transform:uppercase;letter-spacing:.12em}
+.inbox-v41-value{font-size:28px;line-height:1;font-weight:900;margin-top:8px}
+.inbox-v41-list{display:flex;flex-direction:column;gap:8px}
+.inbox-v41-item{display:grid;grid-template-columns:1fr auto;gap:10px;background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:12px}
+.inbox-v41-title{font-weight:900;font-size:13px}
+.inbox-v41-message{font-size:12px;color:var(--text2);margin-top:6px;line-height:1.5}
+.inbox-v41-meta{font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-top:6px}
+.inbox-v41-actions{display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.import-summary-v41{margin-top:12px;background:var(--bg);border:1px solid var(--border2);border-radius:12px;padding:12px;font-family:'DM Mono',monospace;font-size:9px;line-height:1.7;color:var(--muted);white-space:pre-wrap}
+@media(max-width:900px){.inbox-v41-grid{grid-template-columns:1fr}.inbox-v41-item{grid-template-columns:1fr}}

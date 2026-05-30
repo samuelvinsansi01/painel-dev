@@ -1046,6 +1046,27 @@
       <div id="persistenceV36Status" class="persistence-v36-status">// aguardando ação</div>
     </div>
 
+
+<!-- ── CAIXA DE ENTRADA V41 ── -->
+<div class="panel" id="panel-inbox">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Caixa de <span>Entrada.</span></div>
+    <div class="page-sub">// respostas recebidas · aguardando retorno · WhatsApp e Instagram</div>
+  </div>
+  <div class="inbox-v41-grid">
+    <div class="inbox-v41-card"><div class="inbox-v41-label">Não lidas</div><div class="inbox-v41-value" id="inboxUnreadCountV41">0</div></div>
+    <div class="inbox-v41-card"><div class="inbox-v41-label">WhatsApp</div><div class="inbox-v41-value" id="inboxWhatsappCountV41">0</div></div>
+    <div class="inbox-v41-card"><div class="inbox-v41-label">Instagram</div><div class="inbox-v41-value" id="inboxInstagramCountV41">0</div></div>
+  </div>
+  <div class="stretch-card">
+    <div class="audit-v35-toolbar">
+      <div class="card-title">Leads que responderam</div>
+      <button class="btn btn-ghost" onclick="renderInboxV41()">Atualizar</button>
+    </div>
+    <div id="inboxListV41" class="inbox-v41-list"></div>
+  </div>
+</div>
+
 </main>
 
 <!-- MODAIS -->
