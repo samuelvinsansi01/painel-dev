@@ -778,10 +778,6 @@ function clearLeadFollowUp() {
 
 
 function createDevTestLead() {
-  const data = ensureWeekData();
-  const day = selectedDay || todayStr();
-  if (!data.days[day]) data.days[day] = [];
-
   const id = 'dev_test_' + Date.now();
   const lead = {
     id,
@@ -791,23 +787,21 @@ function createDevTestLead() {
     instagram: 'https://instagram.com/leadteste',
     googleUrl: 'https://maps.google.com',
     categoria: 'Teste / Validação',
+    numStatus: 'pendente',
     status: 'Não enviada',
     criadoEm: todayStr(),
     ramoId: null
   };
 
-  data.days[day].push(lead);
-  saveWeekData(data);
+  saveValData([...getValData(), lead]);
   ensureLeadCrm(id, lead);
   addLeadHistory(id, 'Lead teste criado no ambiente DEV', lead);
   syncLeadToCloud(id, lead);
 
-  selectedDay = day;
-  selectedStatus = 'Não enviada';
   renderInicio();
   renderFollowUpsHome();
   updateBadges();
-  notify('Lead teste criado. Abra a ficha na lista.');
+  notify('Lead teste criado em Validação.');
 
   syncAllLocalLeadsToSupabase();}
 
@@ -2012,6 +2006,38 @@ function setLeadWhatsappStatus(leadId, data = {}) {
     checkedAtLabel: crmNowLabel()
   };
   saveLeadCrm(leadId, crm);
+  if (leadId === activeLeadDrawerId) {
+    if (data.status === 'valid' && activeLeadDrawerData) {
+      activeLeadDrawerData.numStatus = 'valido';
+      activeLeadDrawerData.whatsappValidationStatus = 'valid';
+    }
+    try { renderLeadWhatsappValidation(); } catch(e) {}
+    try { renderLeadMessageBox(); } catch(e) {}
+  }
+}
+
+function isLeadWhatsappValidatedForQueue(lead = {}) {
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+  if (!phone || phone.length < 10) return false;
+  if (lead.numStatus === 'valido' || lead.whatsappValidationStatus === 'valid') return true;
+  if (!lead.id) return false;
+
+  const status = getLeadWhatsappStatus(lead.id);
+  const checkedPhone = normalizePhoneForEvolution(status.number || '');
+  return status.status === 'valid' && (!checkedPhone || checkedPhone === phone);
+}
+
+function markLeadWhatsappValidatedForQueue(lead = {}) {
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+  if (!lead.id || !phone) return lead;
+  lead.numStatus = 'valido';
+  lead.whatsappValidationStatus = 'valid';
+  setLeadWhatsappStatus(lead.id, {
+    status: 'valid',
+    label: 'WhatsApp válido',
+    number: phone
+  });
+  return lead;
 }
 
 
@@ -2199,22 +2225,29 @@ Segue o link:
 }
 
 function ensureLeadMessageContainer() {
-  if (document.getElementById('leadMessageBox')) return true;
-
   const drawer = document.getElementById('leadDrawer');
   if (!drawer) return false;
 
-  const target =
-    document.getElementById('leadWhatsappValidationBox') ||
+  const body = drawer.querySelector('.lead-drawer-body');
+  const target = document.getElementById('leadWhatsappValidationBox') ||
     document.getElementById('leadPresentationsList') ||
     document.getElementById('leadTimelineList') ||
     document.getElementById('leadNotesList');
+  const existing = document.getElementById('leadMessageBox');
+
+  if (existing) {
+    if (target) target.insertAdjacentElement('afterend', existing);
+    else if (body) body.appendChild(existing);
+    return true;
+  }
 
   const block = document.createElement('div');
   block.id = 'leadMessageBox';
 
-  if (target && target.parentElement) {
-    target.parentElement.insertAdjacentElement('afterend', block);
+  if (target) {
+    target.insertAdjacentElement('afterend', block);
+  } else if (body) {
+    body.appendChild(block);
   } else {
     drawer.appendChild(block);
   }
@@ -2488,6 +2521,10 @@ function renderQueueTemplates() {
 
 function addActiveLeadToWhatsappQueue() {
   if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+  if (!isLeadWhatsappValidatedForQueue({ ...activeLeadDrawerData, id: activeLeadDrawerId })) {
+    notify('Valide o WhatsApp antes de adicionar à fila.', 'warn');
+    return;
+  }
 
   const campaign = document.getElementById('leadQueueCampaign')?.value || 'Campanha Principal';
   const queue = getWhatsappQueueV27();
@@ -4829,10 +4866,15 @@ function atribuirParaDia(ids, day) {
   const atrib = getAtribuicaoData();
   const diasSemana = currentWeekDays();
   let atribuidos = 0;
+  const atribuidosIds = new Set();
 
   ids.forEach(id => {
     const lead = atrib.find(a => a.id === id);
     if (!lead) return;
+    if (!isLeadWhatsappValidatedForQueue(lead)) {
+      notify(`// valide o WhatsApp de ${lead.nome} antes de atribuir`, 'warn');
+      return;
+    }
 
     // encontra dia com vaga (máx = 60 × nº de chips)
     const dailyLimit = getDailyLimit();
@@ -4851,14 +4893,17 @@ function atribuirParaDia(ids, day) {
       whatsapp: lead.whatsapp || '', instagram: lead.instagram || '',
       googleUrl: lead.googleUrl || '',
       ramoId: lead.ramoId || null,
+      numStatus: 'valido',
+      whatsappValidationStatus: 'valid',
       status: 'Não enviada', criadoEm: lead.criadoEm || todayStr(),
     });
     addLeadHistory(lead.id, `Atribuído para ${dayLabel(diaFinal)}`, lead);
+    atribuidosIds.add(lead.id);
     atribuidos++;
   });
 
   saveWeekData(data);
-  const novaAtrib = atrib.filter(a => !ids.includes(a.id));
+  const novaAtrib = atrib.filter(a => !atribuidosIds.has(a.id));
   saveAtribuicaoData(novaAtrib);
   atribSelecionados.clear();
   renderAtribuicao(); updateBadges();
@@ -4905,6 +4950,10 @@ function mandarParaBacklogZap(id) {
   const atrib = getAtribuicaoData();
   const lead  = atrib.find(a => a.id === id);
   if (!lead) return;
+  if (!isLeadWhatsappValidatedForQueue(lead)) {
+    notify('// valide o WhatsApp antes de enviar para a fila Zap', 'warn');
+    return;
+  }
 
   const backlog = getZapBacklog();
   if (backlog.find(b => b.id === id)) { notify('// já está no Backlog ZAP','warn'); return; }
@@ -4926,6 +4975,10 @@ function moverParaBacklogZapDoDia(id, day) {
   const data = ensureWeekData();
   const lead = (data.days[day]||[]).find(e => e.id === id);
   if (!lead) { notify('// lead não encontrado','warn'); return; }
+  if (!isLeadWhatsappValidatedForQueue(lead)) {
+    notify('// valide o WhatsApp antes de enviar para a fila Zap', 'warn');
+    return;
+  }
   const backlog = getZapBacklog();
   if (backlog.find(b => b.id === id)) { notify('// já está no Backlog ZAP','warn'); return; }
   backlog.push({
@@ -6334,8 +6387,10 @@ function aprovarSemSiteParaZap(id) {
   const val = getValData();
   const v = val.find(x => x.id === id);
   if (!v) return;
+  if (v.numStatus !== 'valido') { notify('// valide o número primeiro','warn'); return; }
   const phone = normalizePhone(v.whatsapp || '');
   if (!phone || phone.length < 10) { notify('// número inválido para WhatsApp','err'); return; }
+  markLeadWhatsappValidatedForQueue(v);
 
   const data = ensureWeekData();
   const day = v.diaDestino || todayStr();
@@ -6354,6 +6409,7 @@ function aprovarSemSiteParaZap(id) {
   data.days[diaDestino].push({
     id: v.id, nome: v.nome, site: '', whatsapp: v.whatsapp,
     instagram: v.instagram, googleUrl: v.googleUrl,
+    numStatus: 'valido', whatsappValidationStatus: 'valid',
     status: 'Não enviada', criadoEm: todayStr(), semSite: true,
   });
   saveWeekData(data);
@@ -6587,10 +6643,12 @@ function aprovarParaFila(id) {
   // Manda para a Base de Atribuição (sem dia ainda)
   const atrib = getAtribuicaoData();
   if (atrib.find(a => a.id === v.id)) { notify('// já está na Base de Atribuição','warn'); return; }
+  markLeadWhatsappValidatedForQueue(v);
   atrib.push({
     id: v.id, nome: v.nome, site: v.site || '', whatsapp: v.whatsapp,
     instagram: v.instagram, googleUrl: v.googleUrl,
     canal: 'zap', // número validado via WhatsApp
+    numStatus: 'valido', whatsappValidationStatus: 'valid',
     status: 'Não enviada', criadoEm: v.importadoEm || todayStr(),
     validadoEm: todayStr(), diaDestino: null,
   });
@@ -6640,10 +6698,12 @@ function aprovarTodosParaAtribuicao() {
 
   // Processa leads com número válido → tag ZAP
   val.filter(v => v.numStatus === 'valido' && !existIds.has(v.id)).forEach(v => {
+    markLeadWhatsappValidatedForQueue(v);
     atrib.push({
       id: v.id, nome: v.nome, site: '', whatsapp: v.whatsapp,
       instagram: v.instagram || '', googleUrl: v.googleUrl || '',
       canal: 'zap',
+      numStatus: 'valido', whatsappValidationStatus: 'valid',
       status: 'Não enviada', criadoEm: v.importadoEm || todayStr(),
       validadoEm: todayStr(), diaDestino: null,
     });
@@ -6755,6 +6815,12 @@ function limparFilaChip(slot) {
 
 /* ─── Iniciar disparo por slot ─── */
 async function iniciarDisparoChip(slot) {
+  const devolvidos = devolverZapNaoValidadoParaValidacao();
+  if (devolvidos) {
+    notify(`↩ ${devolvidos} lead(s) sem WhatsApp validado voltaram para Validação`, 'warn');
+    renderFilaZap();
+    return;
+  }
   const st = chipSlotState[slot];
   if (st.disparoEmAndamento || st.aguardandoLote) return;
   const chip = getChipBySlot(slot);
@@ -7228,6 +7294,8 @@ function renderChipAccordions() {
 }
 
 function renderFilaZap() {
+  const devolvidos = devolverZapNaoValidadoParaValidacao();
+  if (devolvidos) notify(`↩ ${devolvidos} lead(s) sem WhatsApp validado voltaram para Validação`, 'warn');
   sincronizarFilaComEnviados();
   const chips = getChips();
   const weekDays = currentWeekDays();
@@ -7862,6 +7930,76 @@ function onLoteImgRemove(chipId, loteNum, isSlot, slot) {
 /* ════════════════════════════
    SINCRONIZAR FILA — corrige status de itens já enviados
 ════════════════════════════ */
+function devolverZapNaoValidadoParaValidacao() {
+  const data = ensureWeekData();
+  const validacao = getValData();
+  const validacaoIds = new Set(validacao.map(lead => lead.id));
+  const devolvidosIds = new Set();
+
+  const devolver = (lead = {}) => {
+    if (!lead.id || devolvidosIds.has(lead.id)) return;
+    devolvidosIds.add(lead.id);
+    if (validacaoIds.has(lead.id)) return;
+    validacaoIds.add(lead.id);
+    validacao.push({
+      ...lead,
+      canal: 'pendente',
+      numStatus: 'pendente',
+      status: 'Não enviada',
+      diaDestino: null,
+      recuperadoDaFilaZapEm: todayStr(),
+    });
+  };
+
+  Object.keys(data.days || {}).forEach(day => {
+    data.days[day] = (data.days[day] || []).filter(lead => {
+      const aguardando = !lead.status || lead.status === 'Não enviada' || lead.status === 'Em fila';
+      if (!aguardando || isLeadWhatsappValidatedForQueue(lead)) return true;
+      devolver(lead);
+      return false;
+    });
+  });
+
+  const backlog = getZapBacklog();
+  const backlogValido = backlog.filter(lead => {
+    if (isLeadWhatsappValidatedForQueue(lead)) return true;
+    devolver(lead);
+    return false;
+  });
+
+  const filaOperacional = getWhatsappQueueV27();
+  const filaOperacionalValida = filaOperacional.filter(item => {
+    if (item.status === 'Enviado') return true;
+    const lead = findLeadEverywhere(item.leadId) || {
+      id: item.leadId,
+      nome: item.nome,
+      whatsapp: item.telefone
+    };
+    if (isLeadWhatsappValidatedForQueue(lead)) return true;
+    devolver(lead);
+    return false;
+  });
+
+  Object.keys(filaDisparo || {}).forEach(chipId => {
+    filaDisparo[chipId] = (filaDisparo[chipId] || []).filter(item => {
+      if (item.status === 'enviado' || isLeadWhatsappValidatedForQueue(item)) return true;
+      devolver(item);
+      return false;
+    });
+  });
+
+  if (devolvidosIds.size) {
+    saveWeekData(data);
+    saveZapBacklog(backlogValido);
+    if (filaOperacionalValida.length !== filaOperacional.length) saveWhatsappQueueV27(filaOperacionalValida);
+    saveFilaDisparo();
+    saveValData(validacao);
+    updateBadges();
+  }
+
+  return devolvidosIds.size;
+}
+
 function sincronizarFilaComEnviados() {
   const data = ensureWeekData();
   const chips = getChips();
@@ -7945,6 +8083,10 @@ function toggleFilaSlotEmpresa(slot, empId) {
   const all = Object.values(data.days).flat();
   const emp = all.find(e => e.id === empId);
   if (!emp || !emp.whatsapp) { notify('// empresa sem WhatsApp','warn'); return; }
+  if (!isLeadWhatsappValidatedForQueue(emp)) {
+    notify('// valide o WhatsApp antes de adicionar ao chip', 'warn');
+    return;
+  }
 
   // Verificar se o chip alvo tem vaga no dia atual
   const filaChipNoDia = getFilaChipNoDia(chip.id, disparoDay);
@@ -8006,6 +8148,10 @@ function toggleFila(empId) {
     const all  = Object.values(data.days).flat();
     const emp  = all.find(e => e.id === empId);
     if (!emp || !emp.whatsapp) return;
+    if (!isLeadWhatsappValidatedForQueue(emp)) {
+      notify('// valide o WhatsApp antes de adicionar ao chip', 'warn');
+      return;
+    }
     const jaEnviado = emp.status === 'Enviada' || emp.status === 'Respondida' || emp.status === 'Não respondida' || emp.status === 'Recusada' || emp.status === 'Fechada';
     const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
     fila.push({ id: emp.id, nome: emp.nome, site: emp.site || '', whatsapp: emp.whatsapp, mensagem: '', templateIdx: -1, ramoId: null, status: filaStatus, aberto: false });
@@ -9951,7 +10097,7 @@ function encontrarSubstituto(day, data) {
   for (let i = idx + 1; i < weekDays.length; i++) {
     const nextDay = weekDays[i];
     const leads   = data.days[nextDay] || [];
-    const cand    = leads.find(e => (e.status||'Não enviada') === 'Não enviada');
+    const cand    = leads.find(e => (e.status||'Não enviada') === 'Não enviada' && isLeadWhatsappValidatedForQueue(e));
     if (cand) return { ...cand, diaOrigem: nextDay };
   }
   return null;
