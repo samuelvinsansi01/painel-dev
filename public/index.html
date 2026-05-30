@@ -127,6 +127,12 @@
       <span class="nav-label">Auditoria</span>
       <span class="nav-badge" id="badge-audit">LOG</span>
     </div>
+
+    <div class="nav-item" onclick="switchPanel('conversations')" data-label="Conversas">
+      <div class="nav-icon">🗨️</div>
+      <span class="nav-label">Conversas</span>
+      <span class="nav-badge" id="badge-conversations">0</span>
+    </div>
 </aside>
 
 
@@ -844,6 +850,26 @@
       </div>
     </div>
     <div id="auditListV35" class="audit-v35-list"></div>
+  </div>
+</div>
+
+
+<!-- ── CONVERSAS V38 ── -->
+<div class="panel" id="panel-conversations">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Central de <span>Conversas.</span></div>
+    <div class="page-sub">// leads respondidos · histórico · resposta pelo chip</div>
+  </div>
+
+  <div class="conversations-v38-layout">
+    <div class="stretch-card conversations-v38-sidebar">
+      <div class="card-title">Conversas</div>
+      <div id="conversationListV38" class="conversation-list-v38"></div>
+    </div>
+
+    <div class="stretch-card conversations-v38-chat">
+      <div id="conversationChatV38" class="conversation-chat-v38"></div>
+    </div>
   </div>
 </div>
 

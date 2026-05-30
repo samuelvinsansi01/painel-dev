@@ -3989,6 +3989,236 @@ function scheduleOperationalSyncV36() {
   }, 1500);
 }
 
+
+/* ════════════════════════════
+   CONVERSAS V38
+════════════════════════════ */
+let activeConversationLeadV38 = null;
+
+function getAllConversationLeadsV38() {
+  const crm = getLeadCrmStore ? getLeadCrmStore() : {};
+  const queue = getWhatsappQueueV27 ? getWhatsappQueueV27() : [];
+  const responses = getLocalResponsesV34 ? getLocalResponsesV34() : [];
+  const map = new Map();
+
+  Object.entries(crm || {}).forEach(([leadId, data]) => {
+    const hasMessages = Array.isArray(data.messages) && data.messages.length;
+    const hasResponse = !!data.lastResponseAt || data.pipelineStatus === 'respondeu';
+    if (hasMessages || hasResponse) {
+      const lead = findLeadEverywhere(leadId) || { id: leadId, nome: data.nome || 'Lead' };
+      map.set(leadId, { leadId, lead, crm: data });
+    }
+  });
+
+  responses.forEach(resp => {
+    if (!resp.leadId) return;
+    const lead = findLeadEverywhere(resp.leadId) || { id: resp.leadId, nome: 'Lead' };
+    const crmData = crm[resp.leadId] || {};
+    map.set(resp.leadId, { leadId: resp.leadId, lead, crm: crmData });
+  });
+
+  queue.forEach(item => {
+    if (!item.leadId || item.status !== 'Enviado') return;
+    const lead = findLeadEverywhere(item.leadId) || { id: item.leadId, nome: item.nome || 'Lead' };
+    const crmData = crm[item.leadId] || {};
+    if (crmData.messages?.length || crmData.lastWhatsappMessage || item.sentAt) {
+      map.set(item.leadId, { leadId: item.leadId, lead, crm: crmData });
+    }
+  });
+
+  return Array.from(map.values()).sort((a,b) => {
+    const ad = a.crm.lastResponseAt || a.crm.lastWhatsappMessage?.sentAt || '';
+    const bd = b.crm.lastResponseAt || b.crm.lastWhatsappMessage?.sentAt || '';
+    return String(bd).localeCompare(String(ad));
+  });
+}
+
+function getConversationMessagesV38(leadId) {
+  const crm = ensureLeadCrm(leadId, findLeadEverywhere(leadId) || {});
+  const queue = getWhatsappQueueV27 ? getWhatsappQueueV27() : [];
+  const messages = [];
+
+  queue.filter(item => item.leadId === leadId && item.status === 'Enviado').forEach(item => {
+    messages.push({
+      id: item.id,
+      direction: 'out',
+      text: item.templateText || item.templateName || 'Mensagem enviada',
+      at: item.sentAt || item.updatedAt || item.createdAt || '',
+      atLabel: item.sentAtLabel || item.createdAtLabel || '',
+      chipName: item.chipName || ''
+    });
+  });
+
+  if (crm.lastWhatsappMessage) {
+    messages.push({
+      id: 'last_' + leadId,
+      direction: 'out',
+      text: crm.lastWhatsappMessage.text || '',
+      at: crm.lastWhatsappMessage.sentAt || '',
+      atLabel: crm.lastWhatsappMessage.sentAtLabel || '',
+      chipName: crm.lastWhatsappMessage.chipName || ''
+    });
+  }
+
+  (crm.messages || []).forEach(msg => messages.push(msg));
+
+  const unique = new Map();
+  messages.forEach(m => {
+    const key = m.id || `${m.direction}_${m.at}_${m.text}`;
+    unique.set(key, m);
+  });
+
+  return Array.from(unique.values()).sort((a,b) => String(a.at || '').localeCompare(String(b.at || '')));
+}
+
+function renderConversationListV38() {
+  const box = document.getElementById('conversationListV38');
+  if (!box) return;
+
+  const items = getAllConversationLeadsV38();
+
+  if (!items.length) {
+    box.innerHTML = '<div class="conversation-empty-v38">// nenhuma conversa ainda</div>';
+    updateConversationsBadgeV38();
+    return;
+  }
+
+  if (!activeConversationLeadV38) activeConversationLeadV38 = items[0].leadId;
+
+  box.innerHTML = items.map(item => {
+    const messages = getConversationMessagesV38(item.leadId);
+    const last = messages[messages.length - 1];
+    const active = item.leadId === activeConversationLeadV38 ? 'active' : '';
+    return `
+      <div class="conversation-item-v38 ${active}" onclick="openConversationV38('${escHtml(item.leadId)}')">
+        <div class="conversation-item-v38-title">${escHtml(item.lead.nome || item.lead.name || 'Lead')}</div>
+        <div class="conversation-item-v38-meta">
+          ${escHtml(item.lead.whatsapp || item.lead.phone || item.lead.telefone || '')}<br>
+          ${escHtml((last?.text || 'Sem mensagens').slice(0,80))}
+        </div>
+      </div>
+    `;
+  }).join('');
+
+  updateConversationsBadgeV38();
+}
+
+function openConversationV38(leadId) {
+  activeConversationLeadV38 = leadId;
+  renderConversationsV38();
+}
+
+function renderConversationChatV38() {
+  const box = document.getElementById('conversationChatV38');
+  if (!box) return;
+
+  if (!activeConversationLeadV38) {
+    box.innerHTML = '<div class="conversation-empty-v38">// selecione uma conversa</div>';
+    return;
+  }
+
+  const lead = findLeadEverywhere(activeConversationLeadV38) || { nome:'Lead' };
+  const messages = getConversationMessagesV38(activeConversationLeadV38);
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+
+  box.innerHTML = `
+    <div class="conversation-chat-header-v38">
+      <div class="conversation-chat-title-v38">${escHtml(lead.nome || lead.name || 'Lead')}</div>
+      <div class="conversation-chat-meta-v38">${escHtml(phone || 'sem telefone')}</div>
+    </div>
+
+    <div class="conversation-messages-v38">
+      ${messages.length ? messages.map(msg => `
+        <div class="message-bubble-v38 ${msg.direction === 'out' ? 'out' : 'in'}">
+          ${escHtml(msg.text || '[mensagem sem texto]')}
+          <div class="message-time-v38">${escHtml(msg.atLabel || (msg.at ? new Date(msg.at).toLocaleString('pt-BR') : ''))}${msg.chipName ? ' · ' + escHtml(msg.chipName) : ''}</div>
+        </div>
+      `).join('') : '<div class="conversation-empty-v38">// sem mensagens registradas</div>'}
+    </div>
+
+    <div class="conversation-reply-v38">
+      <textarea id="conversationReplyTextV38" placeholder="Responder este lead..."></textarea>
+      <button class="btn btn-primary" onclick="sendConversationReplyV38()">Responder</button>
+    </div>
+  `;
+}
+
+async function sendConversationReplyV38() {
+  if (!activeConversationLeadV38) return;
+
+  const lead = findLeadEverywhere(activeConversationLeadV38) || {};
+  const text = (document.getElementById('conversationReplyTextV38')?.value || '').trim();
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+  const settings = getEvolutionSettings ? getEvolutionSettings() : {};
+
+  if (!text) {
+    notify('Digite uma resposta.', 'warn');
+    return;
+  }
+
+  if (!phone) {
+    notify('Lead sem telefone.', 'warn');
+    return;
+  }
+
+  if (!settings.url || !settings.apiKey) {
+    notify('Configure a Evolution antes de responder.', 'warn');
+    return;
+  }
+
+  const queue = getWhatsappQueueV27 ? getWhatsappQueueV27() : [];
+  const lastSent = queue.filter(item => item.leadId === activeConversationLeadV38 && item.chipInstance).slice(-1)[0];
+  const instance = lastSent?.chipInstance || settings.instance;
+
+  if (!instance) {
+    notify('Instância não encontrada para resposta.', 'warn');
+    return;
+  }
+
+  try {
+    const endpoint = `${settings.url}/message/sendText/${encodeURIComponent(instance)}`;
+    const res = await fetch(endpoint, {
+      method:'POST',
+      headers:getEvolutionHeaders(settings),
+      body:JSON.stringify({ number: phone, text })
+    });
+    const data = await res.json().catch(() => ({}));
+
+    if (!res.ok) throw new Error(data?.message || data?.error || `HTTP ${res.status}`);
+
+    const crm = ensureLeadCrm(activeConversationLeadV38, lead);
+    crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
+    crm.messages.push({
+      id:'reply_' + Date.now(),
+      direction:'out',
+      text,
+      phone,
+      at:new Date().toISOString(),
+      atLabel:crmNowLabel(),
+      chipName:lastSent?.chipName || instance,
+      response:data
+    });
+    saveLeadCrm(activeConversationLeadV38, crm);
+    addLeadHistory(activeConversationLeadV38, `Resposta enviada pela Central de Conversas`, lead);
+
+    renderConversationsV38();
+    notify('Resposta enviada.');
+  } catch (err) {
+    notify('Erro ao responder: ' + (err?.message || 'falha'), 'err');
+  }
+}
+
+function renderConversationsV38() {
+  renderConversationListV38();
+  renderConversationChatV38();
+}
+
+function updateConversationsBadgeV38() {
+  const badge = document.getElementById('badge-conversations');
+  if (!badge) return;
+  badge.textContent = getAllConversationLeadsV38().length;
+}
+
 /* ════════════════════════════
    DEFAULT RAMOS
 ════════════════════════════ */
@@ -4753,7 +4983,7 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
-const PANELS = ['audit','responses','chips','inicio','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes'];
+const PANELS = ['audit','conversations','responses','chips','inicio','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes'];
 function switchPanel(name) {
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
@@ -9817,7 +10047,8 @@ function setupMobileMenuV37(){
    btn=document.createElement('button');
    btn.id='mobileMenuBtnV37';
    btn.innerHTML='☰';
-   btn.style.cssText='position:fixed;top:12px;left:12px;z-index:1000;padding:10px 12px;border-radius:10px;';
+   btn.setAttribute('aria-label','Abrir menu');
+   btn.className='mobile-menu-trigger-v37';
    document.body.appendChild(btn);
  }
 
@@ -9825,11 +10056,13 @@ function setupMobileMenuV37(){
    sidebar.classList.remove('mobile-open');
    overlay.classList.remove('active');
    document.body.style.overflow='';
+   document.body.classList.remove('mobile-menu-open');
  }
  function openMenu(){
    sidebar.classList.add('mobile-open');
    overlay.classList.add('active');
    document.body.style.overflow='hidden';
+   document.body.classList.add('mobile-menu-open');
  }
 
  btn.onclick=()=> sidebar.classList.contains('mobile-open')?closeMenu():openMenu();
@@ -9840,3 +10073,5 @@ function setupMobileMenuV37(){
  });
 }
 document.addEventListener('DOMContentLoaded',setupMobileMenuV37);
+
+// conversations fallback
