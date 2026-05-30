@@ -5490,6 +5490,25 @@ function renderRamoSelect() {
 /* ════════════════════════════
    INÍCIO — RENDER
 ════════════════════════════ */
+
+/* ════════════════════════════
+   RENDER INICIO SAFE V40.11
+════════════════════════════ */
+function renderCommercialDashboardSafeV4011() {
+  try {
+    if (typeof renderCommercialDashboard === 'function') {
+      return renderCommercialDashboard();
+    }
+    if (typeof renderDashboard === 'function') {
+      return renderDashboard();
+    }
+    return '';
+  } catch (e) {
+    console.warn('Dashboard comercial ignorado:', e?.message || e);
+    return '';
+  }
+}
+
 function renderInicio() {
   renderCrmHomeDashboard();
   renderHomeProDashboard();
@@ -5532,7 +5551,7 @@ function renderInicio() {
 
   const tbody = document.getElementById('inicioTbody');
   if (!totalItems) {
-    tbody.innerHTML = `${renderCommercialDashboard()}<tr><td colspan="7" class="table-empty">${inicioBuscaQ ? `Nenhum resultado para "${inicioBuscaEl.value}"` : `Nenhuma empresa com status "${selectedStatus}" neste dia`}</td></tr>`;
+    tbody.innerHTML = `${renderCommercialDashboardSafeV4011()}<tr><td colspan="7" class="table-empty">${inicioBuscaQ ? `Nenhum resultado para "${inicioBuscaEl.value}"` : `Nenhuma empresa com status "${selectedStatus}" neste dia`}</td></tr>`;
   } else {
     tbody.innerHTML = pageItems.map(e => {
       const googleUrl = e.googleUrl || '';
@@ -10842,7 +10861,7 @@ function getEvolutionConfigForChipV405(chip = null) {
 }
 
 if (typeof renderCommercialDashboard !== 'function') {
-  function renderCommercialDashboard() {
+  function renderCommercialDashboardSafeV4011() {
     try {
       if (typeof renderDashboard === 'function') return renderDashboard();
       return '';
