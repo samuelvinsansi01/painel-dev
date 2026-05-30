@@ -927,7 +927,7 @@
           <input id="chipInterval" type="number" value="120" placeholder="Intervalo em segundos">
           <input id="chipBlocks" type="text" value="08:00,10:00,12:00,14:00" placeholder="Blocos">
         </div>
-        <button class="btn btn-primary" onclick="addWhatsappChip()">Adicionar chip</button>
+        <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" onclick="addWhatsappChip()">Salvar chip</button><button class="btn btn-ghost" onclick="testEvolutionChipConnectionV406().then(r=>notify(r.ok?`Conectado: ${r.state||'ok'}`:`Falha: ${r.error}`, r.ok?undefined:'warn'))">Testar chip</button></div>
       </div>
     </div>
 

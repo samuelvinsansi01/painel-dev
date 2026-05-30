@@ -2797,68 +2797,7 @@ function setChipUsedToday(chipId, count){
 }
 
 function addWhatsappChip(){
-  const name = (document.getElementById('chipName')?.value || '').trim();
-  const url = normalizeEvolutionBaseUrlV405(
-    document.getElementById('chipUrl')?.value ||
-    document.getElementById('evoUrl')?.value ||
-    document.querySelector('[placeholder*="URL"]')?.value ||
-    ''
-  );
-  const instance = (
-    document.getElementById('chipInstance')?.value ||
-    document.getElementById('evoInstance')?.value ||
-    document.querySelector('[placeholder*="Instância"]')?.value ||
-    document.querySelector('[placeholder*="Instance"]')?.value ||
-    ''
-  ).trim();
-  const key = (
-    document.getElementById('chipApiKey')?.value ||
-    document.getElementById('evoApiKey')?.value ||
-    document.getElementById('evoKey')?.value ||
-    document.querySelector('[placeholder*="API Key"]')?.value ||
-    document.querySelector('[placeholder*="api key"]')?.value ||
-    ''
-  ).trim();
-
-  const dailyLimit = Number(document.getElementById('chipDailyLimit')?.value || 120);
-  const blockSize = Number(document.getElementById('chipBlockSize')?.value || 30);
-  const intervalSeconds = Number(document.getElementById('chipInterval')?.value || 120);
-  const blocks = (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00')
-    .split(',')
-    .map(v => v.trim())
-    .filter(Boolean);
-
-  if (!name || !url || !instance || !key) {
-    notify('Preencha nome, URL, instância e API Key do chip.', 'warn');
-    return;
-  }
-
-  const chips = getWhatsappChipsV29();
-  const existing = chips.find(chip => chip.id === name || chip.name === name || chip.instance === instance);
-
-  const payload = {
-    id: existing?.id || 'chip_' + Date.now(),
-    name,
-    url,
-    instance,
-    key,
-    apiKey: key,
-    dailyLimit,
-    blockSize,
-    intervalSeconds,
-    blocks,
-    status: existing?.status || 'active',
-    paused: existing?.paused || false,
-    createdAt: existing?.createdAt || new Date().toISOString(),
-    updatedAt: new Date().toISOString()
-  };
-
-  if (existing) Object.assign(existing, payload);
-  else chips.push(payload);
-
-  saveWhatsappChipsV29(chips);
-  renderChipsPanel();
-  notify(existing ? 'Chip atualizado.' : 'Chip cadastrado.');
+  return saveChipWithConnectionTestV406();
 }
 
 function removeWhatsappChip(id){
@@ -3003,7 +2942,7 @@ function renderChipsList(){
           <div>
             <div class="chip-card-name">${escHtml(chip.name)}</div>
             <div class="chip-card-meta">
-              URL: ${escHtml(chip.url || chip.baseUrl || chip.evolutionUrl || 'sem URL')}<br>Instância: ${escHtml(chip.instance)}<br>
+              URL: ${escHtml(chip.url || chip.baseUrl || chip.evolutionUrl || 'sem URL')}<br>Instância: ${escHtml(chip.instance)}<br>Estado: ${escHtml(chip.connectionState || 'não testado')}<br>
               Blocos: ${escHtml((chip.blocks || []).join(', '))}<br>
               Intervalo: ${escHtml(String(chip.intervalSeconds || 120))}s
             </div>
@@ -4287,6 +4226,156 @@ function getEvolutionHeadersV405(config = {}) {
 
 function isValidEvolutionConfigV405(config = {}) {
   return !!(config.url && config.instance && config.apiKey);
+}
+
+
+/* ════════════════════════════
+   EVOLUTION ROTAS CORRIGIDAS V40.6
+   Rotas validadas:
+   GET /instance/connectionState/:instance
+   POST /chat/whatsappNumbers/:instance
+════════════════════════════ */
+function getChipFormValuesV406() {
+  const pick = (ids, selector) => {
+    for (const id of ids) {
+      const el = document.getElementById(id);
+      if (el && String(el.value || '').trim()) return String(el.value || '').trim();
+    }
+    if (selector) {
+      const el = document.querySelector(selector);
+      if (el && String(el.value || '').trim()) return String(el.value || '').trim();
+    }
+    return '';
+  };
+
+  return {
+    name: pick(['chipName'], 'input[placeholder*="Nome"]'),
+    url: normalizeEvolutionBaseUrlV405(pick(['chipUrl', 'evoUrl'], 'input[placeholder*="URL"]')),
+    instance: pick(['chipInstance', 'evoInstance'], 'input[placeholder*="Instância"],input[placeholder*="Instance"]'),
+    key: pick(['chipApiKey', 'evoApiKey', 'evoKey'], 'input[placeholder*="API Key"],input[placeholder*="api key"]'),
+    dailyLimit: Number(document.getElementById('chipDailyLimit')?.value || 120),
+    blockSize: Number(document.getElementById('chipBlockSize')?.value || 30),
+    intervalSeconds: Number(document.getElementById('chipInterval')?.value || 120),
+    blocks: (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00').split(',').map(v => v.trim()).filter(Boolean)
+  };
+}
+
+async function testEvolutionChipConnectionV406(chipLike = null) {
+  const chip = chipLike || getChipFormValuesV406();
+  const cfg = {
+    url: normalizeEvolutionBaseUrlV405(chip.url || chip.baseUrl || chip.evolutionUrl || ''),
+    instance: chip.instance || chip.instanceName || '',
+    apiKey: chip.key || chip.apiKey || chip.apikey || ''
+  };
+
+  if (!cfg.url || !cfg.instance || !cfg.apiKey) {
+    notify('Preencha URL, instância e API Key.', 'warn');
+    return { ok:false, error:'Campos obrigatórios ausentes' };
+  }
+
+  const endpoint = `${cfg.url}/instance/connectionState/${encodeURIComponent(cfg.instance)}`;
+
+  try {
+    const res = await fetch(endpoint, {
+      method: 'GET',
+      headers: { apikey: cfg.apiKey }
+    });
+
+    const data = await res.json().catch(() => ({}));
+    const state = data?.instance?.state || data?.state || '';
+
+    if (!res.ok) return { ok:false, error:`HTTP ${res.status}`, data };
+
+    return {
+      ok: state === 'open' || state === 'connected' || !!state,
+      state,
+      data
+    };
+  } catch (err) {
+    return { ok:false, error:err?.message || 'Falha ao conectar' };
+  }
+}
+
+async function saveChipWithConnectionTestV406() {
+  const form = getChipFormValuesV406();
+
+  if (!form.name || !form.url || !form.instance || !form.key) {
+    notify('Preencha nome, URL, instância e API Key do chip.', 'warn');
+    return;
+  }
+
+  const test = await testEvolutionChipConnectionV406(form);
+
+  if (!test.ok) {
+    notify('Não foi possível conectar este chip: ' + (test.error || 'erro'), 'warn');
+    console.warn('[Evolution chip test]', test);
+    return;
+  }
+
+  const chips = getWhatsappChipsV29();
+  const existing = chips.find(chip => chip.id === form.name || chip.name === form.name || chip.instance === form.instance);
+
+  const payload = {
+    id: existing?.id || 'chip_' + Date.now(),
+    name: form.name,
+    url: form.url,
+    instance: form.instance,
+    key: form.key,
+    apiKey: form.key,
+    dailyLimit: form.dailyLimit,
+    blockSize: form.blockSize,
+    intervalSeconds: form.intervalSeconds,
+    blocks: form.blocks,
+    status: 'active',
+    paused: false,
+    connectionState: test.state || 'open',
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existing) Object.assign(existing, payload);
+  else chips.push(payload);
+
+  saveWhatsappChipsV29(chips);
+  if (typeof renderChipsPanel === 'function') renderChipsPanel();
+  notify(`Chip salvo e conectado: ${test.state || 'open'}`);
+}
+
+async function validateNumberByChipV406(number, chipLike = null) {
+  const chip = chipLike || getPrimaryEvolutionChipV405();
+  const cfg = getEvolutionConfigForChipV405(chip);
+
+  const phone = String(number || '').replace(/\D/g, '');
+
+  if (!phone || phone.length < 10) {
+    return { ok:false, error:'Número inválido' };
+  }
+
+  if (!cfg.url || !cfg.instance || !cfg.apiKey) {
+    return { ok:false, error:'Chip/Evolution incompleto' };
+  }
+
+  const endpoint = `${cfg.url}/chat/whatsappNumbers/${encodeURIComponent(cfg.instance)}`;
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      apikey: cfg.apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({ numbers: [phone] })
+  });
+
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) return { ok:false, error:`HTTP ${res.status}`, data };
+
+  const item = Array.isArray(data) ? data[0] : (data?.data?.[0] || data?.result?.[0] || data);
+  return {
+    ok:true,
+    exists: !!item?.exists,
+    item,
+    data
+  };
 }
 
 /* ════════════════════════════
@@ -10369,3 +10458,29 @@ window.addEventListener('error', function(e){
     try { rebuildSidebarV40(); } catch(err){}
   }
 });
+
+
+/* Override seguro V40.6 */
+async function validateEvolutionNumber() {
+  const result = document.getElementById('evoTestResult');
+  const number = (document.getElementById('evoNumberTest')?.value || '').replace(/\D/g,'');
+
+  if (result) result.textContent = 'Validando número...';
+
+  try {
+    const r = await validateNumberByChipV406(number);
+    if (!r.ok) {
+      if (result) result.textContent = `Erro: ${r.error}`;
+      notify('Erro ao validar número.', 'warn');
+      return;
+    }
+
+    if (result) {
+      result.textContent = r.exists
+        ? `✅ Número existe no WhatsApp: ${number}`
+        : `⚠️ Número não confirmado: ${number}`;
+    }
+  } catch(err) {
+    if (result) result.textContent = `Erro: ${err?.message || 'falha desconhecida'}`;
+  }
+}
