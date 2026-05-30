@@ -4383,11 +4383,32 @@ function nextWeekday(dateStr) {
 }
 
 function updateClock(){
-try{
+  const clockEl =
+    document.getElementById('clock') ||
+    document.getElementById('sidebarClock') ||
+    document.querySelector('[data-time]');
+
+  const dateEl =
+    document.getElementById('date') ||
+    document.getElementById('sidebarDate') ||
+    document.querySelector('[data-date]');
+
   const now = new Date();
-  document.getElementById('sidebarClock').textContent = now.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
-  document.getElementById('sidebarDate').textContent  = now.toLocaleDateString('pt-BR', { weekday:'short', day:'numeric', month:'short' });
-  checkHorarioDisparo(now);
+
+  if (clockEl) {
+    if (clockEl) clockEl.textContent = now.toLocaleTimeString('pt-BR', {
+      hour: '2-digit',
+      minute: '2-digit'
+    });
+  }
+
+  if (dateEl) {
+    if (dateEl) dateEl.textContent = now.toLocaleDateString('pt-BR', {
+      weekday: 'long',
+      day: '2-digit',
+      month: 'short'
+    });
+  }
 }
 setInterval(updateClock, 1000); updateClock();
 
@@ -10235,18 +10256,3 @@ document.addEventListener('DOMContentLoaded', rebuildSidebarV40);
 setTimeout(rebuildSidebarV40, 300);
 setTimeout(rebuildSidebarV40, 1000);
 setTimeout(rebuildSidebarV40, 2000);
-
-
-/* V40.2 updateClock guard */
-window.addEventListener('error', function(e){
-  if(String(e.message||'').includes('updateClock')) {
-    console.warn('updateClock protegido');
-    e.preventDefault?.();
-  }
-});
-
-if(typeof loginGoogle !== 'function'){
-  window.loginGoogle = function(){
-    console.warn('loginGoogle não carregado');
-  };
-}
