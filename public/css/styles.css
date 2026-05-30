@@ -1903,3 +1903,71 @@ body.auth-locked .app{
   background:rgba(240,164,41,.07);
   color:var(--warning);
 }
+
+
+/* ══ WEBHOOK RESPOSTAS V34 ══ */
+.responses-v34-grid{
+  display:grid;
+  grid-template-columns:minmax(0,1fr) minmax(0,1fr);
+  gap:16px;
+  margin-bottom:16px;
+}
+.responses-v34-url{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  line-height:1.6;
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px;
+  color:var(--accent);
+  overflow:auto;
+}
+.responses-v34-list{
+  display:flex;
+  flex-direction:column;
+  gap:8px;
+}
+.response-v34-item{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:12px;
+  padding:12px;
+}
+.response-v34-top{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:10px;
+  margin-bottom:8px;
+}
+.response-v34-phone{
+  font-weight:800;
+  font-size:12px;
+}
+.response-v34-date{
+  font-family:'DM Mono',monospace;
+  font-size:8px;
+  color:var(--muted);
+}
+.response-v34-text{
+  font-size:12px;
+  line-height:1.55;
+  color:var(--text2);
+}
+.response-v34-actions{
+  display:flex;
+  gap:6px;
+  flex-wrap:wrap;
+  margin-top:10px;
+}
+.response-v34-empty{
+  text-align:center;
+  padding:28px;
+  color:var(--muted);
+  font-family:'DM Mono',monospace;
+  font-size:10px;
+}
+@media(max-width:900px){
+  .responses-v34-grid{grid-template-columns:1fr;}
+}

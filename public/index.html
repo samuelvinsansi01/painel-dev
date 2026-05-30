@@ -811,6 +811,40 @@
 <!-- ── FILA WHATSAPP V27 ── -->
 
 <!-- ── CHIPS V29 ── -->
+
+<!-- ── RESPOSTAS WEBHOOK V34 ── -->
+<div class="panel" id="panel-responses">
+  <div class="page-header" style="flex-shrink:0">
+    <div class="page-title">Respostas <span>WhatsApp.</span></div>
+    <div class="page-sub">// webhook Evolution · mensagens recebidas · atualização do lead</div>
+  </div>
+
+  <div class="responses-v34-grid">
+    <div class="stretch-card">
+      <div class="card-title">URL do Webhook</div>
+      <div id="webhookUrlV34" class="responses-v34-url"></div>
+      <div style="display:flex;gap:8px;flex-wrap:wrap;margin-top:10px">
+        <button class="btn btn-ghost" onclick="copyWebhookUrlV34()">Copiar URL</button>
+        <button class="btn btn-primary" onclick="fetchEvolutionResponsesV34()">Buscar respostas</button>
+      </div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="card-title">Configuração necessária</div>
+      <div class="responses-v34-url">
+        Evento principal: messages.upsert<br>
+        Endpoint: /api/webhook/evolution<br>
+        A Evolution deve apontar para a URL pública do seu domínio.
+      </div>
+    </div>
+  </div>
+
+  <div class="stretch-card">
+    <div class="card-title" style="flex-shrink:0">Mensagens recebidas</div>
+    <div id="responsesListV34" class="responses-v34-list"></div>
+  </div>
+</div>
+
 <div class="panel" id="panel-chips">
   <div class="page-header" style="flex-shrink:0">
     <div class="page-title">WhatsApp <span>Chips.</span></div>
