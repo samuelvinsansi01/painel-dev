@@ -10484,3 +10484,137 @@ async function validateEvolutionNumber() {
     if (result) result.textContent = `Erro: ${err?.message || 'falha desconhecida'}`;
   }
 }
+
+
+/* ════════════════════════════
+   CHIP DEBUG + FIX V40.7
+════════════════════════════ */
+function setChipDebugV407(text, type='') {
+  const el = document.getElementById('chipDebugV407');
+  if (!el) return;
+  el.classList.remove('ok','err');
+  if (type) el.classList.add(type);
+  el.textContent = text;
+}
+
+function getChipFormValuesV407() {
+  const byId = id => document.getElementById(id);
+  const findInput = terms => {
+    const inputs = Array.from(document.querySelectorAll('input'));
+    return inputs.find(input => {
+      const hay = `${input.id||''} ${input.name||''} ${input.placeholder||''}`.toLowerCase();
+      return terms.some(t => hay.includes(t));
+    });
+  };
+
+  const nameEl = byId('chipName') || findInput(['nome do chip','nome']);
+  const urlEl = byId('chipUrl') || byId('evoUrl') || findInput(['url da evolution','url evolution','url']);
+  const instanceEl = byId('chipInstance') || byId('evoInstance') || findInput(['instância','instancia','instance']);
+  const keyEl = byId('chipApiKey') || byId('evoApiKey') || byId('evoKey') || findInput(['api key','apikey','chave']);
+
+  return {
+    name: String(nameEl?.value || '').trim(),
+    url: String(urlEl?.value || '').trim().replace(/\/$/, ''),
+    instance: String(instanceEl?.value || '').trim(),
+    key: String(keyEl?.value || '').trim(),
+    dailyLimit: Number(document.getElementById('chipDailyLimit')?.value || 120),
+    blockSize: Number(document.getElementById('chipBlockSize')?.value || 30),
+    intervalSeconds: Number(document.getElementById('chipInterval')?.value || 120),
+    blocks: (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00').split(',').map(v=>v.trim()).filter(Boolean),
+    found: {
+      name: !!nameEl,
+      url: !!urlEl,
+      instance: !!instanceEl,
+      key: !!keyEl
+    }
+  };
+}
+
+async function testEvolutionChipConnectionV407(form=null) {
+  const f = form || getChipFormValuesV407();
+
+  const missing = [];
+  if (!f.name) missing.push('nome');
+  if (!f.url) missing.push('url');
+  if (!f.instance) missing.push('instância');
+  if (!f.key) missing.push('api key');
+
+  if (missing.length) {
+    const msg = `Campos ausentes: ${missing.join(', ')}\nEncontrados no DOM: ${JSON.stringify(f.found)}\nValores lidos:\nURL=${f.url}\nInstância=${f.instance}\nNome=${f.name}\nAPI Key=${f.key ? 'preenchida' : 'vazia'}`;
+    setChipDebugV407(msg, 'err');
+    notify('Preencha todos os campos obrigatórios.', 'warn');
+    return { ok:false, error:msg };
+  }
+
+  const endpoint = `${f.url}/instance/connectionState/${encodeURIComponent(f.instance)}`;
+  setChipDebugV407(`Testando conexão...\nGET ${endpoint}\nHeader apikey: ${f.key ? 'preenchido' : 'vazio'}`);
+
+  try {
+    const res = await fetch(endpoint, {
+      method:'GET',
+      headers:{ apikey:f.key }
+    });
+    const text = await res.text();
+    let data = {};
+    try { data = JSON.parse(text); } catch { data = { raw:text }; }
+
+    const state = data?.instance?.state || data?.state || '';
+
+    if (!res.ok) {
+      const msg = `Falha HTTP ${res.status}\n${text}`;
+      setChipDebugV407(msg, 'err');
+      return { ok:false, error:msg, data };
+    }
+
+    const ok = state === 'open' || state === 'connected' || !!state;
+    setChipDebugV407(`Conexão OK\nState: ${state || 'sem state'}\nResposta: ${JSON.stringify(data, null, 2)}`, ok ? 'ok' : 'err');
+    return { ok, state, data };
+  } catch(err) {
+    const msg = `Erro fetch: ${err?.message || err}`;
+    setChipDebugV407(msg, 'err');
+    return { ok:false, error:msg };
+  }
+}
+
+async function saveChipWithConnectionTestV407() {
+  const f = getChipFormValuesV407();
+  const test = await testEvolutionChipConnectionV407(f);
+  if (!test.ok) return;
+
+  const chips = getWhatsappChipsV29();
+  const existing = chips.find(chip => chip.name === f.name || chip.instance === f.instance);
+
+  const payload = {
+    id: existing?.id || 'chip_' + Date.now(),
+    name: f.name,
+    url: f.url,
+    instance: f.instance,
+    key: f.key,
+    apiKey: f.key,
+    dailyLimit: f.dailyLimit,
+    blockSize: f.blockSize,
+    intervalSeconds: f.intervalSeconds,
+    blocks: f.blocks,
+    status:'active',
+    paused:false,
+    connectionState:test.state || 'open',
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existing) Object.assign(existing, payload);
+  else chips.push(payload);
+
+  saveWhatsappChipsV29(chips);
+  if (typeof renderChipsPanel === 'function') renderChipsPanel();
+  setChipDebugV407(`Chip salvo com sucesso:\n${f.name}\n${f.url}\n${f.instance}`, 'ok');
+  notify('Chip salvo e conectado.');
+}
+
+function addWhatsappChip(){
+  return saveChipWithConnectionTestV407();
+}
+
+function testEvolutionChipConnectionV406(){
+  return testEvolutionChipConnectionV407();
+}

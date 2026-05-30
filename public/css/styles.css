@@ -2361,3 +2361,18 @@ body.auth-locked .app{
 
 /* V40.5 Evolution chip model */
 .chips-v29-form input[type="password"]{font-family:'DM Mono',monospace;}
+
+/* V40.7 chip debug */
+.chip-debug-v407{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  line-height:1.6;
+  color:var(--muted);
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px;
+  white-space:pre-wrap;
+}
+.chip-debug-v407.ok{color:var(--ok);border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06)}
+.chip-debug-v407.err{color:var(--error);border-color:rgba(255,92,92,.35);background:rgba(255,92,92,.06)}
