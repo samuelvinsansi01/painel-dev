@@ -2467,11 +2467,13 @@ body.auth-locked .app{
 /* V41.1 MENU EXPANSÍVEL FIX */
 .sidebar-v41-hello{font-size:18px!important;line-height:1.15!important;font-weight:900!important}
 .sidebar-v41-sub{font-size:8px!important}
-.sidebar-v411-group-head{display:flex!important;align-items:center!important;justify-content:space-between!important;gap:8px!important;padding:10px 12px!important;margin:6px 0 2px!important;border-radius:10px!important;cursor:pointer!important;color:var(--muted)!important;font-family:'DM Mono',monospace!important;font-size:8px!important;letter-spacing:.14em!important;text-transform:uppercase!important}
-.sidebar-v411-group-head:hover{background:var(--surface)!important;color:var(--text)!important}
-.sidebar-v411-chevron{font-size:10px!important;transition:.18s ease!important}
+.sidebar-v411-group{display:flex!important;flex-direction:column!important;gap:2px!important}
+.sidebar-v411-group-head{display:flex!important;align-items:center!important;gap:10px!important;padding:10px 12px!important;margin:0!important;border-radius:8px!important;cursor:pointer!important;color:var(--text2)!important;font-family:inherit!important;font-size:12px!important;letter-spacing:.01em!important;text-transform:none!important}
+.sidebar-v411-group-head:hover{background:var(--surface2)!important;color:var(--text)!important}
+.sidebar-v411-group-head .nav-label{flex:1!important;color:inherit!important}
+.sidebar-v411-chevron{width:16px!important;margin-left:auto!important;text-align:center!important;font-size:16px!important;line-height:1!important;transition:.18s ease!important}
 .sidebar-v411-group.open .sidebar-v411-chevron{transform:rotate(90deg)!important}
-.sidebar-v411-group-body{display:none!important;flex-direction:column!important;gap:4px!important}
+.sidebar-v411-group-body{display:none!important;flex-direction:column!important;gap:4px!important;padding-left:12px!important}
 .sidebar-v411-group.open .sidebar-v411-group-body{display:flex!important}
-.sidebar-v41-subitem{padding-left:30px!important}
+.sidebar-v41-subitem{padding-left:12px!important}
 .sidebar [data-label="Respostas"]{display:none!important}

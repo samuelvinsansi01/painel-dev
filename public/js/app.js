@@ -185,16 +185,6 @@ async function loginGoogle() {
 }
 
 async function logoutSupabase() {
-  if (!sbClient) return;
-
-  const { error } = await sbClient.auth.signOut();
-
-  if (error) {
-    console.error('[auth] logout:', error);
-    notify('Erro ao sair da conta', 'err');
-    return;
-  }
-
   localStorage.removeItem('vs_empresas_v2');
   localStorage.removeItem('vs_lead_crm_v1');
 
@@ -206,7 +196,24 @@ async function logoutSupabase() {
   if (typeof updateBadges === 'function') updateBadges();
 
   showAuthGate();
-  notify('Conta desconectada');
+
+  if (!sbClient) {
+    notify('Conta desconectada');
+    return;
+  }
+
+  try {
+    const { error } = await sbClient.auth.signOut();
+    if (error) {
+      console.warn('[auth] logout remoto:', error.message);
+      notify('Sessão local encerrada. Recarregue se necessário.', 'warn');
+      return;
+    }
+    notify('Conta desconectada');
+  } catch (error) {
+    console.warn('[auth] logout remoto:', error?.message || error);
+    notify('Sessão local encerrada. Recarregue se necessário.', 'warn');
+  }
 }
 
 
@@ -10328,7 +10335,7 @@ function ensureSidebarItemV40(sidebar, panel, icon, label, badge) {
 
 function rebuildSidebarV40() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar) return;
+  if (!sidebar || sidebar.dataset.v411Grouped === 'true') return;
 
   const authBox =
     sidebar.querySelector('#authUserBox') ||
@@ -10423,7 +10430,7 @@ setTimeout(rebuildSidebarV40, 2000);
     }
 
     const sidebar = document.querySelector('.sidebar');
-    if (!sidebar) return;
+    if (!sidebar || sidebar.dataset.v411Grouped === 'true') return;
 
     const authBox = sidebar.querySelector('#authUserBox');
     let footer = document.getElementById('sidebarAuthFooterV40');
@@ -11725,13 +11732,13 @@ function createMenuItemV411(panel, icon, label, badgeId = '') {
   return item;
 }
 
-function createExpandableMenuGroupV411(title, items = [], open = false) {
+function createExpandableMenuGroupV411(title, icon, items = [], open = false) {
   const wrap = document.createElement('div');
   wrap.className = 'sidebar-v411-group' + (open ? ' open' : '');
 
   const head = document.createElement('div');
-  head.className = 'sidebar-v411-group-head';
-  head.innerHTML = `<span>${title}</span><span class="sidebar-v411-chevron">›</span>`;
+  head.className = 'nav-item sidebar-v411-group-head';
+  head.innerHTML = `<div class="nav-icon">${icon}</div><span class="nav-label">${title}</span><span class="sidebar-v411-chevron">›</span>`;
 
   const body = document.createElement('div');
   body.className = 'sidebar-v411-group-body';
@@ -11763,26 +11770,26 @@ function rebuildSidebarGroupedV41() {
   sidebar.appendChild(createMenuItemV411('inicio', '📊', 'Início', 'badge-inicio'));
   sidebar.appendChild(createMenuItemV411('inbox', '📥', 'Caixa de Entrada', 'badge-inbox'));
 
-  sidebar.appendChild(createExpandableMenuGroupV411('Leads', [
+  sidebar.appendChild(createExpandableMenuGroupV411('Leads', '&#128193;', [
     { panel:'importar', icon:'📥', label:'Importar', badgeId:'badge-import' },
     { panel:'validacao', icon:'✅', label:'Validação', badgeId:'badge-validacao' },
     { panel:'atribuicao', icon:'🗂️', label:'Atribuição', badgeId:'badge-atribuicao' }
   ]));
 
-  sidebar.appendChild(createExpandableMenuGroupV411('Envios', [
+  sidebar.appendChild(createExpandableMenuGroupV411('Envios', '&#128228;', [
     { panel:'whatsappQueue', icon:'💬', label:'WhatsApp', badgeId:'badge-whatsapp-queue' },
     { panel:'instagram', icon:'📸', label:'Instagram', badgeId:'badge-instagram' }
   ]));
 
   sidebar.appendChild(createMenuItemV411('conversations', '💬', 'Conversas'));
 
-  sidebar.appendChild(createExpandableMenuGroupV411('Gerenciamento', [
+  sidebar.appendChild(createExpandableMenuGroupV411('Gerenciamento', '&#128203;', [
     { panel:'followups', icon:'⏰', label:'Follow-ups', badgeId:'badge-followups' },
     { panel:'kanban', icon:'📋', label:'Kanban' },
     { panel:'acompanhamento', icon:'📈', label:'Acompanhamentos', badgeId:'badge-acompanhamento' }
   ]));
 
-  sidebar.appendChild(createExpandableMenuGroupV411('Ferramentas', [
+  sidebar.appendChild(createExpandableMenuGroupV411('Ferramentas', '&#128295;', [
     { panel:'redirecionamentos', icon:'🔗', label:'Redirecionamentos' },
     { panel:'audit', icon:'📊', label:'Auditoria', badgeId:'badge-audit' }
   ]));
