@@ -3139,7 +3139,7 @@ async function startDispatchV30() {
       const res = await fetch(endpoint, {
         method: 'POST',
         headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
-        body: JSON.stringify({ number: phone, text })
+        body: JSON.stringify(buildEvolutionTextPayloadV4013(phone, text))
       });
 
       const data = await res.json().catch(() => ({}));
@@ -3377,7 +3377,7 @@ async function dispatchOneItemV32(item, chip) {
     const res = await fetch(endpoint, {
       method: 'POST',
       headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
-      body: JSON.stringify({ number: phone, text })
+      body: JSON.stringify(buildEvolutionTextPayloadV4013(phone, text))
     });
 
     const data = await res.json().catch(() => ({}));
@@ -4152,7 +4152,7 @@ async function sendConversationReplyV38() {
     const res = await fetch(endpoint, {
       method:'POST',
       headers:(typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
-      body:JSON.stringify({ number: phone, text })
+      body:JSON.stringify({ number: phone, textMessage: { text } })
     });
     const data = await res.json().catch(() => ({}));
 
@@ -11033,10 +11033,7 @@ async function sendActiveLeadWhatsappMessage() {
         apikey: cfg.apiKey,
         'Content-Type': 'application/json'
       },
-      body: JSON.stringify({
-        number: phone,
-        text
-      })
+      body: JSON.stringify(buildEvolutionTextPayloadV4013(phone, text))
     });
 
     const data = await res.json().catch(() => ({}));
@@ -11086,5 +11083,123 @@ async function sendActiveLeadWhatsappMessage() {
     if (result) result.textContent = `Falha ao enviar: ${err?.message || 'erro desconhecido'}`;
     if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
     notify('Falha ao conectar na Evolution.', 'err');
+  }
+}
+
+
+/* ════════════════════════════
+   EVOLUTION TEXTMESSAGE PAYLOAD V40.13
+   Evolution v1.8.2 usa:
+   { number, textMessage: { text } }
+════════════════════════════ */
+function buildEvolutionTextPayloadV4013(number, text) {
+  return {
+    number: String(number || '').replace(/\D/g, ''),
+    textMessage: {
+      text: String(text || '')
+    }
+  };
+}
+
+async function sendEvolutionTextV4013({ url, instance, apiKey, number, text }) {
+  const endpoint = `${String(url || '').replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance || '')}`;
+
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: {
+      apikey: apiKey,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify(buildEvolutionTextPayloadV4013(number, text))
+  });
+
+  const raw = await res.text();
+  let data = {};
+  try { data = JSON.parse(raw); } catch { data = { raw }; }
+
+  if (!res.ok) {
+    const msg = data?.message || data?.error || raw || `HTTP ${res.status}`;
+    throw new Error(msg);
+  }
+
+  return data;
+}
+
+async function sendActiveLeadWhatsappMessage() {
+  if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+
+  const result = document.getElementById('leadMessageResult');
+  const text = (document.getElementById('leadMessageText')?.value || '').trim();
+  const phone = normalizePhoneForEvolution(activeLeadDrawerData.whatsapp || activeLeadDrawerData.phone || activeLeadDrawerData.telefone || '');
+  const cfg = getManualSendEvolutionConfigV4012 ? getManualSendEvolutionConfigV4012() : (getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405() : {});
+
+  if (!cfg.url || !cfg.instance || !cfg.apiKey) {
+    notify('Cadastre/conecte um chip antes de enviar.', 'warn');
+    if (result) result.textContent = 'Chip/Evolution não configurado.';
+    return;
+  }
+
+  if (!phone || phone.length < 10) {
+    notify('Telefone inválido para envio.', 'warn');
+    if (result) result.textContent = 'Telefone inválido.';
+    return;
+  }
+
+  if (!text) {
+    notify('Digite uma mensagem antes de enviar.', 'warn');
+    if (result) result.textContent = 'Mensagem vazia.';
+    return;
+  }
+
+  if (result) result.textContent = 'Enviando mensagem...';
+
+  try {
+    const data = await sendEvolutionTextV4013({
+      url: cfg.url,
+      instance: cfg.instance,
+      apiKey: cfg.apiKey,
+      number: phone,
+      text
+    });
+
+    const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+    const sentAt = new Date().toISOString();
+    const sentAtLabel = crmNowLabel();
+
+    crm.lastWhatsappMessage = {
+      text,
+      phone,
+      sentAt,
+      sentAtLabel,
+      chipName: cfg.chip?.name || cfg.chip?.nome || cfg.instance,
+      instance: cfg.instance,
+      response: data
+    };
+
+    crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
+    crm.messages.push({
+      id: 'manual_' + Date.now(),
+      direction: 'out',
+      text,
+      phone,
+      at: sentAt,
+      atLabel: sentAtLabel,
+      chipName: cfg.chip?.name || cfg.chip?.nome || cfg.instance,
+      response: data
+    });
+
+    saveLeadCrm(activeLeadDrawerId, crm);
+    addLeadHistory(activeLeadDrawerId, `Mensagem enviada via WhatsApp por ${cfg.chip?.name || cfg.chip?.nome || cfg.instance}`, activeLeadDrawerData);
+
+    if (result) result.textContent = `Mensagem enviada em ${sentAtLabel}.`;
+    if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+    if (typeof renderConversationsV38 === 'function') renderConversationsV38();
+
+    notify('Mensagem enviada via Evolution.');
+  } catch (err) {
+    addLeadHistory(activeLeadDrawerId, `WhatsApp: falha ao enviar mensagem (${err?.message || 'erro'})`, activeLeadDrawerData);
+    if (result) result.textContent = `Falha ao enviar: ${err?.message || 'erro desconhecido'}`;
+    if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+    notify('Falha ao enviar pela Evolution.', 'err');
   }
 }
