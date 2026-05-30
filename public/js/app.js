@@ -9804,3 +9804,39 @@ function getDispatchConfigTextV33() {
 // audit panel fallback
 
 document.addEventListener('DOMContentLoaded', () => { try { updateAuditBadgeV35(); } catch(e){} });
+
+
+/* V37 MOBILE MENU */
+function setupMobileMenuV37(){
+ const sidebar=document.querySelector('.sidebar');
+ const overlay=document.getElementById('mobileMenuOverlayV37');
+ if(!sidebar||!overlay) return;
+
+ let btn=document.getElementById('mobileMenuBtnV37');
+ if(!btn){
+   btn=document.createElement('button');
+   btn.id='mobileMenuBtnV37';
+   btn.innerHTML='☰';
+   btn.style.cssText='position:fixed;top:12px;left:12px;z-index:1000;padding:10px 12px;border-radius:10px;';
+   document.body.appendChild(btn);
+ }
+
+ function closeMenu(){
+   sidebar.classList.remove('mobile-open');
+   overlay.classList.remove('active');
+   document.body.style.overflow='';
+ }
+ function openMenu(){
+   sidebar.classList.add('mobile-open');
+   overlay.classList.add('active');
+   document.body.style.overflow='hidden';
+ }
+
+ btn.onclick=()=> sidebar.classList.contains('mobile-open')?closeMenu():openMenu();
+ overlay.onclick=closeMenu;
+
+ document.querySelectorAll('.sidebar .nav-item').forEach(el=>{
+   el.addEventListener('click',()=>{ if(window.innerWidth<=980) closeMenu();});
+ });
+}
+document.addEventListener('DOMContentLoaded',setupMobileMenuV37);
