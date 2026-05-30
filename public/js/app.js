@@ -5180,7 +5180,7 @@ function switchPanel(name) {
   });
   document.querySelectorAll('.nav-item').forEach(el => {
     const label = el.getAttribute('data-label') || '';
-    const panelMap = {'Início':'inicio','Caixa de Entrada':'inbox','Importar':'importar','Validação':'validacao','Atribuição':'atribuicao','WhatsApp':'whatsappQueue','Instagram':'instagram','Fila WhatsApp':'fila-zap','Conversas':'conversations','Follow-ups':'followups','Kanban':'kanban','Acompanhamento':'acompanhamento','Acompanhamentos':'acompanhamento','Redirecionamentos':'redirecionamentos','Auditoria':'audit','Configurações':'configuracoes'};
+    const panelMap = {'Início':'inicio','Caixa de Entrada':'inbox','Importar':'importar','Validação':'validacao','Atribuição':'atribuicao','WhatsApp':'fila-zap','Instagram':'instagram','Fila WhatsApp':'fila-zap','Conversas':'conversations','Follow-ups':'followups','Kanban':'kanban','Acompanhamento':'acompanhamento','Acompanhamentos':'acompanhamento','Redirecionamentos':'redirecionamentos','Auditoria':'audit','Configurações':'configuracoes'};
     el.classList.toggle('active', panelMap[label] === name);
   });
   if (name==='inicio')         renderInicio();
@@ -11708,7 +11708,7 @@ function rebuildSidebarGroupedV41() {
   sidebar.appendChild(createMenuItemV41('inicio','📊','Início'));
   sidebar.appendChild(createMenuItemV41('inbox','📥','Caixa de Entrada','badge-inbox'));
   sidebar.appendChild(createMenuGroupV41('Leads',[{panel:'import',icon:'📥',label:'Importar',sub:true},{panel:'validacao',icon:'✅',label:'Validação',sub:true},{panel:'atribuicao',icon:'🗂️',label:'Atribuição',sub:true}]));
-  sidebar.appendChild(createMenuGroupV41('Envios',[{panel:'whatsappQueue',icon:'💬',label:'WhatsApp',badgeId:'badge-whatsapp-queue',sub:true},{panel:'instagram',icon:'📸',label:'Instagram',sub:true}]));
+  sidebar.appendChild(createMenuGroupV41('Envios',[{panel:'fila-zap',icon:'💬',label:'WhatsApp',badgeId:'badge-fila-zap',sub:true},{panel:'instagram',icon:'📸',label:'Instagram',sub:true}]));
   sidebar.appendChild(createMenuItemV41('conversations','💬','Conversas'));
   sidebar.appendChild(createMenuGroupV41('Gerenciamento',[{panel:'followups',icon:'⏰',label:'Follow-ups',sub:true},{panel:'kanban',icon:'📋',label:'Kanban',sub:true},{panel:'acompanhamento',icon:'📈',label:'Acompanhamentos',sub:true}]));
   sidebar.appendChild(createMenuGroupV41('Ferramentas',[{panel:'redirects',icon:'🔗',label:'Redirecionamentos',sub:true},{panel:'audit',icon:'📊',label:'Auditoria',badgeId:'badge-audit',sub:true}]));
@@ -11737,7 +11737,7 @@ function updateBadges() {
     safeSetTextV411('badge-validacao', typeof getValData === 'function' ? getValData().length : 0);
     const instaSemLink = typeof getInstaFila === 'function' ? getInstaFila().filter(l => !l.instagram).length : 0;
     safeSetTextV411('badge-atribuicao', (typeof getAtribuicaoData === 'function' ? getAtribuicaoData().length : 0) + instaSemLink);
-    safeSetTextV411('badge-whatsapp-queue', typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27().length : 0);
+    safeSetTextV411('badge-fila-zap', leads.filter(l => (l.status || 'Não enviada') === 'Não enviada' && l.whatsapp).length);
     const instaWeek = typeof getInstaWeek === 'function' ? getInstaWeek() : {};
     const instaBacklog = typeof getInstaFila === 'function' ? getInstaFila().filter(l => !!l.instagram).length : 0;
     safeSetTextV411('badge-instagram', Object.values(instaWeek).flat().length + instaBacklog);
@@ -11821,7 +11821,7 @@ function rebuildSidebarGroupedV41() {
   ]));
 
   sidebar.appendChild(createExpandableMenuGroupV411('Envios', '&#128228;', [
-    { panel:'whatsappQueue', icon:'💬', label:'WhatsApp', badgeId:'badge-whatsapp-queue' },
+    { panel:'fila-zap', icon:'💬', label:'WhatsApp', badgeId:'badge-fila-zap' },
     { panel:'instagram', icon:'📸', label:'Instagram', badgeId:'badge-instagram' }
   ]));
 
