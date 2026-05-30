@@ -163,6 +163,7 @@ renderAuthUser(currentUser);
 
   if (currentUser) {
     await loadSupabaseAsPrimarySource();
+    try { await loadOperationalDataFromSupabaseV36(); } catch(e){}
   }
 }
 
@@ -5164,7 +5165,7 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
-const PANELS = ['audit','conversations','responses','chips','inicio','inbox','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes'];
+const PANELS = ['audit','conversations','responses','chips','whatsappQueue','evolution','inicio','inbox','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes'];
 function switchPanel(name) {
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
@@ -5172,7 +5173,7 @@ function switchPanel(name) {
   });
   document.querySelectorAll('.nav-item').forEach(el => {
     const label = el.getAttribute('data-label') || '';
-    const panelMap = {'Início':'inicio','Importar':'importar','Validação':'validacao','Atribuição':'atribuicao','Instagram':'instagram','Fila WhatsApp':'fila-zap','Follow-ups':'followups','Acompanhamento':'acompanhamento','Redirecionamentos':'redirecionamentos','Configurações':'configuracoes'};
+    const panelMap = {'Início':'inicio','Caixa de Entrada':'inbox','Importar':'importar','Validação':'validacao','Atribuição':'atribuicao','WhatsApp':'whatsappQueue','Instagram':'instagram','Fila WhatsApp':'fila-zap','Conversas':'conversations','Follow-ups':'followups','Kanban':'kanban','Acompanhamento':'acompanhamento','Acompanhamentos':'acompanhamento','Redirecionamentos':'redirecionamentos','Auditoria':'audit','Configurações':'configuracoes'};
     el.classList.toggle('active', panelMap[label] === name);
   });
   if (name==='inicio')         renderInicio();
@@ -5181,6 +5182,8 @@ function switchPanel(name) {
   if (name==='atribuicao')     { renderAtribuicao(); updateAtribTabCounts(); if (atribActiveTab==='insta') { renderAtribInstaFila(); updateAtribInstaCorteInfo(); } }
   if (name==='instagram')      renderInstagram();
   if (name==='fila-zap')       renderFilaZap();
+  if (name==='whatsappQueue')  renderWhatsappQueuePanel();
+  if (name==='evolution')      renderEvolutionPanel();
   if (name==='kanban')         renderKanban();
   if (name==='followups')      renderFollowups();
   if (name==='acompanhamento') renderAcompanhamento();
@@ -8566,7 +8569,7 @@ function renderConfiguracoes() {
 function abrirModalNovoChip() {
   document.getElementById('chipNome').value = '';
   document.getElementById('chipUrl').value = '';
-  document.getElementById('chipInstance').value = '';
+  document.getElementById('chipLegacyInstance').value = '';
   document.getElementById('chipKey').value = '';
   document.getElementById('chipModal').classList.add('open');
 }
@@ -8575,7 +8578,7 @@ function fecharChipModal() { document.getElementById('chipModal').classList.remo
 function salvarChip() {
   const nome     = document.getElementById('chipNome').value.trim();
   const url      = document.getElementById('chipUrl').value.trim();
-  const instance = document.getElementById('chipInstance').value.trim();
+  const instance = document.getElementById('chipLegacyInstance').value.trim();
   const key      = document.getElementById('chipKey').value.trim();
   if (!nome || !url || !instance || !key) { notify('// preencha todos os campos','err'); return; }
   const chips = getChips();
@@ -10642,7 +10645,7 @@ function testEvolutionChipConnectionV406(){
 /* ════════════════════════════
    CHIP IDS FIX V40.8
    Corrige campos duplicados:
-   chipNome, chipUrl, chipInstance preenchido, chipKey
+   chipNome, chipUrl, chipLegacyInstance preenchido, chipKey
 ════════════════════════════ */
 function getInputValueSmartV408(candidates = [], terms = []) {
   const inputs = Array.from(document.querySelectorAll('input'));
@@ -10670,7 +10673,7 @@ function getInputValueSmartV408(candidates = [], terms = []) {
 function getChipFormValuesV407() {
   const name = getInputValueSmartV408(['chipNome', 'chipName'], ['nome do chip', 'nome']);
   const url = getInputValueSmartV408(['chipUrl', 'evoUrl'], ['url da evolution', 'url evolution', 'url']);
-  const instance = getInputValueSmartV408(['chipInstance', 'evoInstance'], ['instância', 'instancia', 'instance']);
+  const instance = getInputValueSmartV408(['chipLegacyInstance', 'chipInstance', 'evoInstance'], ['instância', 'instancia', 'instance']);
   const key = getInputValueSmartV408(['chipKey', 'chipApiKey', 'evoApiKey', 'evoKey'], ['api key', 'apikey', 'chave']);
 
   return {
@@ -10685,7 +10688,7 @@ function getChipFormValuesV407() {
     found: {
       name: !!document.querySelector('#chipNome, #chipName'),
       url: !!document.querySelector('#chipUrl, #evoUrl'),
-      instance: !!document.querySelector('#chipInstance, #evoInstance'),
+      instance: !!document.querySelector('#chipLegacyInstance, #chipInstance, #evoInstance'),
       key: !!document.querySelector('#chipKey, #chipApiKey, #evoApiKey, #evoKey')
     }
   };
@@ -10713,7 +10716,7 @@ function getLegacyChipFormV409() {
   return {
     nome: smart(['chipNome', 'chipName']),
     url: smart(['chipUrl', 'evoUrl']).replace(/\/$/, ''),
-    instance: smart(['chipInstance', 'evoInstance']),
+    instance: smart(['chipLegacyInstance', 'chipInstance', 'evoInstance']),
     key: smart(['chipKey', 'chipApiKey', 'evoApiKey'])
   };
 }
@@ -11678,14 +11681,21 @@ function updateBadges() {
     const data = typeof ensureWeekData === 'function' ? ensureWeekData() : { days:{} };
     const leads = typeof flattenWeekData === 'function' ? flattenWeekData(data) : [];
 
-    safeSetTextV411('badge-inicio', leads.length || 0);
-    safeSetTextV411('badge-import', (data?.importados || []).length || 0);
-    safeSetTextV411('badge-validacao', leads.filter(l => l.status === 'validacao').length || 0);
-    safeSetTextV411('badge-atribuicao', leads.filter(l => l.status === 'atribuicao').length || 0);
+    safeSetTextV411('badge-inicio', leads.filter(l => (l.status || 'Não enviada') === 'Não enviada').length);
+    safeSetTextV411('badge-import', leads.filter(l => (l.status || 'Não enviada') === 'Não enviada').length);
+    safeSetTextV411('badge-validacao', typeof getValData === 'function' ? getValData().length : 0);
+    const instaSemLink = typeof getInstaFila === 'function' ? getInstaFila().filter(l => !l.instagram).length : 0;
+    safeSetTextV411('badge-atribuicao', (typeof getAtribuicaoData === 'function' ? getAtribuicaoData().length : 0) + instaSemLink);
     safeSetTextV411('badge-whatsapp-queue', typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27().length : 0);
-    safeSetTextV411('badge-instagram', leads.filter(l => l.sourceChannel === 'instagram' || l.instagram).length || 0);
-    safeSetTextV411('badge-followups', 0);
-    safeSetTextV411('badge-acompanhamento', 0);
+    const instaWeek = typeof getInstaWeek === 'function' ? getInstaWeek() : {};
+    const instaBacklog = typeof getInstaFila === 'function' ? getInstaFila().filter(l => !!l.instagram).length : 0;
+    safeSetTextV411('badge-instagram', Object.values(instaWeek).flat().length + instaBacklog);
+    const todayIso = new Date().toISOString().slice(0, 10);
+    const crm = typeof getLeadCrmStore === 'function' ? getLeadCrmStore() : {};
+    safeSetTextV411('badge-followups', Object.values(crm || {}).filter(item => item?.followUpDate && item.followUpDate <= todayIso).length);
+    const acomp = typeof getAcompData === 'function' ? getAcompData() : {};
+    const month = typeof currentMonthKey === 'function' ? currentMonthKey() : '';
+    safeSetTextV411('badge-acompanhamento', (acomp[month] || []).length);
 
     if (typeof updateInboxBadgeV41 === 'function') updateInboxBadgeV41();
     if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
@@ -11699,8 +11709,13 @@ function createMenuItemV411(panel, icon, label, badgeId = '') {
   item.className = 'nav-item';
   item.dataset.label = label;
   item.onclick = () => {
+    if (panel === 'busca') {
+      if (typeof openGlobalSearch === 'function') openGlobalSearch();
+      return;
+    }
     if (panel === 'logout') {
-      if (typeof logout === 'function') logout();
+      if (typeof logoutSupabase === 'function') logoutSupabase();
+      else if (typeof logout === 'function') logout();
       else if (typeof signOut === 'function') signOut();
       return;
     }
@@ -11749,7 +11764,7 @@ function rebuildSidebarGroupedV41() {
   sidebar.appendChild(createMenuItemV411('inbox', '📥', 'Caixa de Entrada', 'badge-inbox'));
 
   sidebar.appendChild(createExpandableMenuGroupV411('Leads', [
-    { panel:'import', icon:'📥', label:'Importar', badgeId:'badge-import' },
+    { panel:'importar', icon:'📥', label:'Importar', badgeId:'badge-import' },
     { panel:'validacao', icon:'✅', label:'Validação', badgeId:'badge-validacao' },
     { panel:'atribuicao', icon:'🗂️', label:'Atribuição', badgeId:'badge-atribuicao' }
   ]));
@@ -11768,11 +11783,11 @@ function rebuildSidebarGroupedV41() {
   ]));
 
   sidebar.appendChild(createExpandableMenuGroupV411('Ferramentas', [
-    { panel:'redirects', icon:'🔗', label:'Redirecionamentos' },
+    { panel:'redirecionamentos', icon:'🔗', label:'Redirecionamentos' },
     { panel:'audit', icon:'📊', label:'Auditoria', badgeId:'badge-audit' }
   ]));
 
-  sidebar.appendChild(createMenuItemV411('config', '⚙️', 'Configurações'));
+  sidebar.appendChild(createMenuItemV411('configuracoes', '⚙️', 'Configurações'));
 
   const footer = document.createElement('div');
   footer.id = 'sidebarAuthFooterV40';
