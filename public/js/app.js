@@ -4382,7 +4382,10 @@ function nextWeekday(dateStr) {
   return dt.toLocaleDateString('pt-BR');
 }
 
-function updateClock() {
+function updateClock(){
+try{
+if(typeof clockEl!=='undefined'&& typeof dateEl!=='undefined'){ if(!clockEl && !dateEl) return; }
+
   const now = new Date();
   document.getElementById('sidebarClock').textContent = now.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   document.getElementById('sidebarDate').textContent  = now.toLocaleDateString('pt-BR', { weekday:'short', day:'numeric', month:'short' });
