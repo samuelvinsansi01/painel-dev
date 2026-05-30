@@ -2308,3 +2308,41 @@ body.auth-locked .app{
 .footer-time{
   display:none!important;
 }
+
+/* V40 SIDEBAR FINAL */
+.sidebar{
+  display:flex!important;
+  flex-direction:column!important;
+}
+.sidebar-nav,
+.nav,
+.menu,
+.sidebar-menu{
+  flex:1 1 auto!important;
+}
+#sidebarToolsV40{
+  display:flex;
+  flex-direction:column;
+  gap:6px;
+}
+#sidebarAuthFooterV40{
+  margin-top:auto!important;
+  padding-top:14px!important;
+  border-top:1px solid var(--border2)!important;
+}
+.sidebar [data-label="Auditoria"],
+.sidebar [data-label="Conversas"],
+.sidebar [data-label="Respostas"]{
+  display:flex!important;
+}
+@media(max-width:980px){
+  .sidebar{
+    width:min(86vw,300px)!important;
+    max-width:300px!important;
+    height:100dvh!important;
+    padding-bottom:18px!important;
+  }
+  #sidebarAuthFooterV40{
+    padding-bottom:18px!important;
+  }
+}
