@@ -2064,3 +2064,46 @@ body.auth-locked .app{
 @media(max-width:560px){
   .audit-v35-cards{grid-template-columns:1fr;}
 }
+
+
+/* ══ PERSISTÊNCIA SUPABASE V36 ══ */
+.persistence-v36-card{
+  background:var(--bg);
+  border:1px solid var(--border2);
+  border-radius:14px;
+  padding:14px;
+  margin-top:14px;
+}
+.persistence-v36-title{
+  font-weight:800;
+  font-size:12px;
+  letter-spacing:.06em;
+  text-transform:uppercase;
+  color:var(--text2);
+  margin-bottom:8px;
+}
+.persistence-v36-text{
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  line-height:1.7;
+}
+.persistence-v36-actions{
+  display:flex;
+  gap:8px;
+  flex-wrap:wrap;
+  margin-top:12px;
+}
+.persistence-v36-status{
+  margin-top:10px;
+  font-family:'DM Mono',monospace;
+  font-size:9px;
+  color:var(--muted);
+  background:var(--surface);
+  border:1px solid var(--border2);
+  border-radius:10px;
+  padding:10px;
+  white-space:pre-wrap;
+}
+.persistence-v36-status.ok{color:var(--ok);border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06);}
+.persistence-v36-status.warn{color:var(--warning);border-color:rgba(240,164,41,.35);background:rgba(240,164,41,.07);}

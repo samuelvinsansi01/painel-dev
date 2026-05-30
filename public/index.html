@@ -1002,6 +1002,21 @@
   </div>
 </div>
 
+
+    <div class="persistence-v36-card">
+      <div class="persistence-v36-title">Persistência Supabase</div>
+      <div class="persistence-v36-text">
+        Sincroniza dados operacionais criados no CRM: campanhas, templates, fila, chips, logs, respostas e configurações.
+        O localStorage continua como cache de segurança.
+      </div>
+      <div class="persistence-v36-actions">
+        <button class="btn btn-primary" onclick="syncOperationalDataToSupabaseV36()">Enviar dados locais</button>
+        <button class="btn btn-ghost" onclick="loadOperationalDataFromSupabaseV36()">Carregar do Supabase</button>
+        <button class="btn btn-ghost" onclick="showPersistenceSchemaV36()">Ver tabelas necessárias</button>
+      </div>
+      <div id="persistenceV36Status" class="persistence-v36-status">// aguardando ação</div>
+    </div>
+
 </main>
 
 <!-- MODAIS -->
