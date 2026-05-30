@@ -2358,3 +2358,6 @@ body.auth-locked .app{
   padding-top:14px!important;
   border-top:1px solid var(--border2)!important;
 }
+
+/* V40.5 Evolution chip model */
+.chips-v29-form input[type="password"]{font-family:'DM Mono',monospace;}

@@ -1894,7 +1894,7 @@ function getEvolutionHeaders(settings) {
 }
 
 async function testEvolutionConnection() {
-  const settings = getEvolutionSettings();
+  const settings = getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405() : getEvolutionSettings();
 
   if (!settings.url || !settings.instance || !settings.apiKey) {
     updateEvolutionStatusCard('err', 'Configuração incompleta', 'Preencha URL, instância e API Key.');
@@ -1908,7 +1908,7 @@ async function testEvolutionConnection() {
     const endpoint = `${settings.url}/instance/connectionState/${encodeURIComponent(settings.instance)}`;
     const res = await fetch(endpoint, {
       method: 'GET',
-      headers: getEvolutionHeaders(settings)
+      headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings))
     });
 
     const data = await res.json().catch(() => ({}));
@@ -1927,7 +1927,7 @@ async function testEvolutionConnection() {
 }
 
 async function validateEvolutionNumber() {
-  const settings = getEvolutionSettings();
+  const settings = getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405() : getEvolutionSettings();
   const result = document.getElementById('evoTestResult');
   const number = (document.getElementById('evoNumberTest')?.value || '').replace(/\D/g,'');
 
@@ -1947,7 +1947,7 @@ async function validateEvolutionNumber() {
     const endpoint = `${settings.url}/chat/whatsappNumbers/${encodeURIComponent(settings.instance)}`;
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: getEvolutionHeaders(settings),
+      headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
       body: JSON.stringify({ numbers: [number] })
     });
 
@@ -2063,7 +2063,7 @@ function renderLeadWhatsappValidation() {
 async function validateActiveLeadWhatsapp() {
   if (!activeLeadDrawerId || !activeLeadDrawerData) return;
 
-  const settings = getEvolutionSettings ? getEvolutionSettings() : {};
+  const settings = getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405() : (getEvolutionSettings ? getEvolutionSettings() : {});
   const phone = normalizePhoneForEvolution(activeLeadDrawerData.whatsapp || activeLeadDrawerData.phone || activeLeadDrawerData.telefone || '');
 
   if (!phone || phone.length < 10) {
@@ -2095,7 +2095,7 @@ async function validateActiveLeadWhatsapp() {
     const endpoint = `${settings.url}/chat/whatsappNumbers/${encodeURIComponent(settings.instance)}`;
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: getEvolutionHeaders(settings),
+      headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
       body: JSON.stringify({ numbers: [phone] })
     });
 
@@ -2296,7 +2296,7 @@ async function sendActiveLeadWhatsappMessage() {
 
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: getEvolutionHeaders(settings),
+      headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
       body: JSON.stringify(payload)
     });
 
@@ -2798,7 +2798,28 @@ function setChipUsedToday(chipId, count){
 
 function addWhatsappChip(){
   const name = (document.getElementById('chipName')?.value || '').trim();
-  const instance = (document.getElementById('chipInstance')?.value || '').trim();
+  const url = normalizeEvolutionBaseUrlV405(
+    document.getElementById('chipUrl')?.value ||
+    document.getElementById('evoUrl')?.value ||
+    document.querySelector('[placeholder*="URL"]')?.value ||
+    ''
+  );
+  const instance = (
+    document.getElementById('chipInstance')?.value ||
+    document.getElementById('evoInstance')?.value ||
+    document.querySelector('[placeholder*="Instância"]')?.value ||
+    document.querySelector('[placeholder*="Instance"]')?.value ||
+    ''
+  ).trim();
+  const key = (
+    document.getElementById('chipApiKey')?.value ||
+    document.getElementById('evoApiKey')?.value ||
+    document.getElementById('evoKey')?.value ||
+    document.querySelector('[placeholder*="API Key"]')?.value ||
+    document.querySelector('[placeholder*="api key"]')?.value ||
+    ''
+  ).trim();
+
   const dailyLimit = Number(document.getElementById('chipDailyLimit')?.value || 120);
   const blockSize = Number(document.getElementById('chipBlockSize')?.value || 30);
   const intervalSeconds = Number(document.getElementById('chipInterval')?.value || 120);
@@ -2807,28 +2828,37 @@ function addWhatsappChip(){
     .map(v => v.trim())
     .filter(Boolean);
 
-  if (!name || !instance) {
-    notify('Informe nome e instância do chip.', 'warn');
+  if (!name || !url || !instance || !key) {
+    notify('Preencha nome, URL, instância e API Key do chip.', 'warn');
     return;
   }
 
   const chips = getWhatsappChipsV29();
-  chips.push({
-    id: 'chip_' + Date.now(),
+  const existing = chips.find(chip => chip.id === name || chip.name === name || chip.instance === instance);
+
+  const payload = {
+    id: existing?.id || 'chip_' + Date.now(),
     name,
+    url,
     instance,
+    key,
+    apiKey: key,
     dailyLimit,
     blockSize,
     intervalSeconds,
     blocks,
-    status: 'active',
-    paused: false,
-    createdAt: new Date().toISOString()
-  });
+    status: existing?.status || 'active',
+    paused: existing?.paused || false,
+    createdAt: existing?.createdAt || new Date().toISOString(),
+    updatedAt: new Date().toISOString()
+  };
+
+  if (existing) Object.assign(existing, payload);
+  else chips.push(payload);
 
   saveWhatsappChipsV29(chips);
   renderChipsPanel();
-  notify('Chip cadastrado.');
+  notify(existing ? 'Chip atualizado.' : 'Chip cadastrado.');
 }
 
 function removeWhatsappChip(id){
@@ -2973,7 +3003,7 @@ function renderChipsList(){
           <div>
             <div class="chip-card-name">${escHtml(chip.name)}</div>
             <div class="chip-card-meta">
-              Instância: ${escHtml(chip.instance)}<br>
+              URL: ${escHtml(chip.url || chip.baseUrl || chip.evolutionUrl || 'sem URL')}<br>Instância: ${escHtml(chip.instance)}<br>
               Blocos: ${escHtml((chip.blocks || []).join(', '))}<br>
               Intervalo: ${escHtml(String(chip.intervalSeconds || 120))}s
             </div>
@@ -3166,10 +3196,10 @@ async function startDispatchV30() {
     }
 
     try {
-      const endpoint = `${settings.url}/message/sendText/${encodeURIComponent(chip.instance || settings.instance)}`;
+      const endpoint = `${chipConfigV405.url}/message/sendText/${encodeURIComponent(chipConfigV405.instance)}`;
       const res = await fetch(endpoint, {
         method: 'POST',
-        headers: getEvolutionHeaders(settings),
+        headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
         body: JSON.stringify({ number: phone, text })
       });
 
@@ -3375,6 +3405,7 @@ function stopDispatchV32(reason = 'Disparo parado') {
 
 async function dispatchOneItemV32(item, chip) {
   const settings = getEvolutionSettings ? getEvolutionSettings() : {};
+  const chipConfigV405 = getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405(chip) : settings;
   const queue = getWhatsappQueueV27 ? getWhatsappQueueV27() : [];
   const queueItem = queue.find(q => q.id === item.id);
 
@@ -3383,9 +3414,9 @@ async function dispatchOneItemV32(item, chip) {
   const phone = normalizePhoneForEvolution(queueItem.telefone || '');
   const text = queueItem.templateText || '';
 
-  if (!settings.url || !settings.apiKey) {
+  if (!chipConfigV405.url || !chipConfigV405.apiKey || !chipConfigV405.instance) {
     queueItem.status = 'Erro';
-    queueItem.error = 'Evolution incompleta';
+    queueItem.error = 'Evolution incompleta no chip';
     saveWhatsappQueueV27(queue);
     return { ok:false, reason:'Evolution incompleta' };
   }
@@ -3402,10 +3433,11 @@ async function dispatchOneItemV32(item, chip) {
     saveWhatsappQueueV27(queue);
     if (typeof renderWhatsappQueuePanel === 'function') renderWhatsappQueuePanel();
 
-    const endpoint = `${settings.url}/message/sendText/${encodeURIComponent(chip.instance || settings.instance)}`;
+    const chipConfigV405 = getEvolutionConfigForChipV405 ? getEvolutionConfigForChipV405(chip) : settings;
+      const endpoint = `${chipConfigV405.url}/message/sendText/${encodeURIComponent(chipConfigV405.instance)}`;
     const res = await fetch(endpoint, {
       method: 'POST',
-      headers: getEvolutionHeaders(settings),
+      headers: (typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
       body: JSON.stringify({ number: phone, text })
     });
 
@@ -4180,7 +4212,7 @@ async function sendConversationReplyV38() {
     const endpoint = `${settings.url}/message/sendText/${encodeURIComponent(instance)}`;
     const res = await fetch(endpoint, {
       method:'POST',
-      headers:getEvolutionHeaders(settings),
+      headers:(typeof getEvolutionHeadersV405 === 'function' ? getEvolutionHeadersV405(settings) : getEvolutionHeaders(settings)),
       body:JSON.stringify({ number: phone, text })
     });
     const data = await res.json().catch(() => ({}));
@@ -4218,6 +4250,43 @@ function updateConversationsBadgeV38() {
   const badge = document.getElementById('badge-conversations');
   if (!badge) return;
   badge.textContent = getAllConversationLeadsV38().length;
+}
+
+
+/* ════════════════════════════
+   EVOLUTION CHIP MODEL V40.5
+   Compatível com sistema antigo: chip.url + chip.instance + chip.key
+════════════════════════════ */
+function normalizeEvolutionBaseUrlV405(url = '') {
+  return String(url || '').trim().replace(/\/$/, '');
+}
+
+function getPrimaryEvolutionChipV405() {
+  const chips = typeof getWhatsappChipsV29 === 'function' ? getWhatsappChipsV29() : [];
+  return chips.find(chip => chip.status !== 'disabled' && !chip.paused) || chips[0] || null;
+}
+
+function getEvolutionConfigForChipV405(chip = null) {
+  const global = typeof getEvolutionSettings === 'function' ? getEvolutionSettings() : {};
+  const selected = chip || getPrimaryEvolutionChipV405() || {};
+
+  return {
+    url: normalizeEvolutionBaseUrlV405(selected.url || selected.baseUrl || selected.evolutionUrl || global.url || ''),
+    instance: selected.instance || selected.instanceName || selected.chipInstance || global.instance || '',
+    apiKey: selected.key || selected.apiKey || selected.apikey || global.apiKey || '',
+    chip: selected
+  };
+}
+
+function getEvolutionHeadersV405(config = {}) {
+  const headers = { 'Content-Type': 'application/json' };
+  const key = config.apiKey || config.key || config.apikey || '';
+  if (key) headers.apikey = key;
+  return headers;
+}
+
+function isValidEvolutionConfigV405(config = {}) {
+  return !!(config.url && config.instance && config.apiKey);
 }
 
 /* ════════════════════════════
