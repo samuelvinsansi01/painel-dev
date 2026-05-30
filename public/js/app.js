@@ -4384,8 +4384,6 @@ function nextWeekday(dateStr) {
 
 function updateClock(){
 try{
-if(typeof clockEl!=='undefined'&& typeof dateEl!=='undefined'){ if(!clockEl && !dateEl) return; }
-
   const now = new Date();
   document.getElementById('sidebarClock').textContent = now.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
   document.getElementById('sidebarDate').textContent  = now.toLocaleDateString('pt-BR', { weekday:'short', day:'numeric', month:'short' });
@@ -10237,3 +10235,18 @@ document.addEventListener('DOMContentLoaded', rebuildSidebarV40);
 setTimeout(rebuildSidebarV40, 300);
 setTimeout(rebuildSidebarV40, 1000);
 setTimeout(rebuildSidebarV40, 2000);
+
+
+/* V40.2 updateClock guard */
+window.addEventListener('error', function(e){
+  if(String(e.message||'').includes('updateClock')) {
+    console.warn('updateClock protegido');
+    e.preventDefault?.();
+  }
+});
+
+if(typeof loginGoogle !== 'function'){
+  window.loginGoogle = function(){
+    console.warn('loginGoogle não carregado');
+  };
+}

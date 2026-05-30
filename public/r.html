@@ -101,19 +101,5 @@
       }, 300);
     })();
   </script>
-
-<script>
-document.addEventListener('click',function(){
- setTimeout(()=>{
-  document.querySelectorAll('input').forEach(i=>{
-   const p=(i.placeholder||'').toLowerCase();
-   const n=(i.name||'').toLowerCase();
-   if((p.includes('limite')||n.includes('limite'))&&!i.value) i.value='120';
-   if((p.includes('interval')||n.includes('interval'))&&!i.value) i.value='120';
-  });
- },100);
-});
-</script>
-
 </body>
 </html>
