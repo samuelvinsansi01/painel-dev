@@ -147,11 +147,12 @@ renderAuthUser(currentUser);
     updateAuthGate();
 
     if (currentUser) {
+      let operationalLoaded = false;
+      try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
       if (typeof loadSupabaseAsPrimarySource === 'function') {
-        await loadSupabaseAsPrimarySource();
-      try { await loadOperationalDataFromSupabaseV36(); } catch(e){}
+        await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
       } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
-        await loadSupabaseLeadsToLocalState();
+        await loadSupabaseLeadsToLocalState({ preserveWorkflow: operationalLoaded });
       }
     } else {
       if (typeof clearLocalSessionData === 'function') clearLocalSessionData();
@@ -163,8 +164,9 @@ renderAuthUser(currentUser);
   });
 
   if (currentUser) {
-    await loadSupabaseAsPrimarySource();
-    try { await loadOperationalDataFromSupabaseV36(); } catch(e){}
+    let operationalLoaded = false;
+    try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
+    await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
   }
 }
 
@@ -369,7 +371,7 @@ async function loadSupabaseLeadCrmToLocalState() {
   console.log(`[supabase] CRM carregado: ${(notesRes.data || []).length} notas, ${(historyRes.data || []).length} eventos, ${(followupsRes.data || []).length} follow-ups`);
 }
 
-async function loadSupabaseLeadsToLocalState() {
+async function loadSupabaseLeadsToLocalState({ preserveWorkflow = false } = {}) {
   if (!sbClient || !currentUser) return;
 
   const { data, error } = await sbClient
@@ -398,14 +400,32 @@ async function loadSupabaseLeadsToLocalState() {
       : today
   }));
 
-  const weekData = {
-    weekStart: currentWeekStartStr(),
-    days: {
-      [today]: leads
-    }
-  };
+  const localWeek = getWeekData();
+  const hasLocalWorkflow = Object.values(localWeek?.days || {}).flat().length > 0
+    || getValData().length > 0
+    || getAtribuicaoData().length > 0
+    || getInstaFila().length > 0
+    || getZapBacklog().length > 0;
 
-  saveWeekData(weekData);
+  if (!preserveWorkflow && !hasLocalWorkflow) {
+    const needsValidation = leads.filter(lead =>
+      !lead.status || lead.status === 'Não enviada' || lead.status === 'Em fila'
+    );
+    const processed = leads.filter(lead => !needsValidation.includes(lead));
+    const weekData = {
+      weekStart: currentWeekStartStr(),
+      days: processed.length ? { [today]: processed } : {}
+    };
+
+    saveWeekData(weekData);
+    saveValData(needsValidation.map(lead => ({
+      ...lead,
+      canal: 'pendente',
+      numStatus: 'pendente',
+      status: 'Não enviada',
+      importadoEm: lead.criadoEm || today
+    })));
+  }
   renderInicio();
   updateBadges();
   renderCrmHomeDashboard();
@@ -1402,10 +1422,10 @@ async function syncAllLocalLeadsToSupabase() {
   console.log(`[supabase] Leads locais enviados: ${ok}`);
 }
 
-async function loadSupabaseAsPrimarySource() {
+async function loadSupabaseAsPrimarySource(options = {}) {
   if (!isSupabaseReady()) return;
 
-  await loadSupabaseLeadsToLocalState();
+  await loadSupabaseLeadsToLocalState(options);
 
   if (typeof loadSupabaseLeadCrmToLocalState === 'function') {
     await loadSupabaseLeadCrmToLocalState();
@@ -3839,6 +3859,22 @@ const OPERATIONAL_SUPABASE_TABLE_V36 = 'operational_data';
 
 const OPERATIONAL_DATA_KEYS_V36 = {
   leadCrm: 'vs_lead_crm_v1',
+  weeklyLeads: EMPRESAS_KEY,
+  weeklyHistory: HISTORY_KEY,
+  monthlyTracking: ACOMP_KEY,
+  validationQueue: VAL_KEY,
+  assignmentQueue: ATRIBUICAO_KEY,
+  instagramQueue: INSTA_KEY,
+  instagramWeek: INSTA_WEEK_KEY,
+  instagramSchedule: INSTA_SCHED_KEY,
+  whatsappDispatchQueues: FILA_DISPARO_KEY,
+  whatsappBacklog: 'vin_zap_backlog',
+  legacyChips: CHIPS_KEY,
+  legacyEvolutionSettings: EVO_KEY,
+  excludedDomains: EXCLUDED_KEY,
+  branches: RAMOS_KEY,
+  legacyTemplates: TEMPLATES_KEY,
+  branchTemplates: TEMPLATES_RAMO_KEY,
   whatsappQueue: 'vs_whatsapp_queue_v27',
   queueCampaigns: 'vs_queue_campaigns_v27',
   queueTemplates: 'vs_queue_templates_v27',
@@ -3883,21 +3919,24 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
     localStorage.setItem(key, JSON.stringify(data[name]));
   });
 
+  try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
   if (typeof updateBadges === 'function') updateBadges();
   if (typeof updateWhatsappQueueBadge === 'function') updateWhatsappQueueBadge();
   if (typeof updateChipsBadge === 'function') updateChipsBadge();
   if (typeof updateResponsesBadgeV34 === 'function') updateResponsesBadgeV34();
   if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
+  if (typeof renderInicio === 'function') renderInicio();
+  if (document.getElementById('panel-fila-zap')?.classList.contains('active') && typeof renderFilaZap === 'function') renderFilaZap();
 }
 
 function isSupabaseOperationalReadyV36() {
   return !!(typeof sbClient !== 'undefined' && sbClient && currentUser?.id);
 }
 
-async function syncOperationalDataToSupabaseV36() {
+async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
   if (!isSupabaseOperationalReadyV36()) {
     setPersistenceStatusV36('Supabase indisponível ou usuário não conectado.', 'warn');
-    notify('Entre na conta antes de sincronizar.', 'warn');
+    if (!silent) notify('Entre na conta antes de sincronizar.', 'warn');
     return;
   }
 
@@ -3920,7 +3959,7 @@ async function syncOperationalDataToSupabaseV36() {
     if (error) throw error;
 
     setPersistenceStatusV36('Dados operacionais sincronizados com sucesso.', 'ok');
-    notify('Dados operacionais enviados ao Supabase.');
+    if (!silent) notify('Dados operacionais enviados ao Supabase.');
   } catch (err) {
     setPersistenceStatusV36(
       'Falha ao sincronizar. Verifique se a tabela operational_data existe.\n\n' +
@@ -3934,7 +3973,7 @@ async function loadOperationalDataFromSupabaseV36() {
   if (!isSupabaseOperationalReadyV36()) {
     setPersistenceStatusV36('Supabase indisponível ou usuário não conectado.', 'warn');
     notify('Entre na conta antes de carregar.', 'warn');
-    return;
+    return false;
   }
 
   setPersistenceStatusV36('Carregando dados operacionais do Supabase...');
@@ -3951,18 +3990,24 @@ async function loadOperationalDataFromSupabaseV36() {
 
     if (!data?.payload) {
       setPersistenceStatusV36('Nenhum dado operacional encontrado no Supabase.', 'warn');
-      return;
+      return false;
     }
 
     restoreOperationalSnapshotV36(data.payload);
     setPersistenceStatusV36('Dados carregados do Supabase e aplicados no CRM.', 'ok');
     notify('Dados operacionais carregados.');
+    const restoredData = data.payload?.data || {};
+    return Object.prototype.hasOwnProperty.call(restoredData, 'weeklyLeads')
+      || Object.prototype.hasOwnProperty.call(restoredData, 'validationQueue')
+      || Object.prototype.hasOwnProperty.call(restoredData, 'assignmentQueue')
+      || Object.prototype.hasOwnProperty.call(restoredData, 'whatsappDispatchQueues');
   } catch (err) {
     setPersistenceStatusV36(
       'Falha ao carregar. Verifique se a tabela operational_data existe.\n\n' +
       'Erro: ' + (err?.message || 'erro desconhecido'),
       'warn'
     );
+    return false;
   }
 }
 
@@ -4003,8 +4048,12 @@ function scheduleOperationalSyncV36() {
   if (!isSupabaseOperationalReadyV36()) return;
   clearTimeout(window.__operationalSyncV36Timer);
   window.__operationalSyncV36Timer = setTimeout(() => {
-    syncOperationalDataToSupabaseV36();
+    syncOperationalDataToSupabaseV36({ silent: true });
   }, 1500);
+}
+
+function scheduleLegacyOperationalSyncV36() {
+  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36();
 }
 
 
@@ -4482,7 +4531,7 @@ function getRamoTemplatesDefault(ramoId, tipo) {
 function getRamoTemplates() {
   try { return JSON.parse(localStorage.getItem(TEMPLATES_RAMO_KEY)||'null') || {}; } catch { return {}; }
 }
-function saveRamoTemplates(obj) { localStorage.setItem(TEMPLATES_RAMO_KEY, JSON.stringify(obj)); }
+function saveRamoTemplates(obj) { localStorage.setItem(TEMPLATES_RAMO_KEY, JSON.stringify(obj)); scheduleLegacyOperationalSyncV36(); }
 
 function getTemplatesForRamoTipo(ramoId, tipo) {
   const all = getRamoTemplates();
@@ -4636,7 +4685,7 @@ function capitalizeName(raw) {
 function getTemplates() {
   try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || 'null') || TEMPLATES_DEFAULT; } catch { return TEMPLATES_DEFAULT; }
 }
-function saveTemplates(t) { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t)); }
+function saveTemplates(t) { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t)); scheduleLegacyOperationalSyncV36(); }
 
 function pickTemplate(nome, ramoId) {
   const tpl = ramoId ? getTemplatesForRamoTipo(ramoId, 'com-site') : getTemplates();
@@ -4944,7 +4993,7 @@ function removerDaAtribuicao(id) {
 ════════════════════════════ */
 const ZAP_BACKLOG_KEY = 'vin_zap_backlog';
 function getZapBacklog()   { try { return JSON.parse(localStorage.getItem(ZAP_BACKLOG_KEY)||'[]'); } catch { return []; } }
-function saveZapBacklog(d) { localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d)); }
+function saveZapBacklog(d) { localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 function mandarParaBacklogZap(id) {
   const atrib = getAtribuicaoData();
@@ -5308,7 +5357,7 @@ function scheduleSupabaseLeadSync() {
    STORAGE — EMPRESAS
 ════════════════════════════ */
 function getWeekData()  { try { return JSON.parse(localStorage.getItem(EMPRESAS_KEY)||'null'); } catch { return null; } }
-function saveWeekData(d){ localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d)); scheduleSupabaseLeadSync(); }
+function saveWeekData(d){ localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d)); scheduleSupabaseLeadSync(); scheduleLegacyOperationalSyncV36(); }
 function ensureWeekData() {
   let d = getWeekData(); const ws = currentWeekStartStr();
   if (!d || d.weekStart !== ws) {
@@ -5375,7 +5424,7 @@ function getHistoryData() { try { return JSON.parse(localStorage.getItem(HISTORY
    STORAGE — ACOMPANHAMENTO MENSAL
 ════════════════════════════ */
 function getAcompData()  { try { return JSON.parse(localStorage.getItem(ACOMP_KEY)||'{}'); } catch { return {}; } }
-function saveAcompData(d){ localStorage.setItem(ACOMP_KEY, JSON.stringify(d)); }
+function saveAcompData(d){ localStorage.setItem(ACOMP_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 function currentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -5403,17 +5452,17 @@ function getAllSites(d)  { return new Set(flattenWeekData(d).map(e => extractDom
    STORAGE — VALIDAÇÃO FILA
 ════════════════════════════ */
 function getValData()  { try { return JSON.parse(localStorage.getItem(VAL_KEY)||'[]'); } catch { return []; } }
-function saveValData(d){ localStorage.setItem(VAL_KEY, JSON.stringify(d)); }
+function saveValData(d){ localStorage.setItem(VAL_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    STORAGE — BASE DE ATRIBUIÇÃO
 ════════════════════════════ */
 function getAtribuicaoData()  { try { return JSON.parse(localStorage.getItem(ATRIBUICAO_KEY)||'[]'); } catch { return []; } }
-function saveAtribuicaoData(d){ localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d)); }
+function saveAtribuicaoData(d){ localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 
 function getInstaFila()  { try { return JSON.parse(localStorage.getItem(INSTA_KEY)||'[]'); } catch { return []; } }
-function saveInstaFila(d){ localStorage.setItem(INSTA_KEY, JSON.stringify(d)); }
+function saveInstaFila(d){ localStorage.setItem(INSTA_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 function recuperarValidacaoZapDoDia() {
   if (localStorage.getItem(RECUPERAR_VALIDACAO_ZAP_KEY) === '1') return 0;
@@ -5453,26 +5502,26 @@ function recuperarValidacaoZapDoDia() {
    STORAGE — INSTA CRONOGRAMA
 ════════════════════════════ */
 function getInstaSched()  { try { return JSON.parse(localStorage.getItem(INSTA_SCHED_KEY)||'{}'); } catch { return {}; } }
-function saveInstaSched(d){ localStorage.setItem(INSTA_SCHED_KEY, JSON.stringify(d)); }
+function saveInstaSched(d){ localStorage.setItem(INSTA_SCHED_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    STORAGE — CHIPS
 ════════════════════════════ */
 function getChips()  { try { return JSON.parse(localStorage.getItem(CHIPS_KEY)||'[]'); } catch { return []; } }
-function saveChips(c){ localStorage.setItem(CHIPS_KEY, JSON.stringify(c)); }
+function saveChips(c){ localStorage.setItem(CHIPS_KEY, JSON.stringify(c)); scheduleLegacyOperationalSyncV36(); }
 function getChipById(id) { return getChips().find(c => c.id === id); }
 
 /* ════════════════════════════
    STORAGE — RAMOS
 ════════════════════════════ */
 function getRamos()  { try { return JSON.parse(localStorage.getItem(RAMOS_KEY)||'null') || RAMOS_DEFAULT; } catch { return RAMOS_DEFAULT; } }
-function saveRamos(r){ localStorage.setItem(RAMOS_KEY, JSON.stringify(r)); }
+function saveRamos(r){ localStorage.setItem(RAMOS_KEY, JSON.stringify(r)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    EXCLUDED DOMAINS
 ════════════════════════════ */
 function getExcludedDomains() { try { return JSON.parse(localStorage.getItem(EXCLUDED_KEY)||'[]'); } catch { return []; } }
-function saveExcludedDomains(arr) { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(arr)); }
+function saveExcludedDomains(arr) { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(arr)); scheduleLegacyOperationalSyncV36(); }
 function extractDomain(site) {
   try { return new URL(site.trim()).hostname.replace(/^www\./,'').toLowerCase(); } catch { return null; }
 }
@@ -8045,6 +8094,7 @@ function getFilaChip(chipId) {
 
 function saveFilaDisparo() {
   try { localStorage.setItem('vs_fila_disparo_v1', JSON.stringify(filaDisparo)); } catch(e) { console.warn('saveFilaDisparo error', e); }
+  scheduleLegacyOperationalSyncV36();
 }
 
 const CHIP_LIMIT = 120; // máximo de leads por chip por dia
@@ -8401,6 +8451,7 @@ function saveEvoConfig() {
     horarioInicio: document.getElementById('horarioInicio')?.value,
   };
   localStorage.setItem(EVO_KEY, JSON.stringify(cfg));
+  scheduleLegacyOperationalSyncV36();
   atualizarStatsDisparo();
 }
 function toggleLoteConfig() {
@@ -9281,7 +9332,7 @@ function atribInstaExcluir(id) {
 ════════════════════════════ */
 // getInstaFila / saveInstaFila definidas acima — sem duplicata
 function getInstaWeek()    { try { return JSON.parse(localStorage.getItem(INSTA_WEEK_KEY)||'{}'); } catch { return {}; } }
-function saveInstaWeek(d)  { localStorage.setItem(INSTA_WEEK_KEY, JSON.stringify(d)); }
+function saveInstaWeek(d)  { localStorage.setItem(INSTA_WEEK_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ── MIGRAÇÃO: normaliza chaves antigas para dd/mm/aaaa ── */
 function migrarChavesInstaWeek() {
