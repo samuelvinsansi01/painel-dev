@@ -10799,3 +10799,146 @@ async function salvarChip() {
 function addWhatsappChip() {
   return salvarChip();
 }
+
+
+/* ════════════════════════════
+   FIX VALIDAÇÃO + DASHBOARD V40.10
+════════════════════════════ */
+function getAnySavedChipV4010() {
+  try {
+    const chipsNew = typeof getWhatsappChipsV29 === 'function' ? getWhatsappChipsV29() : [];
+    const activeNew = chipsNew.find(c => c && c.status !== 'disabled' && !c.paused) || chipsNew[0];
+    if (activeNew) return activeNew;
+  } catch(e) {}
+
+  try {
+    const chipsOld = typeof getChips === 'function' ? getChips() : [];
+    const activeOld = chipsOld.find(c => c && c.status !== 'desconectado') || chipsOld[0];
+    if (activeOld) {
+      return {
+        name: activeOld.nome || activeOld.name,
+        url: activeOld.url,
+        instance: activeOld.instance,
+        key: activeOld.key,
+        apiKey: activeOld.key,
+        status: 'active'
+      };
+    }
+  } catch(e) {}
+
+  return null;
+}
+
+function getEvolutionConfigForChipV405(chip = null) {
+  const global = typeof getEvolutionSettings === 'function' ? getEvolutionSettings() : {};
+  const selected = chip || getAnySavedChipV4010() || {};
+
+  return {
+    url: normalizeEvolutionBaseUrlV405(selected.url || selected.baseUrl || selected.evolutionUrl || global.url || ''),
+    instance: selected.instance || selected.instanceName || selected.chipInstance || global.instance || '',
+    apiKey: selected.key || selected.apiKey || selected.apikey || global.apiKey || '',
+    chip: selected
+  };
+}
+
+if (typeof renderCommercialDashboard !== 'function') {
+  function renderCommercialDashboard() {
+    try {
+      if (typeof renderDashboard === 'function') return renderDashboard();
+      return '';
+    } catch(e) {
+      console.warn('renderCommercialDashboard fallback:', e);
+      return '';
+    }
+  }
+}
+
+async function validateActiveLeadWhatsapp() {
+  if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+
+  const cfg = getEvolutionConfigForChipV405();
+  const phone = normalizePhoneForEvolution(activeLeadDrawerData.whatsapp || activeLeadDrawerData.phone || activeLeadDrawerData.telefone || '');
+
+  if (!phone || phone.length < 10) {
+    setLeadWhatsappStatus(activeLeadDrawerId, {
+      status: 'invalid',
+      label: 'Telefone ausente/inválido',
+      number: phone
+    });
+    addLeadHistory(activeLeadDrawerId, 'WhatsApp: telefone ausente ou inválido', activeLeadDrawerData);
+    renderLeadWhatsappValidation();
+    if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+    notify('Telefone inválido.', 'warn');
+    return;
+  }
+
+  if (!cfg.url || !cfg.instance || !cfg.apiKey) {
+    notify('Cadastre e conecte um chip antes de validar.', 'warn');
+    return;
+  }
+
+  setLeadWhatsappStatus(activeLeadDrawerId, {
+    status: 'pending',
+    label: 'Validando...',
+    number: phone
+  });
+  renderLeadWhatsappValidation();
+
+  try {
+    const endpoint = `${cfg.url}/chat/whatsappNumbers/${encodeURIComponent(cfg.instance)}`;
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        apikey: cfg.apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ numbers: [phone] })
+    });
+
+    const data = await res.json().catch(() => ({}));
+    const item = Array.isArray(data) ? data[0] : (data?.data?.[0] || data?.result?.[0] || data);
+    const exists = !!item?.exists;
+
+    if (!res.ok) {
+      setLeadWhatsappStatus(activeLeadDrawerId, {
+        status: 'invalid',
+        label: 'Erro na validação',
+        number: phone,
+        raw: data
+      });
+      addLeadHistory(activeLeadDrawerId, `WhatsApp: erro na validação (${res.status})`, activeLeadDrawerData);
+      notify('Erro ao validar WhatsApp.', 'err');
+    } else if (exists) {
+      setLeadWhatsappStatus(activeLeadDrawerId, {
+        status: 'valid',
+        label: 'WhatsApp válido',
+        number: phone,
+        raw: item
+      });
+      addLeadHistory(activeLeadDrawerId, `WhatsApp validado: ${phone}`, activeLeadDrawerData);
+      notify('WhatsApp válido.');
+    } else {
+      setLeadWhatsappStatus(activeLeadDrawerId, {
+        status: 'invalid',
+        label: 'WhatsApp não confirmado',
+        number: phone,
+        raw: item
+      });
+      addLeadHistory(activeLeadDrawerId, `WhatsApp não confirmado: ${phone}`, activeLeadDrawerData);
+      notify('WhatsApp não confirmado.', 'warn');
+    }
+  } catch (err) {
+    setLeadWhatsappStatus(activeLeadDrawerId, {
+      status: 'invalid',
+      label: 'Falha na conexão',
+      number: phone,
+      error: err?.message || 'erro desconhecido'
+    });
+    addLeadHistory(activeLeadDrawerId, `WhatsApp: falha na conexão (${err?.message || 'erro'})`, activeLeadDrawerData);
+    notify('Falha ao conectar na Evolution.', 'err');
+  }
+
+  renderLeadWhatsappValidation();
+  if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
+  if (typeof renderKanban === 'function') renderKanban();
+}

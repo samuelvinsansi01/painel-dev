@@ -2376,3 +2376,41 @@ body.auth-locked .app{
 }
 .chip-debug-v407.ok{color:var(--ok);border-color:rgba(78,203,113,.35);background:rgba(78,203,113,.06)}
 .chip-debug-v407.err{color:var(--error);border-color:rgba(255,92,92,.35);background:rgba(255,92,92,.06)}
+
+/* V40.10 drawer message compact */
+.lead-message-block{
+  padding:10px!important;
+  margin-bottom:10px!important;
+}
+.lead-message-title{
+  margin-bottom:8px!important;
+}
+.lead-message-template{
+  grid-template-columns:1fr auto!important;
+  gap:6px!important;
+  margin-bottom:6px!important;
+}
+.lead-message-block textarea{
+  min-height:72px!important;
+  max-height:120px!important;
+  resize:vertical!important;
+  font-size:11px!important;
+  line-height:1.45!important;
+}
+.lead-message-actions{
+  margin-top:8px!important;
+  gap:6px!important;
+}
+.lead-message-actions .btn,
+.lead-message-template .btn{
+  padding:6px 10px!important;
+  font-size:9px!important;
+}
+.lead-message-result{
+  margin-top:7px!important;
+  font-size:8px!important;
+}
+@media(max-width:700px){
+  .lead-message-template{grid-template-columns:1fr!important;}
+  .lead-message-block textarea{min-height:64px!important;}
+}
