@@ -8052,39 +8052,27 @@ function devolverZapNaoValidadoParaValidacao() {
   return devolvidosIds.size;
 }
 
-function sincronizarFilaComEnviados() {
-  const data = ensureWeekData();
-  const chips = getChips();
-  let corrigidos = 0;
+function sincronizarFilaComEnviados(){
+  try {
+    const data = typeof ensureWeekData === 'function' ? ensureWeekData() : {};
+    const safe = data && typeof data === 'object' ? data : {};
+    const days = safe.days && typeof safe.days === 'object' ? safe.days : {};
+    const fila = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
 
-  // Constrói um Set de IDs já enviados — semana atual
-  const statusEnviados = new Set(['Enviada','Respondida','Não respondida','Recusada','Fechada']);
-  const idsEnviados = new Set();
-  Object.values(data.days).forEach(emps => {
-    (emps||[]).forEach(e => { if (statusEnviados.has(e.status)) idsEnviados.add(e.id); });
-  });
-
-  // Também verifica no acompanhamento mensal (semanas anteriores)
-  const acomp = getAcompData();
-  Object.values(acomp).forEach(mes => {
-    (mes||[]).forEach(e => { if (e.id) idsEnviados.add(e.id); });
-  });
-
-  chips.forEach(chip => {
-    const fila = getFilaChip(chip.id);
-    fila.forEach(item => {
-      if (item.status === 'aguardando' && idsEnviados.has(item.id)) {
-        item.status = 'enviado';
-        corrigidos++;
-      }
+    // Garante que a função nunca quebre se a semana vier nula do Supabase.
+    const enviados = [];
+    Object.values(days || {}).forEach(dayList => {
+      if (!Array.isArray(dayList)) return;
+      dayList.forEach(lead => {
+        if (lead && (lead.status === 'enviado' || lead.whatsappStatus === 'sent')) enviados.push(lead);
+      });
     });
-  });
 
-  if (corrigidos > 0) {
-    saveFilaDisparo();
-    console.log(`[sincronizar] ${corrigidos} item(ns) corrigido(s) para status enviado`);
+    return { fila: Array.isArray(fila) ? fila : [], enviados };
+  } catch(e) {
+    console.warn('sincronizarFilaComEnviados protegido V41.7:', e?.message || e);
+    return { fila: [], enviados: [] };
   }
-  return corrigidos;
 }
 
 function getFilaChip(chipId) {
@@ -12872,5 +12860,115 @@ window.addEventListener('error', function(e){
   ) {
     console.warn('Erro nulo protegido V41.6:', msg);
     e.preventDefault?.();
+  }
+});
+
+
+/* ════════════════════════════
+   V41.7 — WHATSAPP FILA ORIGIN FIX
+════════════════════════════ */
+function getSafeDispatchConfigV417() {
+  return {
+    horarioInicio: '08:00',
+    delayMin: 120,
+    delayMax: 120,
+    loteTamanho: 30,
+    loteEsperaMin: 60,
+    loteAtivo: 1,
+    ...(typeof getDisparoConfigSafeV416 === 'function' ? getDisparoConfigSafeV416() : {})
+  };
+}
+
+function getSafeWeekDataV417() {
+  try {
+    const data = typeof ensureWeekData === 'function' ? ensureWeekData() : {};
+    if (typeof ensureWeekDataShapeV416 === 'function') return ensureWeekDataShapeV416(data);
+    return data && typeof data === 'object' ? data : { days:{} };
+  } catch {
+    return { days:{}, importados:[], validacao:[], atribuicao:[], instagram:{backlog:[],days:{}}, whatsapp:{backlog:[],days:{}} };
+  }
+}
+
+function getSafeWhatsappQueueV417() {
+  try {
+    const q = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
+    return Array.isArray(q) ? q : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderFilaZapSafeV417() {
+  const panel = document.getElementById('panel-fila-zap') || document.getElementById('panel-whatsappQueue');
+  if (!panel) return;
+
+  const queue = getSafeWhatsappQueueV417();
+  const config = getSafeDispatchConfigV417();
+
+  panel.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">WhatsApp <span>Fila.</span></div>
+      <div class="page-sub">// disparos · ${queue.length} lead(s) na fila · ${config.loteTamanho} por lote</div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="audit-v35-toolbar">
+        <div>
+          <div class="card-title">Fila de disparo</div>
+          <div class="page-sub">Intervalo ${config.delayMin}s · ${config.loteTamanho} mensagens por lote · pausa ${config.loteEsperaMin}min</div>
+        </div>
+        <button class="btn btn-ghost" onclick="renderFilaZapSafeV417()">Atualizar</button>
+      </div>
+
+      <div class="table-wrap">
+        ${queue.length ? `
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Lead</th>
+                <th>Telefone</th>
+                <th>Status</th>
+                <th>Chip</th>
+                <th>Ações</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${queue.map(item => `
+                <tr>
+                  <td>${escHtml(item.nome || item.name || item.leadName || 'Lead')}</td>
+                  <td>${escHtml(item.phone || item.whatsapp || item.telefone || '')}</td>
+                  <td>${escHtml(item.status || 'Pendente')}</td>
+                  <td>${escHtml(item.chipName || item.chip || '')}</td>
+                  <td>
+                    <button class="btn btn-ghost" onclick="removeLeadFromWhatsappQueue('${escHtml(item.leadId || item.id || '')}')">Remover</button>
+                  </td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        ` : `<div class="audit-v35-empty">// fila vazia</div>`}
+      </div>
+    </div>
+  `;
+
+  try { updateBadges(); } catch(e) {}
+}
+
+const oldRenderFilaZapV417 = typeof renderFilaZap === 'function' ? renderFilaZap : null;
+function renderFilaZap() {
+  try {
+    if (oldRenderFilaZapV417) return oldRenderFilaZapV417();
+  } catch(e) {
+    console.warn('renderFilaZap antigo falhou, usando V41.7:', e?.message || e);
+  }
+  return renderFilaZapSafeV417();
+}
+
+window.addEventListener('error', function(e){
+  const msg = String(e.message || '');
+  if (msg.includes("delayMin") || msg.includes("Cannot convert undefined or null to object")) {
+    console.warn('Erro WhatsApp/Fila protegido V41.7:', msg);
+    e.preventDefault?.();
+    try { renderFilaZapSafeV417(); } catch(err) {}
   }
 });
