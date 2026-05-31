@@ -12686,3 +12686,191 @@ document.addEventListener('DOMContentLoaded', () => {
 
 setTimeout(() => { buildFinalSidebarV413(); installSidebarWatchV413(); }, 2500);
 setInterval(ensureFinalSidebarV413, 1200);
+
+
+/* ════════════════════════════
+   V41.6 — ESTABILIDADE FILAS / INSTAGRAM / CONFIG
+════════════════════════════ */
+
+function ensureWeekDataShapeV416(data) {
+  const safe = data && typeof data === 'object' ? data : {};
+  safe.days = safe.days && typeof safe.days === 'object' ? safe.days : {};
+  safe.importados = Array.isArray(safe.importados) ? safe.importados : [];
+  safe.validacao = Array.isArray(safe.validacao) ? safe.validacao : [];
+  safe.atribuicao = Array.isArray(safe.atribuicao) ? safe.atribuicao : [];
+  safe.instagram = safe.instagram && typeof safe.instagram === 'object' ? safe.instagram : {};
+  safe.instagram.backlog = Array.isArray(safe.instagram.backlog) ? safe.instagram.backlog : [];
+  safe.instagram.days = safe.instagram.days && typeof safe.instagram.days === 'object' ? safe.instagram.days : {};
+  safe.whatsapp = safe.whatsapp && typeof safe.whatsapp === 'object' ? safe.whatsapp : {};
+  safe.whatsapp.backlog = Array.isArray(safe.whatsapp.backlog) ? safe.whatsapp.backlog : [];
+  safe.whatsapp.days = safe.whatsapp.days && typeof safe.whatsapp.days === 'object' ? safe.whatsapp.days : {};
+  return safe;
+}
+
+if (typeof ensureWeekData === 'function') {
+  const oldEnsureWeekDataV416 = ensureWeekData;
+  ensureWeekData = function() {
+    try {
+      return ensureWeekDataShapeV416(oldEnsureWeekDataV416());
+    } catch(e) {
+      console.warn('ensureWeekData protegido:', e?.message || e);
+      return ensureWeekDataShapeV416({});
+    }
+  };
+}
+
+function getDisparoConfigSafeV416() {
+  const defaults = {
+    delayMin: 120,
+    delayMax: 120,
+    loteTamanho: 30,
+    loteEsperaMin: 60,
+    loteAtivo: 1,
+    horarioInicio: '08:00'
+  };
+
+  try {
+    const cfg = typeof getDisparoConfig === 'function' ? getDisparoConfig() : {};
+    return { ...defaults, ...(cfg || {}) };
+  } catch {
+    return defaults;
+  }
+}
+
+function getQueueControlSafeV416() {
+  try {
+    const c = typeof getWhatsappQueueControl === 'function' ? getWhatsappQueueControl() : null;
+    return c && typeof c === 'object' ? { paused: !!c.paused } : { paused:false };
+  } catch {
+    return { paused:false };
+  }
+}
+
+function getWhatsappQueueSafeV416() {
+  try {
+    const q = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
+    return Array.isArray(q) ? q : [];
+  } catch {
+    return [];
+  }
+}
+
+/* Corrige Object.values(null) em sincronização da fila */
+if (typeof sincronizarFilaComEnviados === 'function') {
+  const oldSincronizarFilaComEnviadosV416 = sincronizarFilaComEnviados;
+  sincronizarFilaComEnviados = function() {
+    try {
+      const data = ensureWeekDataShapeV416(typeof ensureWeekData === 'function' ? ensureWeekData() : {});
+      return oldSincronizarFilaComEnviadosV416(data);
+    } catch(e) {
+      console.warn('sincronizarFilaComEnviados protegido:', e?.message || e);
+      return [];
+    }
+  };
+}
+
+/* Corrige fila WhatsApp quebrando se estado operacional vem nulo */
+if (typeof renderFilaZap === 'function') {
+  const oldRenderFilaZapV416 = renderFilaZap;
+  renderFilaZap = function() {
+    try {
+      return oldRenderFilaZapV416();
+    } catch(e) {
+      console.warn('renderFilaZap protegido:', e?.message || e);
+      const panel = document.getElementById('panel-fila-zap') || document.getElementById('panel-whatsappQueue');
+      if (panel) {
+        panel.innerHTML = `
+          <div class="page-header">
+            <div class="page-title">WhatsApp <span>Fila.</span></div>
+            <div class="page-sub">// fila protegida · dados operacionais inconsistentes</div>
+          </div>
+          <div class="stretch-card">
+            <div class="audit-v35-empty">
+              // A fila foi protegida contra dados nulos. Recarregue os dados do Supabase ou adicione leads novamente à fila.
+            </div>
+          </div>
+        `;
+      }
+    }
+  };
+}
+
+/* Corrige Instagram quando days/backlog vem null */
+function instaCountForDay(dayKey) {
+  try {
+    const data = ensureWeekDataShapeV416(typeof ensureWeekData === 'function' ? ensureWeekData() : {});
+    const instagram = data.instagram || {};
+    const days = instagram.days || {};
+    const list = days[dayKey] || [];
+    return Array.isArray(list) ? list.length : 0;
+  } catch {
+    return 0;
+  }
+}
+
+if (typeof renderInstagram === 'function') {
+  const oldRenderInstagramV416 = renderInstagram;
+  renderInstagram = function() {
+    try {
+      return oldRenderInstagramV416();
+    } catch(e) {
+      console.warn('renderInstagram protegido:', e?.message || e);
+      const panel = document.getElementById('panel-instagram');
+      if (panel) {
+        panel.innerHTML = `
+          <div class="page-header">
+            <div class="page-title">Instagram <span>Fila.</span></div>
+            <div class="page-sub">// backlog · dados protegidos</div>
+          </div>
+          <div class="stretch-card">
+            <div class="audit-v35-empty">
+              // Nenhum lead de Instagram disponível ou dados de dias ainda não inicializados.
+            </div>
+          </div>
+        `;
+      }
+    }
+  };
+}
+
+/* updateBadges sem Object.values(null) */
+function updateBadges() {
+  try {
+    const data = ensureWeekDataShapeV416(typeof ensureWeekData === 'function' ? ensureWeekData() : {});
+    const leads = typeof flattenWeekData === 'function' ? (flattenWeekData(data) || []) : [];
+
+    const set = (id, value) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = value;
+    };
+
+    set('badge-inicio', leads.length || 0);
+    set('badge-importar', data.importados.length || 0);
+    set('badge-import', data.importados.length || 0);
+    set('badge-validacao', data.validacao.length || leads.filter(l => l.status === 'validacao').length || 0);
+    set('badge-atribuicao', data.atribuicao.length || leads.filter(l => l.status === 'atribuicao').length || 0);
+    set('badge-fila-zap', getWhatsappQueueSafeV416().length);
+    set('badge-whatsapp-queue', getWhatsappQueueSafeV416().length);
+    set('badge-instagram', (data.instagram.backlog || []).length);
+    set('badge-followups', 0);
+    set('badge-acompanhamento', 0);
+
+    if (typeof updateInboxBadgeV41 === 'function') updateInboxBadgeV41();
+    if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
+  } catch(e) {
+    console.warn('updateBadges protegido:', e?.message || e);
+  }
+}
+
+/* Captura global para evitar tela morrer por dados nulos */
+window.addEventListener('error', function(e){
+  const msg = String(e.message || '');
+  if (
+    msg.includes("Cannot convert undefined or null to object") ||
+    msg.includes("Cannot read properties of null") ||
+    msg.includes("Cannot set properties of null")
+  ) {
+    console.warn('Erro nulo protegido V41.6:', msg);
+    e.preventDefault?.();
+  }
+});
