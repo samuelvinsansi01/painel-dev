@@ -1,3 +1,23 @@
+
+/* V41.8 PRELUDE SAFE DEFAULTS */
+function getDisparoConfigSafeV418(){
+  const defaults = {
+    horarioInicio: '08:00',
+    delayMin: 120,
+    delayMax: 120,
+    loteTamanho: 30,
+    loteEsperaMin: 60,
+    loteAtivo: 1
+  };
+  try {
+    const raw = localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
+    const parsed = JSON.parse(raw);
+    return { ...defaults, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+  } catch {
+    return defaults;
+  }
+}
+
 /* ════════════════════════════
    CONSTANTS & KEYS
 ════════════════════════════ */
@@ -12864,32 +12884,13 @@ window.addEventListener('error', function(e){
 });
 
 
+
+
+
 /* ════════════════════════════
-   V41.7 — WHATSAPP FILA ORIGIN FIX
+   V41.8 — WHATSAPP FILA FINAL SAFE
 ════════════════════════════ */
-function getSafeDispatchConfigV417() {
-  return {
-    horarioInicio: '08:00',
-    delayMin: 120,
-    delayMax: 120,
-    loteTamanho: 30,
-    loteEsperaMin: 60,
-    loteAtivo: 1,
-    ...(typeof getDisparoConfigSafeV416 === 'function' ? getDisparoConfigSafeV416() : {})
-  };
-}
-
-function getSafeWeekDataV417() {
-  try {
-    const data = typeof ensureWeekData === 'function' ? ensureWeekData() : {};
-    if (typeof ensureWeekDataShapeV416 === 'function') return ensureWeekDataShapeV416(data);
-    return data && typeof data === 'object' ? data : { days:{} };
-  } catch {
-    return { days:{}, importados:[], validacao:[], atribuicao:[], instagram:{backlog:[],days:{}}, whatsapp:{backlog:[],days:{}} };
-  }
-}
-
-function getSafeWhatsappQueueV417() {
+function getSafeWhatsappQueueV418() {
   try {
     const q = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
     return Array.isArray(q) ? q : [];
@@ -12898,30 +12899,51 @@ function getSafeWhatsappQueueV417() {
   }
 }
 
-function renderFilaZapSafeV417() {
+function sincronizarFilaComEnviados() {
+  try {
+    const data = typeof ensureWeekData === 'function' ? ensureWeekData() : {};
+    const safe = data && typeof data === 'object' ? data : {};
+    const days = safe.days && typeof safe.days === 'object' ? safe.days : {};
+    const enviados = [];
+
+    Object.values(days).forEach(list => {
+      if (!Array.isArray(list)) return;
+      list.forEach(lead => {
+        if (lead && (lead.status === 'enviado' || lead.whatsappStatus === 'sent')) enviados.push(lead);
+      });
+    });
+
+    return { fila: getSafeWhatsappQueueV418(), enviados };
+  } catch(e) {
+    console.warn('sincronizarFilaComEnviados protegido V41.8:', e?.message || e);
+    return { fila: getSafeWhatsappQueueV418(), enviados: [] };
+  }
+}
+
+function renderFilaZapSafeV418() {
   const panel = document.getElementById('panel-fila-zap') || document.getElementById('panel-whatsappQueue');
   if (!panel) return;
 
-  const queue = getSafeWhatsappQueueV417();
-  const config = getSafeDispatchConfigV417();
+  const queue = getSafeWhatsappQueueV418();
+  const config = getDisparoConfigSafeV418();
 
   panel.innerHTML = `
     <div class="page-header">
       <div class="page-title">WhatsApp <span>Fila.</span></div>
-      <div class="page-sub">// disparos · ${queue.length} lead(s) na fila · ${config.loteTamanho} por lote</div>
+      <div class="page-sub">// disparos · ${queue.length} lead(s) na fila</div>
     </div>
 
     <div class="stretch-card">
       <div class="audit-v35-toolbar">
         <div>
           <div class="card-title">Fila de disparo</div>
-          <div class="page-sub">Intervalo ${config.delayMin}s · ${config.loteTamanho} mensagens por lote · pausa ${config.loteEsperaMin}min</div>
+          <div class="page-sub">${config.delayMin}s entre mensagens · ${config.loteTamanho} por lote · pausa ${config.loteEsperaMin}min</div>
         </div>
-        <button class="btn btn-ghost" onclick="renderFilaZapSafeV417()">Atualizar</button>
+        <button class="btn btn-ghost" onclick="renderFilaZapSafeV418()">Atualizar</button>
       </div>
 
-      <div class="table-wrap">
-        ${queue.length ? `
+      ${queue.length ? `
+        <div class="table-wrap">
           <table class="data-table">
             <thead>
               <tr>
@@ -12939,36 +12961,28 @@ function renderFilaZapSafeV417() {
                   <td>${escHtml(item.phone || item.whatsapp || item.telefone || '')}</td>
                   <td>${escHtml(item.status || 'Pendente')}</td>
                   <td>${escHtml(item.chipName || item.chip || '')}</td>
-                  <td>
-                    <button class="btn btn-ghost" onclick="removeLeadFromWhatsappQueue('${escHtml(item.leadId || item.id || '')}')">Remover</button>
-                  </td>
+                  <td><button class="btn btn-ghost" onclick="removeLeadFromWhatsappQueue('${escHtml(item.leadId || item.id || '')}')">Remover</button></td>
                 </tr>
               `).join('')}
             </tbody>
           </table>
-        ` : `<div class="audit-v35-empty">// fila vazia</div>`}
-      </div>
+        </div>
+      ` : `<div class="audit-v35-empty">// fila vazia</div>`}
     </div>
   `;
 
   try { updateBadges(); } catch(e) {}
 }
 
-const oldRenderFilaZapV417 = typeof renderFilaZap === 'function' ? renderFilaZap : null;
 function renderFilaZap() {
-  try {
-    if (oldRenderFilaZapV417) return oldRenderFilaZapV417();
-  } catch(e) {
-    console.warn('renderFilaZap antigo falhou, usando V41.7:', e?.message || e);
-  }
-  return renderFilaZapSafeV417();
+  return renderFilaZapSafeV418();
 }
 
 window.addEventListener('error', function(e){
   const msg = String(e.message || '');
-  if (msg.includes("delayMin") || msg.includes("Cannot convert undefined or null to object")) {
-    console.warn('Erro WhatsApp/Fila protegido V41.7:', msg);
+  if (msg.includes('delayMin') || msg.includes('Cannot convert undefined or null to object')) {
+    console.warn('Erro WhatsApp/Fila protegido V41.8:', msg);
     e.preventDefault?.();
-    try { renderFilaZapSafeV417(); } catch(err) {}
+    setTimeout(() => { try { renderFilaZapSafeV418(); } catch(err){} }, 30);
   }
 });
