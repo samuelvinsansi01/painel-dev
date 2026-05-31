@@ -57,7 +57,11 @@
     </button>
 
     <details class="menu-group-final">
-      <summary><span>Leads</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Leads">
+        <div class="nav-icon">👥</div>
+        <span class="nav-label">Leads</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('importar')" data-label="Importar">
         <div class="nav-icon">📥</div><span class="nav-label">Importar</span><span class="nav-badge" id="badge-importar">0</span>
       </button>
@@ -70,7 +74,11 @@
     </details>
 
     <details class="menu-group-final">
-      <summary><span>Envios</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Envios">
+        <div class="nav-icon">📨</div>
+        <span class="nav-label">Envios</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('fila-zap')" data-label="WhatsApp">
         <div class="nav-icon">💬</div><span class="nav-label">WhatsApp</span><span class="nav-badge" id="badge-fila-zap">0</span>
       </button>
@@ -84,7 +92,11 @@
     </button>
 
     <details class="menu-group-final">
-      <summary><span>Gerenciamento</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Gerenciamento">
+        <div class="nav-icon">📋</div>
+        <span class="nav-label">Gerenciamento</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('followups')" data-label="Follow-ups">
         <div class="nav-icon">⏰</div><span class="nav-label">Follow-ups</span><span class="nav-badge" id="badge-followups">0</span>
       </button>
@@ -97,7 +109,11 @@
     </details>
 
     <details class="menu-group-final">
-      <summary><span>Ferramentas</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Ferramentas">
+        <div class="nav-icon">🛠️</div>
+        <span class="nav-label">Ferramentas</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('redirecionamentos')" data-label="Redirecionamentos">
         <div class="nav-icon">🔗</div><span class="nav-label">Redirecionamentos</span>
       </button>
@@ -1293,7 +1309,11 @@
     </button>
 
     <details class="menu-group-final">
-      <summary><span>Leads</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Leads">
+        <div class="nav-icon">👥</div>
+        <span class="nav-label">Leads</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('importar')" data-label="Importar">
         <div class="nav-icon">📥</div><span class="nav-label">Importar</span><span class="nav-badge" id="badge-importar">0</span>
       </button>
@@ -1306,7 +1326,11 @@
     </details>
 
     <details class="menu-group-final">
-      <summary><span>Envios</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Envios">
+        <div class="nav-icon">📨</div>
+        <span class="nav-label">Envios</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('fila-zap')" data-label="WhatsApp">
         <div class="nav-icon">💬</div><span class="nav-label">WhatsApp</span><span class="nav-badge" id="badge-fila-zap">0</span>
       </button>
@@ -1320,7 +1344,11 @@
     </button>
 
     <details class="menu-group-final">
-      <summary><span>Gerenciamento</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Gerenciamento">
+        <div class="nav-icon">📋</div>
+        <span class="nav-label">Gerenciamento</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('followups')" data-label="Follow-ups">
         <div class="nav-icon">⏰</div><span class="nav-label">Follow-ups</span><span class="nav-badge" id="badge-followups">0</span>
       </button>
@@ -1333,7 +1361,11 @@
     </details>
 
     <details class="menu-group-final">
-      <summary><span>Ferramentas</span><span>›</span></summary>
+      <summary class="nav-item menu-summary-final" data-label="Ferramentas">
+        <div class="nav-icon">🛠️</div>
+        <span class="nav-label">Ferramentas</span>
+        <span class="menu-arrow-final">›</span>
+      </summary>
       <button class="nav-item sub" onclick="switchPanel('redirecionamentos')" data-label="Redirecionamentos">
         <div class="nav-icon">🔗</div><span class="nav-label">Redirecionamentos</span>
       </button>
@@ -1420,5 +1452,27 @@
 </script>
 
 <div id="mobileMenuOverlayV37"></div>
+
+<script>
+(function(){
+  const icons = { Leads:'👥', Envios:'📨', Gerenciamento:'📋', Ferramentas:'🛠️' };
+  function normalizeMenuSummariesV415(){
+    document.querySelectorAll('.menu-group-final > summary').forEach(summary => {
+      const label = (summary.textContent || '').replace('›','').trim();
+      if (!icons[label] || summary.classList.contains('menu-summary-final')) return;
+      summary.className = 'nav-item menu-summary-final';
+      summary.dataset.label = label;
+      summary.innerHTML = `<div class="nav-icon">${icons[label]}</div><span class="nav-label">${label}</span><span class="menu-arrow-final">›</span>`;
+    });
+  }
+  document.addEventListener('DOMContentLoaded', () => {
+    setTimeout(normalizeMenuSummariesV415, 100);
+    setTimeout(normalizeMenuSummariesV415, 700);
+    setTimeout(normalizeMenuSummariesV415, 1500);
+  });
+  setInterval(normalizeMenuSummariesV415, 2000);
+})();
+</script>
+
 </body>
 </html>
