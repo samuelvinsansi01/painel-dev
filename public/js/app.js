@@ -12551,3 +12551,138 @@ setTimeout(() => {
 }, 2200);
 
 setTimeout(forceSidebarGroupedV412, 3500);
+
+
+/* ════════════════════════════
+   V41.3 — MENU NA ORIGEM / HARD FIX
+   Garante que o menu antigo não permaneça.
+════════════════════════════ */
+function createMenuItemV413(panel, icon, label, badgeId = '') {
+  const item = document.createElement('div');
+  item.className = 'nav-item';
+  item.dataset.label = label;
+  item.onclick = () => {
+    if (panel === 'logout') {
+      if (typeof logout === 'function') logout();
+      else if (typeof signOut === 'function') signOut();
+      return;
+    }
+    if (typeof switchPanel === 'function') switchPanel(panel);
+  };
+  item.innerHTML = `
+    <div class="nav-icon">${icon}</div>
+    <span class="nav-label">${label}</span>
+    ${badgeId ? `<span class="nav-badge" id="${badgeId}">0</span>` : ''}
+  `;
+  return item;
+}
+
+function createExpandableMenuGroupV413(title, items = []) {
+  const wrap = document.createElement('div');
+  wrap.className = 'sidebar-v413-group';
+
+  const head = document.createElement('div');
+  head.className = 'sidebar-v413-group-head';
+  head.innerHTML = `<span>${title}</span><span class="sidebar-v413-chevron">›</span>`;
+
+  const body = document.createElement('div');
+  body.className = 'sidebar-v413-group-body';
+
+  items.forEach(item => {
+    const el = createMenuItemV413(item.panel, item.icon, item.label, item.badgeId || '');
+    el.classList.add('sidebar-v413-subitem');
+    body.appendChild(el);
+  });
+
+  head.onclick = () => wrap.classList.toggle('open');
+  wrap.appendChild(head);
+  wrap.appendChild(body);
+  return wrap;
+}
+
+function buildFinalSidebarV413() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return false;
+
+  sidebar.innerHTML = '';
+
+  const brand = document.createElement('div');
+  brand.className = 'sidebar-v413-brand';
+  brand.innerHTML = `
+    <div class="sidebar-v413-hello">Olá, Samuel 👋</div>
+    <div class="sidebar-v413-sub">CRM de Prospecção</div>
+  `;
+  sidebar.appendChild(brand);
+
+  sidebar.appendChild(createMenuItemV413('busca', '🔎', 'Busca'));
+  sidebar.appendChild(createMenuItemV413('inicio', '📊', 'Início', 'badge-inicio'));
+  sidebar.appendChild(createMenuItemV413('inbox', '📥', 'Caixa de Entrada', 'badge-inbox'));
+
+  sidebar.appendChild(createExpandableMenuGroupV413('Leads', [
+    { panel:'import', icon:'📥', label:'Importar', badgeId:'badge-import' },
+    { panel:'validacao', icon:'✅', label:'Validação', badgeId:'badge-validacao' },
+    { panel:'atribuicao', icon:'🗂️', label:'Atribuição', badgeId:'badge-atribuicao' }
+  ]));
+
+  sidebar.appendChild(createExpandableMenuGroupV413('Envios', [
+    { panel:'whatsappQueue', icon:'💬', label:'WhatsApp', badgeId:'badge-whatsapp-queue' },
+    { panel:'instagram', icon:'📸', label:'Instagram', badgeId:'badge-instagram' }
+  ]));
+
+  sidebar.appendChild(createMenuItemV413('conversations', '💬', 'Conversas'));
+
+  sidebar.appendChild(createExpandableMenuGroupV413('Gerenciamento', [
+    { panel:'followups', icon:'⏰', label:'Follow-ups', badgeId:'badge-followups' },
+    { panel:'kanban', icon:'📋', label:'Kanban' },
+    { panel:'acompanhamento', icon:'📈', label:'Acompanhamentos', badgeId:'badge-acompanhamento' }
+  ]));
+
+  sidebar.appendChild(createExpandableMenuGroupV413('Ferramentas', [
+    { panel:'redirects', icon:'🔗', label:'Redirecionamentos' },
+    { panel:'audit', icon:'📊', label:'Auditoria', badgeId:'badge-audit' }
+  ]));
+
+  sidebar.appendChild(createMenuItemV413('config', '⚙️', 'Configurações'));
+
+  const footer = document.createElement('div');
+  footer.id = 'sidebarAuthFooterV413';
+  footer.appendChild(createMenuItemV413('logout', '🚪', 'Sair'));
+  sidebar.appendChild(footer);
+
+  sidebar.dataset.v413Final = 'true';
+  try { if (typeof updateBadges === 'function') updateBadges(); } catch(e) {}
+  return true;
+}
+
+function ensureFinalSidebarV413() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+
+  const txt = sidebar.textContent || '';
+  const hasOldMenu = /PRINCIPAL|LEADS|ENVIO|RESULTADOS|Conectado|Fila WhatsApp/i.test(txt);
+  const hasFinal = sidebar.dataset.v413Final === 'true' && sidebar.querySelector('.sidebar-v413-group');
+
+  if (!hasFinal || hasOldMenu) buildFinalSidebarV413();
+}
+
+function installSidebarWatchV413() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || sidebar.__v413Watch) return;
+  sidebar.__v413Watch = true;
+
+  const observer = new MutationObserver(() => {
+    clearTimeout(window.__v413Timer);
+    window.__v413Timer = setTimeout(ensureFinalSidebarV413, 40);
+  });
+  observer.observe(sidebar, { childList:true, subtree:true, characterData:true });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  setTimeout(buildFinalSidebarV413, 50);
+  setTimeout(buildFinalSidebarV413, 250);
+  setTimeout(buildFinalSidebarV413, 750);
+  setTimeout(() => { buildFinalSidebarV413(); installSidebarWatchV413(); }, 1500);
+});
+
+setTimeout(() => { buildFinalSidebarV413(); installSidebarWatchV413(); }, 2500);
+setInterval(ensureFinalSidebarV413, 1200);
