@@ -8419,7 +8419,7 @@ let horarioJaDisparado = false;
 let horarioUltimoDisparo = '';
 
 function checkHorarioDisparo(now) {
-  const cfg = loadEvoConfig();
+  const cfg = loadEvoConfig() || {};
   if (!cfg.horarioInicio) return;
   const [hh, mm] = cfg.horarioInicio.split(':').map(Number);
   const nowH = now.getHours(), nowM = now.getMinutes();
@@ -8452,40 +8452,32 @@ function checkHorarioDisparo(now) {
 /* ════════════════════════════
    EVO CONFIG
 ════════════════════════════ */
-function loadEvoConfig() { try { return JSON.parse(localStorage.getItem(EVO_KEY)||'{}'); } catch { return {}; } }
-function atualizarStatsDisparo() {
-  const tamanho  = parseInt(document.getElementById('loteTamanho')?.value)   || 30;
-  const esperaMin= parseInt(document.getElementById('loteEsperaMin')?.value) || 60;
-  const delayMin = parseInt(document.getElementById('delayMin')?.value)      || 120;
-  const delayMax = parseInt(document.getElementById('delayMax')?.value)      || delayMin;
-  const chips    = getChips();
-  const nChips   = chips.length || 1;
-  const lotesDay = Math.floor(CHIP_LIMIT / tamanho);
-  const esperaH  = esperaMin >= 60
-    ? (esperaMin % 60 === 0 ? `${esperaMin/60}h` : `${Math.floor(esperaMin/60)}h${esperaMin%60}`)
-    : `${esperaMin}min`;
-  const intervaloVal = delayMin === delayMax
-    ? (delayMin % 60 === 0 ? `${delayMin/60} min` : `${delayMin} seg`)
-    : `${delayMin}-${delayMax} seg`;
-  const intervaloSub = delayMin === delayMax
-    ? `${delayMin} seg fixo entre cada lead`
-    : `${delayMin}-${delayMax} seg entre cada lead`;
+function loadEvoConfig(){
+  const defaults = {
+    horarioInicio: '08:00',
+    delayMin: 120,
+    delayMax: 120,
+    loteTamanho: 30,
+    loteEsperaMin: 60,
+    loteAtivo: 1
+  };
 
-  const subEl       = document.getElementById('filaZapSub');
-  const intervaloEl = document.getElementById('statIntervalVal');
-  const intervaloSb = document.getElementById('statIntervalSub');
-  const loteVal     = document.getElementById('statLoteVal');
-  const loteSub     = document.getElementById('statLoteSub');
-  const diaVal      = document.getElementById('statDiaVal');
-  const diaSub      = document.getElementById('statDiaSub');
+  try {
+    const raw =
+      localStorage.getItem('vs_evo_config') ||
+      localStorage.getItem('evo_config') ||
+      localStorage.getItem('vs_disparo_config') ||
+      localStorage.getItem('disparoConfig') ||
+      '{}';
 
-  if (subEl)       subEl.textContent       = `// ${nChips} chip${nChips!==1?'s':''} · disparo paralelo · ${tamanho} por lote · ${esperaH} de delay`;
-  if (intervaloEl) intervaloEl.textContent = intervaloVal;
-  if (intervaloSb) intervaloSb.textContent = intervaloSub;
-  if (loteVal)     loteVal.textContent     = `${tamanho} msg`;
-  if (loteSub)     loteSub.textContent     = `por chip · ${lotesDay} lote${lotesDay!==1?'s':''} por dia`;
-  if (diaVal)      diaVal.textContent      = `${CHIP_LIMIT} msg`;
-  if (diaSub)      diaSub.textContent      = `${lotesDay} lote${lotesDay!==1?'s':''} × ${tamanho} · espera ${esperaH}`;
+    const parsed = JSON.parse(raw);
+    return {
+      ...defaults,
+      ...(parsed && typeof parsed === 'object' ? parsed : {})
+    };
+  } catch {
+    return defaults;
+  }
 }
 
 function saveEvoConfig() {
@@ -8557,8 +8549,8 @@ async function dispararLote() {
   const loteConf = getLoteConfig();
   const chip     = getChipById(disparoChipId);
   if (!chip) { notify('// configure um chip primeiro','err'); return; }
-  const delayMin = parseInt(document.getElementById('delayMin').value)||120;
-  const delayMax = parseInt(document.getElementById('delayMax').value)||180;
+  const delayMin = parseInt((document.getElementById('delayMin')||{}).value)||120;
+  const delayMax = parseInt((document.getElementById('delayMax')||{}).value)||180;
   const MSG_DELAY = 15000; // 15s entre mensagens da mesma empresa
   const logEl    = document.getElementById('disparoLog');
   logEl.style.display = 'block';
@@ -10305,13 +10297,13 @@ function confirmarExcluirLead() {
   // Inicializa login Google sem interferir nos dados atuais.
   initAuth();
 
-  const cfg = loadEvoConfig();
-  if (cfg.delayMin)      document.getElementById('delayMin').value      = cfg.delayMin; else document.getElementById('delayMin').value = 120;
-  if (cfg.delayMax)      document.getElementById('delayMax').value      = cfg.delayMax; else document.getElementById('delayMax').value = 120;
+  const cfg = loadEvoConfig() || {};
+  if (cfg.delayMin)      (document.getElementById('delayMin')||{}).value      = cfg.delayMin; else (document.getElementById('delayMin')||{}).value = 120;
+  if (cfg.delayMax)      (document.getElementById('delayMax')||{}).value      = cfg.delayMax; else (document.getElementById('delayMax')||{}).value = 120;
   // Parâmetros fixos da operação: 4 lotes de 30, com espera de 1h entre lotes.
-  document.getElementById('loteTamanho').value   = 30;
-  document.getElementById('loteEsperaMin').value = 60;
-  if (cfg.horarioInicio) document.getElementById('horarioInicio').value = cfg.horarioInicio;
+  (document.getElementById('loteTamanho')||{}).value   = 30;
+  (document.getElementById('loteEsperaMin')||{}).value = 60;
+  if (cfg.horarioInicio) (document.getElementById('horarioInicio')||{}).value = cfg.horarioInicio;
 
   atualizarStatsDisparo();
 
@@ -13024,3 +13016,96 @@ window.addEventListener('error', function(e){
     setTimeout(() => { try { renderFilaZapSafeV418(); } catch(err){} }, 30);
   }
 });
+
+
+/* ════════════════════════════
+   V41.10 — FILA WHATSAPP ESTÁVEL
+════════════════════════════ */
+function getFilaWhatsappConfigV4110(){
+  return typeof loadEvoConfig === 'function' ? loadEvoConfig() : {
+    horarioInicio:'08:00',
+    delayMin:120,
+    delayMax:120,
+    loteTamanho:30,
+    loteEsperaMin:60,
+    loteAtivo:1
+  };
+}
+
+function getFilaWhatsappItemsV4110(){
+  try {
+    const q = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
+    return Array.isArray(q) ? q : [];
+  } catch {
+    return [];
+  }
+}
+
+function renderFilaZapSafeV4110(){
+  const panel = document.getElementById('panel-fila-zap') || document.getElementById('panel-whatsappQueue');
+  if (!panel) return;
+
+  const queue = getFilaWhatsappItemsV4110();
+  const cfg = getFilaWhatsappConfigV4110();
+  const byStatus = (status) => queue.filter(i => String(i.status || '').toLowerCase() === status).length;
+
+  panel.innerHTML = `
+    <div class="page-header">
+      <div class="page-title">WhatsApp <span>Fila.</span></div>
+      <div class="page-sub">// fila de disparo · ${queue.length} lead(s)</div>
+    </div>
+
+    <div class="inbox-v41-grid">
+      <div class="inbox-v41-card"><div class="inbox-v41-label">Na fila</div><div class="inbox-v41-value">${queue.length}</div></div>
+      <div class="inbox-v41-card"><div class="inbox-v41-label">Prontos</div><div class="inbox-v41-value">${byStatus('pronto')}</div></div>
+      <div class="inbox-v41-card"><div class="inbox-v41-label">Enviados</div><div class="inbox-v41-value">${byStatus('enviado')}</div></div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="audit-v35-toolbar">
+        <div>
+          <div class="card-title">Fila de disparo</div>
+          <div class="page-sub">${cfg.delayMin}s entre mensagens · ${cfg.loteTamanho} por lote · pausa ${cfg.loteEsperaMin}min · início ${cfg.horarioInicio}</div>
+        </div>
+        <div style="display:flex;gap:8px;flex-wrap:wrap">
+          <button class="btn btn-ghost" onclick="renderFilaZapSafeV4110()">Atualizar</button>
+          ${typeof prepareQueueTemplates === 'function' ? `<button class="btn btn-primary" onclick="prepareQueueTemplates()">Sortear templates</button>` : ''}
+        </div>
+      </div>
+
+      ${queue.length ? `
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead><tr><th>Lead</th><th>Telefone</th><th>Status</th><th>Chip</th><th>Ações</th></tr></thead>
+            <tbody>
+              ${queue.map(item => `
+                <tr>
+                  <td>${escHtml(item.nome || item.name || item.leadName || item.companyName || 'Lead')}</td>
+                  <td>${escHtml(item.phone || item.whatsapp || item.telefone || '')}</td>
+                  <td>${escHtml(item.status || 'Pendente')}</td>
+                  <td>${escHtml(item.chipName || item.chip || item.chipId || '')}</td>
+                  <td><button class="btn btn-ghost" onclick="removeLeadFromWhatsappQueue('${escHtml(item.leadId || item.id || '')}')">Remover</button></td>
+                </tr>
+              `).join('')}
+            </tbody>
+          </table>
+        </div>
+      ` : `<div class="audit-v35-empty">// fila vazia</div>`}
+    </div>
+  `;
+
+  try { updateBadges(); } catch(e) {}
+}
+
+function renderFilaZap(){
+  return renderFilaZapSafeV4110();
+}
+
+window.addEventListener('error', function(e){
+  const msg = String(e.message || '');
+  if (msg.includes('delayMin') || msg.includes('delayMax') || msg.includes('loteTamanho')) {
+    console.warn('Config da fila protegida V41.10:', msg);
+    e.preventDefault?.();
+    setTimeout(renderFilaZapSafeV4110, 50);
+  }
+}, true);
