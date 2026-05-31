@@ -12478,3 +12478,76 @@ if (document.readyState === 'loading') {
 } else {
   startWhatsappMessagesSyncV412();
 }
+
+
+/* ════════════════════════════
+   V41.2 — TRAVA MENU EXPANSÍVEL
+   Impede rebuilds antigos de sobrescreverem a sidebar
+════════════════════════════ */
+function forceSidebarGroupedV412() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar) return;
+
+  // Se já está com o menu novo e possui grupos expansíveis, apenas atualiza badges.
+  if (sidebar.querySelector('.sidebar-v411-group')) {
+    sidebar.dataset.v411Grouped = 'true';
+    sidebar.dataset.v41Grouped = 'true';
+    try { updateBadges(); } catch(e) {}
+    return;
+  }
+
+  // Força reconstrução limpa ignorando flags antigas.
+  delete sidebar.dataset.v411Grouped;
+  delete sidebar.dataset.v41Grouped;
+
+  if (typeof rebuildSidebarGroupedV41 === 'function') {
+    rebuildSidebarGroupedV41();
+  }
+}
+
+function disableLegacySidebarRebuildersV412() {
+  const noopOrForce = function(){
+    setTimeout(forceSidebarGroupedV412, 0);
+  };
+
+  // Esses nomes foram usados nas versões anteriores e podem estar sobrescrevendo o menu.
+  if (typeof cleanupSidebarMenuV39 === 'function') window.cleanupSidebarMenuV39 = noopOrForce;
+  if (typeof rebuildSidebarV40 === 'function') window.rebuildSidebarV40 = noopOrForce;
+  if (typeof cleanupSidebarMenuV39 !== 'function') window.cleanupSidebarMenuV39 = noopOrForce;
+  if (typeof rebuildSidebarV40 !== 'function') window.rebuildSidebarV40 = noopOrForce;
+}
+
+function watchSidebarV412() {
+  const sidebar = document.querySelector('.sidebar');
+  if (!sidebar || sidebar.__v412Watcher) return;
+  sidebar.__v412Watcher = true;
+
+  const observer = new MutationObserver(() => {
+    clearTimeout(window.__v412MenuTimer);
+    window.__v412MenuTimer = setTimeout(() => {
+      const hasNewMenu = !!sidebar.querySelector('.sidebar-v411-group');
+      const hasOldConnected = /Conectado/i.test(sidebar.textContent || '');
+      if (!hasNewMenu || hasOldConnected) {
+        forceSidebarGroupedV412();
+      }
+    }, 80);
+  });
+
+  observer.observe(sidebar, { childList:true, subtree:true });
+}
+
+document.addEventListener('DOMContentLoaded', () => {
+  disableLegacySidebarRebuildersV412();
+  setTimeout(forceSidebarGroupedV412, 100);
+  setTimeout(forceSidebarGroupedV412, 500);
+  setTimeout(forceSidebarGroupedV412, 1300);
+  setTimeout(watchSidebarV412, 1500);
+});
+
+setTimeout(() => {
+  disableLegacySidebarRebuildersV412();
+  forceSidebarGroupedV412();
+  watchSidebarV412();
+}, 2200);
+
+setTimeout(forceSidebarGroupedV412, 3500);

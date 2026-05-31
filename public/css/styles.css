@@ -2477,3 +2477,9 @@ body.auth-locked .app{
 .sidebar-v411-group.open .sidebar-v411-group-body{display:flex!important}
 .sidebar-v41-subitem{padding-left:12px!important}
 .sidebar [data-label="Respostas"]{display:none!important}
+
+/* V41.2 lock menu */
+.sidebar .sidebar-v411-group{display:block!important}
+.sidebar .sidebar-v411-group-body{display:none!important}
+.sidebar .sidebar-v411-group.open .sidebar-v411-group-body{display:flex!important}
+.sidebar-v411-group-head{user-select:none!important}
