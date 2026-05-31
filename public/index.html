@@ -32,109 +32,92 @@
 </div>
 
 
-<!-- SIDEBAR -->
-<aside class="sidebar collapsed" id="sidebar">
-  <div class="sidebar-logo">
-    <div class="sidebar-hamburger" onclick="toggleSidebar()">☰</div>
-    <div class="sidebar-brand">
-      <div class="logo-text">VIN STUDIO</div>
-      <div class="logo-sub">// prospecção</div>
+
+<!-- SIDEBAR FINAL V41.4 -->
+<aside class="sidebar collapsed sidebar-final-v414" id="sidebar" data-menu-final="v41.4">
+  <div class="sidebar-final-head">
+    <button class="sidebar-hamburger" onclick="toggleSidebar()" aria-label="Alternar menu">☰</button>
+    <div>
+      <div class="sidebar-final-title">Olá, Samuel 👋</div>
+      <div class="sidebar-final-sub">CRM de Prospecção</div>
     </div>
   </div>
-  <nav class="sidebar-nav">
-    <div class="nav-section-label">Principal</div>
-    <div class="nav-item" onclick="openGlobalSearch()" data-label="Busca">
-      <div class="nav-icon">🔎</div>
-      <span class="nav-label">Busca</span>
-      <span class="nav-badge">⌘K</span>
-    </div>
-    <div class="nav-item active" onclick="switchPanel('inicio')" data-label="Início">
-      <div class="nav-icon">📊</div>
-      <span class="nav-label">Início</span>
-      <span class="nav-badge" id="badge-inicio">0</span>
-    </div>
-    <div class="nav-section-label">Leads</div>
-    <div class="nav-item" onclick="switchPanel('importar')" data-label="Importar">
-      <div class="nav-icon">📥</div>
-      <span class="nav-label">Importar</span>
-      <span class="nav-badge" id="badge-importar">0</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('validacao')" data-label="Validação">
-      <div class="nav-icon">✅</div>
-      <span class="nav-label">Validação</span>
-      <span class="nav-badge" id="badge-validacao">0</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('atribuicao')" data-label="Atribuição">
-      <div class="nav-icon">🗂️</div>
-      <span class="nav-label">Atribuição</span>
-      <span class="nav-badge" id="badge-atribuicao">0</span>
-    </div>
-    <div class="nav-section-label">Envio</div>
-    <div class="nav-item" onclick="switchPanel('fila-zap')" data-label="Fila WhatsApp">
-      <div class="nav-icon">💬</div>
-      <span class="nav-label">Fila WhatsApp</span>
-      <span class="nav-badge" id="badge-fila-zap">0</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('instagram')" data-label="Instagram">
-      <div class="nav-icon">📸</div>
-      <span class="nav-label">Instagram</span>
-      <span class="nav-badge" id="badge-instagram">0</span>
-    </div>
 
-    <div class="nav-section-label">Resultados</div>
-    
-    <div class="nav-item" onclick="switchPanel('followups')" data-label="Follow-ups">
-      <div class="nav-icon">⏰</div>
-      <span class="nav-label">Follow-ups</span>
-      <span class="nav-badge" id="badge-followups">0</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('kanban')" data-label="Kanban">
-      <div class="nav-icon">📋</div>
-      <span class="nav-label">Kanban</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('acompanhamento')" data-label="Acompanhamento">
-      <div class="nav-icon">📈</div>
-      <span class="nav-label">Acompanhamento</span>
-      <span class="nav-badge" id="badge-acompanhamento">0</span>
-    </div>
+  <nav class="sidebar-final-nav">
+    <button class="nav-item" onclick="openGlobalSearch()" data-label="Busca">
+      <div class="nav-icon">🔎</div><span class="nav-label">Busca</span><span class="nav-badge">⌘K</span>
+    </button>
 
-    <div class="nav-section-label">Ferramentas</div>
-    <div class="nav-item" onclick="switchPanel('redirecionamentos')" data-label="Redirecionamentos">
-      <div class="nav-icon">🔗</div>
-      <span class="nav-label">Redirecionamentos</span>
-    </div>
-    <div class="nav-item" onclick="switchPanel('configuracoes')" data-label="Configurações">
-      <div class="nav-icon">⚙️</div>
-      <span class="nav-label">Configurações</span>
-    </div>
+    <button class="nav-item active" onclick="switchPanel('inicio')" data-label="Início">
+      <div class="nav-icon">📊</div><span class="nav-label">Início</span><span class="nav-badge" id="badge-inicio">0</span>
+    </button>
+
+    <button class="nav-item" onclick="switchPanel('inbox')" data-label="Caixa de Entrada">
+      <div class="nav-icon">📥</div><span class="nav-label">Caixa de Entrada</span><span class="nav-badge" id="badge-inbox">0</span>
+    </button>
+
+    <details class="menu-group-final">
+      <summary><span>Leads</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('importar')" data-label="Importar">
+        <div class="nav-icon">📥</div><span class="nav-label">Importar</span><span class="nav-badge" id="badge-importar">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('validacao')" data-label="Validação">
+        <div class="nav-icon">✅</div><span class="nav-label">Validação</span><span class="nav-badge" id="badge-validacao">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('atribuicao')" data-label="Atribuição">
+        <div class="nav-icon">🗂️</div><span class="nav-label">Atribuição</span><span class="nav-badge" id="badge-atribuicao">0</span>
+      </button>
+    </details>
+
+    <details class="menu-group-final">
+      <summary><span>Envios</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('fila-zap')" data-label="WhatsApp">
+        <div class="nav-icon">💬</div><span class="nav-label">WhatsApp</span><span class="nav-badge" id="badge-fila-zap">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('instagram')" data-label="Instagram">
+        <div class="nav-icon">📸</div><span class="nav-label">Instagram</span><span class="nav-badge" id="badge-instagram">0</span>
+      </button>
+    </details>
+
+    <button class="nav-item" onclick="switchPanel('conversations')" data-label="Conversas">
+      <div class="nav-icon">💬</div><span class="nav-label">Conversas</span>
+    </button>
+
+    <details class="menu-group-final">
+      <summary><span>Gerenciamento</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('followups')" data-label="Follow-ups">
+        <div class="nav-icon">⏰</div><span class="nav-label">Follow-ups</span><span class="nav-badge" id="badge-followups">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('kanban')" data-label="Kanban">
+        <div class="nav-icon">📋</div><span class="nav-label">Kanban</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('acompanhamento')" data-label="Acompanhamentos">
+        <div class="nav-icon">📈</div><span class="nav-label">Acompanhamentos</span><span class="nav-badge" id="badge-acompanhamento">0</span>
+      </button>
+    </details>
+
+    <details class="menu-group-final">
+      <summary><span>Ferramentas</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('redirecionamentos')" data-label="Redirecionamentos">
+        <div class="nav-icon">🔗</div><span class="nav-label">Redirecionamentos</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('audit')" data-label="Auditoria">
+        <div class="nav-icon">📊</div><span class="nav-label">Auditoria</span><span class="nav-badge" id="badge-audit">LOG</span>
+      </button>
+    </details>
+
+    <button class="nav-item" onclick="switchPanel('configuracoes')" data-label="Configurações">
+      <div class="nav-icon">⚙️</div><span class="nav-label">Configurações</span>
+    </button>
   </nav>
-  <div class="sidebar-footer">
-    <div class="sidebar-clock" id="sidebarClock">--:--</div>
-    <div id="sidebarDate">carregando...</div>
 
-    <div class="auth-box">
-      <div class="auth-user" id="authUserBox">
-        <strong>Conta</strong><br>não conectado
-      </div>
-      <div class="auth-actions">
-        <button class="btn btn-primary" id="authLoginBtn" onclick="loginGoogle()">Entrar com Google</button>
-        <button class="btn btn-ghost" id="authLogoutBtn" onclick="logoutSupabase()" style="display:none">Sair</button>
-      </div>
-    </div>
+  <div class="sidebar-final-footer">
+    <button class="nav-item logout" onclick="logoutSupabase()" data-label="Sair">
+      <div class="nav-icon">🚪</div><span class="nav-label">Sair</span>
+    </button>
   </div>
-
-    <div class="nav-item" onclick="switchPanel('audit')" data-label="Auditoria">
-      <div class="nav-icon">📊</div>
-      <span class="nav-label">Auditoria</span>
-      <span class="nav-badge" id="badge-audit">LOG</span>
-    </div>
-
-    <div class="nav-item" onclick="switchPanel('conversations')" data-label="Conversas">
-      <div class="nav-icon">🗨️</div>
-      <span class="nav-label">Conversas</span>
-      <span class="nav-badge" id="badge-conversations">0</span>
-    </div>
 </aside>
+
 
 
 <!-- GLOBAL SEARCH -->
@@ -1282,6 +1265,160 @@
 
 <script src="js/adapters/supabase-adapter.js"></script>
 <script src="js/app.js"></script>
+
+<script>
+(function(){
+  const FINAL_SIDEBAR_HTML = `
+<!-- SIDEBAR FINAL V41.4 -->
+<aside class="sidebar collapsed sidebar-final-v414" id="sidebar" data-menu-final="v41.4">
+  <div class="sidebar-final-head">
+    <button class="sidebar-hamburger" onclick="toggleSidebar()" aria-label="Alternar menu">☰</button>
+    <div>
+      <div class="sidebar-final-title">Olá, Samuel 👋</div>
+      <div class="sidebar-final-sub">CRM de Prospecção</div>
+    </div>
+  </div>
+
+  <nav class="sidebar-final-nav">
+    <button class="nav-item" onclick="openGlobalSearch()" data-label="Busca">
+      <div class="nav-icon">🔎</div><span class="nav-label">Busca</span><span class="nav-badge">⌘K</span>
+    </button>
+
+    <button class="nav-item active" onclick="switchPanel('inicio')" data-label="Início">
+      <div class="nav-icon">📊</div><span class="nav-label">Início</span><span class="nav-badge" id="badge-inicio">0</span>
+    </button>
+
+    <button class="nav-item" onclick="switchPanel('inbox')" data-label="Caixa de Entrada">
+      <div class="nav-icon">📥</div><span class="nav-label">Caixa de Entrada</span><span class="nav-badge" id="badge-inbox">0</span>
+    </button>
+
+    <details class="menu-group-final">
+      <summary><span>Leads</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('importar')" data-label="Importar">
+        <div class="nav-icon">📥</div><span class="nav-label">Importar</span><span class="nav-badge" id="badge-importar">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('validacao')" data-label="Validação">
+        <div class="nav-icon">✅</div><span class="nav-label">Validação</span><span class="nav-badge" id="badge-validacao">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('atribuicao')" data-label="Atribuição">
+        <div class="nav-icon">🗂️</div><span class="nav-label">Atribuição</span><span class="nav-badge" id="badge-atribuicao">0</span>
+      </button>
+    </details>
+
+    <details class="menu-group-final">
+      <summary><span>Envios</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('fila-zap')" data-label="WhatsApp">
+        <div class="nav-icon">💬</div><span class="nav-label">WhatsApp</span><span class="nav-badge" id="badge-fila-zap">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('instagram')" data-label="Instagram">
+        <div class="nav-icon">📸</div><span class="nav-label">Instagram</span><span class="nav-badge" id="badge-instagram">0</span>
+      </button>
+    </details>
+
+    <button class="nav-item" onclick="switchPanel('conversations')" data-label="Conversas">
+      <div class="nav-icon">💬</div><span class="nav-label">Conversas</span>
+    </button>
+
+    <details class="menu-group-final">
+      <summary><span>Gerenciamento</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('followups')" data-label="Follow-ups">
+        <div class="nav-icon">⏰</div><span class="nav-label">Follow-ups</span><span class="nav-badge" id="badge-followups">0</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('kanban')" data-label="Kanban">
+        <div class="nav-icon">📋</div><span class="nav-label">Kanban</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('acompanhamento')" data-label="Acompanhamentos">
+        <div class="nav-icon">📈</div><span class="nav-label">Acompanhamentos</span><span class="nav-badge" id="badge-acompanhamento">0</span>
+      </button>
+    </details>
+
+    <details class="menu-group-final">
+      <summary><span>Ferramentas</span><span>›</span></summary>
+      <button class="nav-item sub" onclick="switchPanel('redirecionamentos')" data-label="Redirecionamentos">
+        <div class="nav-icon">🔗</div><span class="nav-label">Redirecionamentos</span>
+      </button>
+      <button class="nav-item sub" onclick="switchPanel('audit')" data-label="Auditoria">
+        <div class="nav-icon">📊</div><span class="nav-label">Auditoria</span><span class="nav-badge" id="badge-audit">LOG</span>
+      </button>
+    </details>
+
+    <button class="nav-item" onclick="switchPanel('configuracoes')" data-label="Configurações">
+      <div class="nav-icon">⚙️</div><span class="nav-label">Configurações</span>
+    </button>
+  </nav>
+
+  <div class="sidebar-final-footer">
+    <button class="nav-item logout" onclick="logoutSupabase()" data-label="Sair">
+      <div class="nav-icon">🚪</div><span class="nav-label">Sair</span>
+    </button>
+  </div>
+</aside>
+`;
+
+  function isFinalSidebar(){
+    const s = document.getElementById('sidebar');
+    return !!(s && s.dataset && s.dataset.menuFinal === 'v41.4' && s.querySelector('.menu-group-final'));
+  }
+
+  function activateFinalSidebar(){
+    let current = document.getElementById('sidebar');
+    if (isFinalSidebar()) return;
+
+    const temp = document.createElement('div');
+    temp.innerHTML = FINAL_SIDEBAR_HTML.trim();
+    const next = temp.firstElementChild;
+
+    if (current) current.replaceWith(next);
+    else document.body.insertBefore(next, document.body.firstChild);
+
+    try { if (typeof updateBadges === 'function') updateBadges(); } catch(e){}
+    bindFinalActiveState();
+  }
+
+  function bindFinalActiveState(){
+    const sidebar = document.getElementById('sidebar');
+    if (!sidebar) return;
+    sidebar.querySelectorAll('.nav-item').forEach(item => {
+      if (item.__finalBound) return;
+      item.__finalBound = true;
+      item.addEventListener('click', () => {
+        sidebar.querySelectorAll('.nav-item').forEach(i => i.classList.remove('active'));
+        item.classList.add('active');
+        if (window.innerWidth <= 980) {
+          sidebar.classList.remove('mobile-open');
+          document.getElementById('mobileMenuOverlayV37')?.classList.remove('active');
+          document.body.classList.remove('mobile-menu-open');
+          document.body.style.overflow = '';
+        }
+      });
+    });
+  }
+
+  window.rebuildSidebarGroupedV41 = activateFinalSidebar;
+  window.buildFinalSidebarV413 = activateFinalSidebar;
+  window.forceSidebarGroupedV412 = activateFinalSidebar;
+  window.ensureFinalSidebarV413 = activateFinalSidebar;
+
+  document.addEventListener('DOMContentLoaded', () => {
+    activateFinalSidebar();
+    setTimeout(activateFinalSidebar, 100);
+    setTimeout(activateFinalSidebar, 500);
+    setTimeout(activateFinalSidebar, 1200);
+
+    const obs = new MutationObserver(() => {
+      clearTimeout(window.__sidebarFinal414);
+      window.__sidebarFinal414 = setTimeout(activateFinalSidebar, 60);
+    });
+    obs.observe(document.body, { childList:true, subtree:true });
+  });
+
+  setTimeout(activateFinalSidebar, 50);
+  setTimeout(activateFinalSidebar, 300);
+  setTimeout(activateFinalSidebar, 1000);
+  setInterval(() => { if(!isFinalSidebar()) activateFinalSidebar(); }, 1500);
+})();
+</script>
+
 <div id="mobileMenuOverlayV37"></div>
 </body>
 </html>
