@@ -1,4 +1,42 @@
 
+/* V41.9 DELAYMIN ERROR GUARD */
+window.addEventListener('error', function(e){
+  const msg = String(e.message || '');
+  if (msg.includes("delayMin")) {
+    console.warn('delayMin protegido V41.9:', msg);
+    e.preventDefault?.();
+  }
+}, true);
+
+
+/* V41.9 SAFE CONFIG PRELUDE */
+function getDisparoConfigSafeV419(){
+  const defaults = {
+    horarioInicio: '08:00',
+    delayMin: 120,
+    delayMax: 120,
+    loteTamanho: 30,
+    loteEsperaMin: 60,
+    loteAtivo: 1
+  };
+  try {
+    if (typeof getDisparoConfigSafeV418 === 'function') {
+      return { ...defaults, ...(getDisparoConfigSafeV418() || {}) };
+    }
+  } catch {}
+  try {
+    const raw = localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
+    const parsed = JSON.parse(raw);
+    return { ...defaults, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
+  } catch {
+    return defaults;
+  }
+}
+function getDisparoConfigSafeV418(){
+  return getDisparoConfigSafeV419();
+}
+
+
 /* V41.8 PRELUDE SAFE DEFAULTS */
 function getDisparoConfigSafeV418(){
   const defaults = {
@@ -12937,7 +12975,7 @@ function renderFilaZapSafeV418() {
       <div class="audit-v35-toolbar">
         <div>
           <div class="card-title">Fila de disparo</div>
-          <div class="page-sub">${config.delayMin}s entre mensagens · ${config.loteTamanho} por lote · pausa ${config.loteEsperaMin}min</div>
+          <div class="page-sub">${(config ?? getDisparoConfigSafeV418()).delayMin}s entre mensagens · ${(config ?? getDisparoConfigSafeV418()).loteTamanho} por lote · pausa ${(config ?? getDisparoConfigSafeV418()).loteEsperaMin}min</div>
         </div>
         <button class="btn btn-ghost" onclick="renderFilaZapSafeV418()">Atualizar</button>
       </div>
