@@ -166,6 +166,89 @@ function getContactMapByLidV418(lid = '', instance = '') {
   }) || null;
 }
 
+
+const WHATSAPP_CONVERSATION_META_V421_KEY = 'vs_whatsapp_conversation_meta_v421';
+
+function getConversationMetaStoreV421() {
+  try { return JSON.parse(localStorage.getItem(WHATSAPP_CONVERSATION_META_V421_KEY) || '{}') || {}; } catch(e) { return {}; }
+}
+
+function saveConversationMetaStoreV421(store = {}) {
+  try { localStorage.setItem(WHATSAPP_CONVERSATION_META_V421_KEY, JSON.stringify(store || {})); } catch(e) {}
+}
+
+function getConversationMetaKeyV421(conversationKey = '') {
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const instance = String((getConversationMessagesV38(conversationKey)[0]?.instance) || resolved.instance || 'prospecto').trim();
+  return `${currentUser?.id || 'local'}:${instance}:${conversationKey}`;
+}
+
+function getConversationMetaV421(conversationKey = '') {
+  const store = getConversationMetaStoreV421();
+  return store[getConversationMetaKeyV421(conversationKey)] || {};
+}
+
+function setConversationMetaV421(conversationKey = '', patch = {}) {
+  const store = getConversationMetaStoreV421();
+  const key = getConversationMetaKeyV421(conversationKey);
+  store[key] = { ...(store[key] || {}), ...patch, updatedAt:new Date().toISOString() };
+  saveConversationMetaStoreV421(store);
+  try { renderInboxV41(); } catch(e) {}
+  try { renderConversationListV38(); } catch(e) {}
+}
+
+function archiveConversationV421(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  if (!conversationKey) return;
+  setConversationMetaV421(conversationKey, { archived:true, archivedAt:new Date().toISOString() });
+  notify('Conversa arquivada.');
+}
+
+async function markConversationUnreadV421(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  if (!conversationKey) return;
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const leadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  const phone = resolved.phone;
+  if (sbClient && currentUser?.id) {
+    let query = sbClient.from('whatsapp_messages').update({ read_at:null, updated_at:new Date().toISOString() }).eq('user_id', currentUser.id).eq('direction','in');
+    if (leadId) query = query.eq('lead_id', leadId);
+    else if (phone) query = query.or(`phone.eq.${phone},phone_normalized.eq.${phone}`);
+    const { error } = await query;
+    if (error) console.warn('[whatsapp_messages] marcar não lida:', error.message);
+  }
+  await fetchEvolutionResponsesV34({ silent:true });
+  notify('Conversa marcada como não lida.');
+}
+
+async function markConversationReadActionV421(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  await markConversationReadV412(conversationKey);
+  await fetchEvolutionResponsesV34({ silent:true });
+  notify('Conversa marcada como lida.');
+}
+
+function toggleConversationActionsV421() {
+  const menu = document.getElementById('conversationActionsMenuV421');
+  if (menu) menu.classList.toggle('open');
+}
+
+function addConversationNoteV421(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const leadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  if (leadId && typeof openLeadDrawer === 'function') openLeadDrawer(leadId);
+  else notify('Associe esta conversa a um lead antes de adicionar nota.', 'warn');
+}
+
+function createConversationFollowupV421(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const leadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  if (leadId && typeof openLeadDrawer === 'function') openLeadDrawer(leadId);
+  else notify('Associe esta conversa a um lead antes de criar follow-up.', 'warn');
+}
+
 function applyContactMapToMessageV418(message = {}) {
   if (!message || message.leadId) return message;
   const map = getContactMapByLidV418(message.phone, message.instance);
@@ -754,8 +837,21 @@ function getConversationLeadFromKeyV412(key = '') {
   if (!key) return { leadId:'', lead:{ nome:'Lead' }, phone:'' };
   if (isPhoneConversationKeyV412(key)) {
     const phone = getPhoneFromConversationKeyV412(key);
-    const lead = findLeadByPhoneV412(phone);
     const fallbackIdentity = getFallbackContactIdentityByPhoneV416(phone);
+    const contactMap = getContactMapByLidV418(phone, 'prospecto') || getContactMapByLidV418(phone, '');
+    if (contactMap?.lead_id) {
+      const mappedLead = findLeadEverywhere(contactMap.lead_id) || { id:contactMap.lead_id, nome:contactMap.push_name || fallbackIdentity.name || 'Lead associado' };
+      const phoneReal = normalizeWhatsappDigitsV412(contactMap.phone_real || mappedLead.whatsapp || mappedLead.phone || mappedLead.telefone || '');
+      return {
+        leadId: contactMap.lead_id,
+        lead: { ...mappedLead, whatsapp: phoneReal || mappedLead.whatsapp || mappedLead.phone || '', mappedFromLid: phone, subtitle: phoneReal ? `Telefone: ${phoneReal}` : `Identificador WhatsApp: ${phone}` },
+        phone: phoneReal || phone,
+        isLid:false,
+        mappedFromLid: phone,
+        subtitle: phoneReal ? `Telefone: ${phoneReal}` : `Identificador WhatsApp: ${phone}`
+      };
+    }
+    const lead = findLeadByPhoneV412(phone);
     return {
       leadId: lead?.id || '',
       lead: lead || {
@@ -913,6 +1009,7 @@ function renderConversationChatV38() {
   const associationButton = lead.isLid && !resolved.leadId
     ? `<button class="btn btn-ghost" onclick="associateLidConversationToLeadV417('${escHtml(activeConversationLeadV38)}')">Associar ao lead</button>`
     : '';
+  const canReassociate = lead.isLid || resolved.mappedFromLid || isPhoneConversationKeyV412(activeConversationLeadV38);
 
   box.innerHTML = `
     <div class="conversation-chat-header-v38">
@@ -920,7 +1017,18 @@ function renderConversationChatV38() {
         <div class="conversation-chat-title-v38">${escHtml(chatTitle)}</div>
         <div class="conversation-chat-meta-v38">${escHtml(chatMeta)}</div>
       </div>
-      ${associationButton}
+      <div class="conversation-header-actions-v421">
+        ${associationButton}
+        <button class="conversation-actions-btn-v421" onclick="toggleConversationActionsV421()" title="Ações">⋮</button>
+        <div id="conversationActionsMenuV421" class="conversation-actions-menu-v421">
+          <button onclick="archiveConversationV421('${escHtml(activeConversationLeadV38)}')">Arquivar conversa</button>
+          <button onclick="markConversationReadActionV421('${escHtml(activeConversationLeadV38)}')">Marcar como lida</button>
+          <button onclick="markConversationUnreadV421('${escHtml(activeConversationLeadV38)}')">Marcar como não lida</button>
+          ${canReassociate ? `<button onclick="associateLidConversationToLeadV417('${escHtml(activeConversationLeadV38)}')">Trocar associação de lead</button>` : ''}
+          <button onclick="addConversationNoteV421('${escHtml(activeConversationLeadV38)}')">Adicionar nota</button>
+          <button onclick="createConversationFollowupV421('${escHtml(activeConversationLeadV38)}')">Criar follow-up</button>
+        </div>
+      </div>
     </div>
 
     <div class="conversation-messages-v38">
@@ -1170,46 +1278,58 @@ async function sendConversationReplyV38() {
 }
 
 function getInboxItemsV41() {
-  const items = new Map();
+  const grouped = new Map();
+  const upsertItem = (message = {}) => {
+    if (!message || message.direction !== 'in') return;
+    const conversationKey = getWhatsappConversationKeyV412(message);
+    if (!conversationKey) return;
+    const resolved = getConversationLeadFromKeyV412(conversationKey);
+    const meta = getConversationMetaV421(conversationKey);
+    if (meta.archived) return;
+    const current = grouped.get(conversationKey) || {
+      id: conversationKey,
+      conversationKey,
+      leadId: resolved.leadId || '',
+      lead: resolved.lead,
+      text: '',
+      channel:'whatsapp',
+      at:'',
+      unreadCount:0,
+      totalMessages:0,
+      pending: !resolved.leadId
+    };
+    current.leadId = resolved.leadId || current.leadId || '';
+    current.lead = resolved.lead || current.lead;
+    current.pending = !current.leadId;
+    current.totalMessages += 1;
+    if (!message.read) current.unreadCount += 1;
+    const at = message.receivedAt || message.at || '';
+    if (!current.at || String(at).localeCompare(String(current.at || '')) > 0) {
+      current.at = at;
+      current.text = message.text || '';
+    }
+    grouped.set(conversationKey, current);
+  };
 
   getSupabaseWhatsappMessagesV412()
     .filter(message => message.direction === 'in')
-    .forEach(message => {
-      const conversationKey = getWhatsappConversationKeyV412(message);
-      const resolved = getConversationLeadFromKeyV412(conversationKey);
-      const id = message.dbId || message.id || conversationKey;
-      items.set(id, {
-        id,
-        conversationKey,
-        leadId: resolved.leadId || '',
-        lead: resolved.lead,
-        text: message.text || '',
-        channel:'whatsapp',
-        at: message.receivedAt || '',
-        unread: !message.read,
-        pending: !resolved.leadId
-      });
-    });
+    .forEach(upsertItem);
 
   const responses = typeof getLocalResponsesV34 === 'function' ? getLocalResponsesV34() : [];
   responses.forEach(response => {
-    if (items.has(response.id)) return;
     const conversationKey = response.leadId || (response.phone ? `phone:${normalizeWhatsappDigitsV412(response.phone)}` : '');
-    const resolved = getConversationLeadFromKeyV412(conversationKey);
-    items.set(response.id, {
-      id: response.id,
-      conversationKey,
-      leadId: resolved.leadId || response.leadId || '',
-      lead: resolved.lead,
+    if (!conversationKey) return;
+    upsertItem({
+      ...response,
+      direction:'in',
+      receivedAt: response.receivedAt || response.at || '',
       text: response.text || '',
-      channel:'whatsapp',
-      at: response.receivedAt || '',
-      unread: !response.read,
-      pending: !resolved.leadId
+      leadId: response.leadId || '',
+      phone: response.phone || ''
     });
   });
 
-  return Array.from(items.values()).sort((a,b) => String(b.at || '').localeCompare(String(a.at || '')));
+  return Array.from(grouped.values()).sort((a,b) => String(b.at || '').localeCompare(String(a.at || '')));
 }
 
 function renderInboxV41() {
@@ -1217,8 +1337,8 @@ function renderInboxV41() {
   if (!list) return;
   const items = getInboxItemsV41();
   const set = (id, value) => { const el = document.getElementById(id); if (el) el.textContent = value; };
-  set('inboxUnreadCountV41', items.filter(item => item.unread).length);
-  set('inboxWhatsappCountV41', items.length);
+  set('inboxUnreadCountV41', items.reduce((total, item) => total + (item.unreadCount || 0), 0));
+  set('inboxWhatsappCountV41', items.reduce((total, item) => total + (item.totalMessages || 0), 0));
   set('inboxInstagramCountV41', 0);
 
   if (!items.length) {
@@ -1230,7 +1350,10 @@ function renderInboxV41() {
   list.innerHTML = items.map(item => `
     <div class="inbox-v41-item">
       <div>
-        <div class="inbox-v41-title">${escHtml(item.lead?.nome || 'Lead')}</div>
+        <div class="inbox-v41-title-row">
+          <div class="inbox-v41-title">${escHtml(item.lead?.nome || 'Lead')}</div>
+          <div class="inbox-v41-count">${item.unreadCount ? escHtml(item.unreadCount + ' novas') : escHtml((item.totalMessages || 0) + ' msgs')}</div>
+        </div>
         <div class="inbox-v41-message">${escHtml(item.text || '[mensagem sem texto]')}</div>
         <div class="inbox-v41-meta">${item.pending ? (item.lead?.isLid ? 'contato via LID · ' : 'lead não identificado · ') : ''}${item.lead?.subtitle ? escHtml(item.lead.subtitle) + ' · ' : ''}whatsapp · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div>
       </div>

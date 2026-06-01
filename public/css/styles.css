@@ -2931,3 +2931,14 @@ body.auth-locked .app{
   border-radius:14px;
   text-align:center;
 }
+
+/* Conversas: ações e Inbox agrupada V42.1 */
+.conversation-header-actions-v421{position:relative;display:flex;align-items:center;gap:8px}
+.conversation-actions-btn-v421{width:34px;height:34px;border-radius:12px;border:1px solid var(--border2);background:rgba(255,255,255,.03);color:var(--text);font-size:20px;line-height:1;cursor:pointer}
+.conversation-actions-btn-v421:hover{border-color:var(--accent);color:var(--accent)}
+.conversation-actions-menu-v421{position:absolute;right:0;top:42px;min-width:220px;background:var(--surface);border:1px solid var(--border2);border-radius:14px;padding:6px;box-shadow:0 18px 40px rgba(0,0,0,.35);display:none;z-index:20}
+.conversation-actions-menu-v421.open{display:flex;flex-direction:column;gap:2px}
+.conversation-actions-menu-v421 button{width:100%;text-align:left;border:0;background:transparent;color:var(--text2);padding:10px 12px;border-radius:10px;font-size:12px;cursor:pointer}
+.conversation-actions-menu-v421 button:hover{background:rgba(174,255,61,.08);color:var(--accent)}
+.inbox-v41-title-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
+.inbox-v41-count{font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);border:1px solid rgba(174,255,61,.28);background:rgba(174,255,61,.08);padding:4px 7px;border-radius:999px;white-space:nowrap}

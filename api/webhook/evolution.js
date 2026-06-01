@@ -28,7 +28,26 @@ function pickPhoneSource({ remoteJid = '', from = '', sender = '', participant =
 
   const remoteIsLid = remote.endsWith('@lid');
   const senderIsWhatsapp = senderValue.endsWith('@s.whatsapp.net') || senderValue.endsWith('@c.us');
-  const inbound = direction !== 'out';
+  const fromMe = direction === 'out';
+  const inbound = !fromMe;
+
+  // Mensagens enviadas pelo WhatsApp/celular chegam no webhook com fromMe=true.
+  // Nesses eventos, sender costuma ser o próprio chip conectado; nunca use sender
+  // como telefone do lead. A referência da conversa é o remoteJid.
+  if (fromMe && remoteIsLid && phoneCandidateRemoteJid) {
+    return {
+      source: 'remoteJid',
+      raw: remote,
+      phone: phoneCandidateRemoteJid,
+      reason: 'from_me_remoteJid_lid',
+      phoneCandidateRemoteJid,
+      phoneCandidateFrom,
+      phoneCandidateSender,
+      phoneCandidateParticipant,
+      selectedPhone: phoneCandidateRemoteJid,
+      rejectedBecauseOwnInstance: Boolean(senderIsWhatsapp && phoneCandidateSender)
+    };
+  }
 
   // In incoming @lid events, Evolution/Baileys may expose the connected chip in
   // sender. Do not use it as the lead phone, otherwise the conversation becomes
@@ -295,7 +314,7 @@ async function persistMessage(message) {
       body: message.body,
       status: message.direction === 'in' ? 'received' : 'sent',
       occurred_at: message.occurredAt,
-      raw_payload: message.direction === 'in' ? (message.rawPayload || null) : null
+      raw_payload: message.rawPayload || null
     })
   });
 
@@ -367,12 +386,24 @@ export default async function handler(req, res) {
       });
     }
 
-    const lidForMap = message.debug?.phoneSourceReason === 'fallback_remoteJid_lid_no_real_phone'
+    const lidForMap = (message.debug?.phoneSourceReason === 'fallback_remoteJid_lid_no_real_phone' || message.debug?.phoneSourceReason === 'from_me_remoteJid_lid')
       ? message.phone
       : '';
     const contactMapDebug = lidForMap
       ? await findContactMapByLid(userId, message.instance, lidForMap)
       : { map:null, query:null, error:null };
+
+    if (message.direction === 'out' && message.debug?.keyFromMe === true) {
+      console.log('[webhook/evolution][from-me]', {
+        instance: message.instance,
+        remoteJid: message.debug?.remoteJid || '',
+        sender: message.debug?.sender || '',
+        selectedPhone: message.phone,
+        lidForMap: lidForMap || null,
+        contactMapFound: Boolean(contactMapDebug.map),
+        contactMapLeadId: contactMapDebug.map?.lead_id || null
+      });
+    }
 
     if (contactMapDebug.map?.lead_id) {
       message.leadId = contactMapDebug.map.lead_id;
@@ -381,6 +412,20 @@ export default async function handler(req, res) {
         message.debug.mappedPhoneReal = message.phone;
         message.debug.mappedFromLid = lidForMap;
       }
+      if (message.direction === 'out' && message.debug?.keyFromMe === true) {
+        console.log('[webhook/evolution][from-me-mapped]', {
+          lid: lidForMap || null,
+          leadId: message.leadId,
+          phoneReal: message.phone,
+          instance: message.instance
+        });
+      }
+    } else if (message.direction === 'out' && message.debug?.keyFromMe === true && lidForMap) {
+      console.log('[webhook/evolution][from-me-unmapped]', {
+        lid: lidForMap,
+        selectedPhone: message.phone,
+        instance: message.instance
+      });
     }
 
     const leadDebug = message.leadId
