@@ -13,7 +13,7 @@ function diasEmEspera(criadoEm) {
 }
 
 function renderAtribuicao() {
-  const leads = getAtribuicaoData();
+  const leads = moveUnvalidatedAtribLeadsToValidationV42(getAtribuicaoData());
   const weekDays = currentWeekDays();
   const today = todayStr();
   if (!atribDiaLote || !weekDays.includes(atribDiaLote)) atribDiaLote = today;
@@ -364,6 +364,55 @@ function moverParaBacklogInstaDoInsta(id, key) {
    MANUAL LEAD (Importar panel)
 ════════════════════════════ */
 let manualValChipId = null;
+let manualLeadLastValidation = null;
+
+function normalizeManualWhatsappV42(value) {
+  const raw = normalizePhone(value || '');
+  if (!raw) return '';
+  return raw.startsWith('55') ? raw : `55${raw}`;
+}
+
+function manualLeadWasJustValidatedV42(phone) {
+  const normalized = normalizeManualWhatsappV42(phone);
+  if (!normalized || !manualLeadLastValidation) return false;
+  return manualLeadLastValidation.valid === true && manualLeadLastValidation.phone === normalized;
+}
+
+function moveUnvalidatedAtribLeadsToValidationV42(leads) {
+  const validAtrib = [];
+  const toValidation = [];
+  leads.forEach(lead => {
+    const canal = lead.canal && lead.canal !== 'pendente' ? lead.canal : (lead.whatsapp ? 'zap' : 'insta');
+    if (canal === 'zap' && !isLeadWhatsappValidatedForQueue(lead)) {
+      toValidation.push({
+        ...lead,
+        whatsapp: normalizeManualWhatsappV42(lead.whatsapp || lead.phone || lead.telefone || ''),
+        phone: normalizeManualWhatsappV42(lead.whatsapp || lead.phone || lead.telefone || ''),
+        tipo: lead.tipo || 'sem-site',
+        canal: 'zap',
+        numStatus: lead.numStatus === 'invalido' ? 'invalido' : 'pendente',
+        whatsappValidationStatus: lead.whatsappValidationStatus || 'pending',
+        importadoEm: lead.importadoEm || lead.criadoEm || todayStr(),
+        origem: lead.origem || 'Atribuição não validada'
+      });
+    } else {
+      validAtrib.push(lead);
+    }
+  });
+
+  if (!toValidation.length) return leads;
+
+  const val = getValData();
+  const existing = new Set(val.map(v => v.id));
+  toValidation.forEach(lead => {
+    if (!existing.has(lead.id)) val.push(lead);
+  });
+  saveValData(val);
+  saveAtribuicaoData(validAtrib);
+  atribSelecionados.clear();
+  notify(`↩ ${toValidation.length} lead${toValidation.length !== 1 ? 's' : ''} sem WhatsApp validado voltou para Validação`, 'warn');
+  return validAtrib;
+}
 
 function renderManualValChips() {
   const chips = getChips();
@@ -399,6 +448,7 @@ async function validarNumeroManual() {
     const data = await res.json();
     const r = Array.isArray(data) ? data[0] : data;
     const valido = r?.exists === true;
+    manualLeadLastValidation = { phone: numFull, valid: valido, checkedAt: new Date().toISOString(), chipId: chip.id };
     if (resultEl) {
       resultEl.style.display = 'block';
       resultEl.style.background = valido ? 'rgba(78,203,113,0.1)' : 'rgba(255,92,92,0.1)';
@@ -416,28 +466,68 @@ async function validarNumeroManual() {
 function adicionarLeadManual() {
   const nome = (document.getElementById('manualLeadNome')?.value || '').trim();
   if (!nome) { notify('// nome da empresa é obrigatório','warn'); return; }
-  const phone = (document.getElementById('manualLeadPhone')?.value || '').trim();
+  const phoneRaw = (document.getElementById('manualLeadPhone')?.value || '').trim();
+  const phone = normalizeManualWhatsappV42(phoneRaw);
   const googleUrl = (document.getElementById('manualLeadGoogleUrl')?.value || '').trim();
   const instagram = (document.getElementById('manualLeadInsta')?.value || '').trim();
-  const lead = {
-    id: 'manual_' + Date.now(),
-    nome, whatsapp: phone ? normalizePhone(phone) : '',
-    googleUrl, instagram,
-    site: '', ramoId: null,
+  const id = 'manual_' + Date.now();
+  const baseLead = {
+    id,
+    nome,
+    whatsapp: phone,
+    phone,
+    googleUrl,
+    instagram,
+    site: '',
+    ramoId: null,
     canal: phone ? 'zap' : 'insta',
     criadoEm: todayStr(),
+    importadoEm: todayStr(),
+    origem: 'manual'
   };
-  const atrib = getAtribuicaoData();
-  atrib.push(lead);
-  saveAtribuicaoData(atrib);
+
+  if (phone) {
+    const isValidated = manualLeadWasJustValidatedV42(phone);
+    if (isValidated) {
+      const lead = markLeadWhatsappValidatedForQueue({
+        ...baseLead,
+        numStatus: 'valido',
+        whatsappValidationStatus: 'valid',
+        validadoEm: todayStr()
+      });
+      const atrib = getAtribuicaoData();
+      if (!atrib.find(a => a.id === lead.id)) atrib.push(lead);
+      saveAtribuicaoData(atrib);
+      notify(`✓ ${nome} validado → Base de Atribuição`);
+    } else {
+      const val = getValData();
+      val.push({
+        ...baseLead,
+        tipo: 'sem-site',
+        numStatus: 'pendente',
+        whatsappValidationStatus: 'pending'
+      });
+      saveValData(val);
+      notify(`✓ ${nome} → Validação. Valide o WhatsApp antes da atribuição.`);
+    }
+  } else {
+    const lead = { ...baseLead, canal: 'insta' };
+    const atrib = getAtribuicaoData();
+    if (!atrib.find(a => a.id === lead.id)) atrib.push(lead);
+    saveAtribuicaoData(atrib);
+    notify(`✓ ${nome} → Atribuição Instagram`);
+  }
+
   // Limpa os campos
   ['manualLeadNome','manualLeadPhone','manualLeadGoogleUrl','manualLeadInsta'].forEach(id => {
     const el = document.getElementById(id); if (el) el.value = '';
   });
+  manualLeadLastValidation = null;
   const resultEl = document.getElementById('manualValResult');
   if (resultEl) resultEl.style.display = 'none';
-  renderAtribuicao(); updateBadges();
-  notify(`✓ ${nome} → Atribuição`);
+  renderAtribuicao();
+  if (typeof renderValidacao === 'function') renderValidacao();
+  updateBadges();
 }
 
 /* ════════════════════════════
