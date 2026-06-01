@@ -81,15 +81,42 @@ function getSupabaseWhatsappMessagesV412() {
 
 
 /* Mapeamento manual seguro LID -> Lead/telefone real */
+let whatsappContactMapCacheV418 = [];
+let contactMapDrawerStateV418 = {
+  open:false,
+  conversationKey:'',
+  lid:'',
+  instance:'',
+  pushName:'',
+  lastMessage:'',
+  query:'',
+  loading:false,
+  results:[],
+  debounce:null
+};
+
+function debugContactMapV418(step, data = {}) {
+  try { console.log(`[contact-map]${step}`, data); } catch(e) {}
+}
+
+function normalizeLeadForContactMapV418(lead = {}) {
+  const id = String(lead.id || lead.lead_id || lead.leadId || '').trim();
+  if (!id) return null;
+  return {
+    ...lead,
+    id,
+    nome: String(lead.nome || lead.company_name || lead.companyName || lead.name || lead.title || 'Lead sem nome').trim(),
+    whatsapp: normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || ''),
+    status: lead.status || lead.pipeline_status || lead.pipelineStatus || '',
+    dia: lead.dia || lead.day || lead.assignedDay || lead.weekDay || lead.weekday || ''
+  };
+}
+
 function getAllKnownLeadsForWhatsappMapV417() {
   const map = new Map();
   const add = (lead) => {
-    if (!lead || !lead.id) return;
-    const normalized = {
-      ...lead,
-      nome: lead.nome || lead.companyName || lead.company_name || lead.title || 'Lead sem nome',
-      whatsapp: normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || '')
-    };
+    const normalized = normalizeLeadForContactMapV418(lead);
+    if (!normalized) return;
     if (!map.has(normalized.id)) map.set(normalized.id, normalized);
   };
 
@@ -105,77 +132,285 @@ function getAllKnownLeadsForWhatsappMapV417() {
 }
 
 function findWhatsappLeadCandidatesForMapV417(query = '') {
-  const q = normalizeStr ? normalizeStr(query || '') : String(query || '').toLowerCase();
+  const q = typeof normalizeStr === 'function' ? normalizeStr(query || '') : String(query || '').toLowerCase();
+  const digits = String(query || '').replace(/\D/g, '');
   return getAllKnownLeadsForWhatsappMapV417()
     .filter(lead => {
       const haystack = [lead.nome, lead.whatsapp, lead.phone, lead.telefone, lead.site, lead.instagram].filter(Boolean).join(' ');
-      const norm = normalizeStr ? normalizeStr(haystack) : haystack.toLowerCase();
-      return !q || norm.includes(q) || String(lead.whatsapp || '').includes(String(query || '').replace(/\D/g, ''));
+      const norm = typeof normalizeStr === 'function' ? normalizeStr(haystack) : haystack.toLowerCase();
+      return !q || norm.includes(q) || (digits && String(lead.whatsapp || '').includes(digits));
     })
     .slice(0, 20);
 }
 
-async function associateLidConversationToLeadV417(conversationKey) {
-  const resolved = getConversationLeadFromKeyV412(conversationKey || activeConversationLeadV38);
-  const lid = normalizeWhatsappDigitsV412(resolved.phone || getPhoneFromConversationKeyV412(conversationKey || activeConversationLeadV38));
-  if (!lid || !(resolved.isLid || resolved.lead?.isLid)) {
-    notify('Esta conversa não parece ser um identificador LID.', 'warn');
-    return;
+async function fetchContactMapsV418() {
+  if (!currentUser?.id) return [];
+  try {
+    const res = await fetch(`/api/whatsapp/contact-map?user_id=${encodeURIComponent(currentUser.id)}`);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`);
+    whatsappContactMapCacheV418 = Array.isArray(data.maps) ? data.maps : [];
+  } catch (error) {
+    debugContactMapV418('[map-fetch-error]', { error:error?.message || error });
   }
-  if (!currentUser?.id) { notify('Usuário não autenticado.', 'warn'); return; }
+  return whatsappContactMapCacheV418;
+}
 
-  const query = prompt('Digite parte do nome ou telefone do lead para vincular a esta conversa:');
-  if (query === null) return;
-  const candidates = findWhatsappLeadCandidatesForMapV417(query);
-  if (!candidates.length) {
-    notify('Nenhum lead encontrado com esse termo.', 'warn');
-    return;
+function getContactMapByLidV418(lid = '', instance = '') {
+  const normalizedLid = normalizeWhatsappDigitsV412(lid);
+  if (!normalizedLid) return null;
+  return whatsappContactMapCacheV418.find(item => {
+    const sameLid = normalizeWhatsappDigitsV412(item.lid || '') === normalizedLid;
+    const sameInstance = !instance || !item.instance || String(item.instance) === String(instance);
+    return sameLid && sameInstance;
+  }) || null;
+}
+
+function applyContactMapToMessageV418(message = {}) {
+  if (!message || message.leadId) return message;
+  const map = getContactMapByLidV418(message.phone, message.instance);
+  if (!map?.lead_id) return message;
+  return {
+    ...message,
+    leadId: map.lead_id,
+    mappedPhoneReal: map.phone_real || '',
+    contactMapId: map.id || '',
+    pushName: message.pushName || map.push_name || ''
+  };
+}
+
+function getRecentLeadSuggestionsForContactMapV418() {
+  const byId = new Map();
+  const addLead = (lead, reason = '') => {
+    const normalized = normalizeLeadForContactMapV418(lead);
+    if (!normalized) return;
+    if (!byId.has(normalized.id)) byId.set(normalized.id, { ...normalized, reason });
+  };
+
+  try {
+    getSupabaseWhatsappMessagesV412()
+      .filter(msg => msg.direction === 'out' && msg.leadId)
+      .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))
+      .forEach(msg => addLead(findLeadEverywhere(msg.leadId), 'Enviado recentemente'));
+  } catch(e) {}
+
+  try {
+    (typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [])
+      .filter(item => item.status === 'Enviado' || item.status === 'Pendente' || item.status === 'Na fila')
+      .slice(-60)
+      .reverse()
+      .forEach(item => addLead(item.leadId ? (findLeadEverywhere(item.leadId) || item) : item, 'Fila WhatsApp'));
+  } catch(e) {}
+
+  try {
+    Object.values(typeof getWeekData === 'function' ? (getWeekData()?.days || {}) : {}).flat()
+      .slice(-60)
+      .reverse()
+      .forEach(lead => addLead(lead, 'Semana'));
+  } catch(e) {}
+
+  return Array.from(byId.values()).slice(0, 20);
+}
+
+async function searchLeadsForContactMapV418(query = '') {
+  const term = String(query || '').trim();
+  if (term.length < 3) return getRecentLeadSuggestionsForContactMapV418();
+  debugContactMapV418('[search]', { query:term });
+
+  const fallback = findWhatsappLeadCandidatesForMapV417(term);
+  if (!sbClient || !currentUser?.id) return fallback;
+
+  const digits = term.replace(/\D/g, '');
+  const safeTerm = term.replace(/[%,]/g, '');
+  const orParts = [];
+  if (safeTerm) orParts.push(`company_name.ilike.%${safeTerm}%`);
+  if (digits) orParts.push(`phone.ilike.%${digits}%`);
+
+  try {
+    let queryBuilder = sbClient
+      .from('leads')
+      .select('id,company_name,phone,status,pipeline_status,updated_at,created_at')
+      .eq('user_id', currentUser.id)
+      .limit(20);
+    if (orParts.length) queryBuilder = queryBuilder.or(orParts.join(','));
+    const { data, error } = await queryBuilder;
+    if (error) throw error;
+    const remote = (data || []).map(normalizeLeadForContactMapV418).filter(Boolean);
+    const merged = new Map();
+    [...remote, ...fallback].forEach(lead => { if (lead?.id && !merged.has(lead.id)) merged.set(lead.id, lead); });
+    return Array.from(merged.values()).slice(0, 20);
+  } catch (error) {
+    debugContactMapV418('[search-error]', { error:error?.message || error });
+    return fallback;
   }
+}
 
-  let selected = candidates[0];
-  if (candidates.length > 1) {
-    const list = candidates.map((lead, i) => `${i + 1}. ${lead.nome || 'Lead sem nome'} — ${lead.whatsapp || lead.phone || lead.telefone || 'sem telefone'}`).join('\n');
-    const picked = prompt(`Escolha o número do lead:\n\n${list}`, '1');
-    if (picked === null) return;
-    const index = Math.max(0, Math.min(candidates.length - 1, Number(picked) - 1));
-    selected = candidates[index];
-  }
-
-  const phoneReal = normalizeWhatsappDigitsV412(selected.whatsapp || selected.phone || selected.telefone || '');
-  if (!phoneReal) { notify('Lead selecionado está sem telefone.', 'warn'); return; }
-
+function getContactMapContextV418(conversationKey = '') {
+  const key = conversationKey || activeConversationLeadV38 || '';
+  const resolved = getConversationLeadFromKeyV412(key);
+  const lid = normalizeWhatsappDigitsV412(resolved.phone || getPhoneFromConversationKeyV412(key));
   const latestMessage = getSupabaseWhatsappMessagesV412()
     .filter(msg => phonesMatchV412(msg.phone, lid))
     .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))[0];
-  const instance = String(latestMessage?.instance || resolved.instance || '').trim() || 'prospecto';
-  const pushName = String(resolved.lead?.nome || latestMessage?.pushName || '').trim();
+  return {
+    conversationKey:key,
+    resolved,
+    lid,
+    instance:String(latestMessage?.instance || resolved.instance || '').trim() || 'prospecto',
+    pushName:String(resolved.lead?.nome || latestMessage?.pushName || '').trim(),
+    lastMessage:String(latestMessage?.text || '').trim(),
+    latestMessage
+  };
+}
 
+function ensureContactMapDrawerV418() {
+  let drawer = document.getElementById('contactMapDrawerV418');
+  if (drawer) return drawer;
+  drawer = document.createElement('div');
+  drawer.id = 'contactMapDrawerV418';
+  drawer.className = 'contact-map-drawer-v418';
+  drawer.innerHTML = '<div class="contact-map-drawer-v418-panel" id="contactMapDrawerPanelV418"></div>';
+  document.body.appendChild(drawer);
+  drawer.addEventListener('click', event => {
+    if (event.target === drawer) closeContactMapDrawerV418();
+  });
+  return drawer;
+}
+
+function renderContactMapDrawerV418() {
+  const drawer = ensureContactMapDrawerV418();
+  const panel = document.getElementById('contactMapDrawerPanelV418');
+  if (!panel) return;
+  const state = contactMapDrawerStateV418;
+  drawer.classList.toggle('open', !!state.open);
+  const results = Array.isArray(state.results) ? state.results : [];
+  panel.innerHTML = `
+    <div class="contact-map-drawer-head-v418">
+      <div>
+        <div class="contact-map-drawer-title-v418">Associar Conversa</div>
+        <div class="contact-map-drawer-subtitle-v418">Vincule este identificador WhatsApp ao lead correto.</div>
+      </div>
+      <button class="contact-map-close-v418" onclick="closeContactMapDrawerV418()">×</button>
+    </div>
+
+    <div class="contact-map-context-v418">
+      <div><span>PushName</span><strong>${escHtml(state.pushName || 'Não informado')}</strong></div>
+      <div><span>LID</span><strong>${escHtml(state.lid || '-')}</strong></div>
+      <div><span>Última mensagem</span><strong>${escHtml(state.lastMessage || '[mensagem sem texto]')}</strong></div>
+    </div>
+
+    <label class="contact-map-label-v418">Buscar lead por nome ou telefone</label>
+    <input class="contact-map-search-v418" id="contactMapSearchInputV418" value="${escHtml(state.query || '')}" placeholder="Digite pelo menos 3 caracteres..." oninput="handleContactMapSearchInputV418(this.value)" />
+    <div class="contact-map-help-v418">Ao abrir, mostramos apenas sugestões recentes. A busca no banco começa com 3 caracteres.</div>
+
+    <div class="contact-map-results-v418">
+      ${state.loading ? '<div class="contact-map-empty-v418">Buscando...</div>' : ''}
+      ${!state.loading && !results.length ? '<div class="contact-map-empty-v418">Nenhum lead encontrado.</div>' : ''}
+      ${!state.loading ? results.map(lead => `
+        <div class="contact-map-card-v418">
+          <div>
+            <div class="contact-map-card-title-v418">${escHtml(lead.nome || 'Lead sem nome')}</div>
+            <div class="contact-map-card-phone-v418">${escHtml(lead.whatsapp || lead.phone || lead.telefone || 'sem telefone')}</div>
+            <div class="contact-map-card-meta-v418">${escHtml([lead.reason, lead.status, lead.dia ? 'Dia: ' + lead.dia : ''].filter(Boolean).join(' · ') || 'Lead disponível')}</div>
+          </div>
+          <button class="btn btn-primary" onclick="associateContactMapLeadV418('${escHtml(lead.id)}')">Associar</button>
+        </div>
+      `).join('') : ''}
+    </div>
+  `;
+  setTimeout(() => {
+    const input = document.getElementById('contactMapSearchInputV418');
+    if (input && document.activeElement !== input) input.focus();
+  }, 0);
+}
+
+async function openContactMapDrawerV418(conversationKey = '') {
+  const context = getContactMapContextV418(conversationKey);
+  if (!context.lid || !(context.resolved?.isLid || context.resolved?.lead?.isLid)) {
+    notify('Esta conversa não parece ser um identificador LID.', 'warn');
+    return;
+  }
+  debugContactMapV418('[drawer-open]', context);
+  contactMapDrawerStateV418 = {
+    ...contactMapDrawerStateV418,
+    open:true,
+    conversationKey:context.conversationKey,
+    lid:context.lid,
+    instance:context.instance,
+    pushName:context.pushName,
+    lastMessage:context.lastMessage,
+    query:'',
+    loading:false,
+    results:getRecentLeadSuggestionsForContactMapV418()
+  };
+  renderContactMapDrawerV418();
+}
+
+function closeContactMapDrawerV418() {
+  contactMapDrawerStateV418.open = false;
+  renderContactMapDrawerV418();
+}
+
+function handleContactMapSearchInputV418(value = '') {
+  contactMapDrawerStateV418.query = value;
+  clearTimeout(contactMapDrawerStateV418.debounce);
+  contactMapDrawerStateV418.debounce = setTimeout(async () => {
+    contactMapDrawerStateV418.loading = true;
+    renderContactMapDrawerV418();
+    const results = await searchLeadsForContactMapV418(contactMapDrawerStateV418.query);
+    contactMapDrawerStateV418.results = results;
+    contactMapDrawerStateV418.loading = false;
+    renderContactMapDrawerV418();
+  }, 400);
+}
+
+async function associateContactMapLeadV418(leadId = '') {
+  const state = contactMapDrawerStateV418;
+  const lead = (state.results || []).find(item => String(item.id) === String(leadId)) || normalizeLeadForContactMapV418(findLeadEverywhere(leadId));
+  if (!lead) { notify('Lead não encontrado.', 'warn'); return; }
+  const phoneReal = normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || '');
+  if (!phoneReal) { notify('Lead selecionado está sem telefone.', 'warn'); return; }
+  if (!currentUser?.id) { notify('Usuário não autenticado.', 'warn'); return; }
+
+  debugContactMapV418('[associate]', { lid:state.lid, leadId:lead.id, phoneReal, instance:state.instance });
   try {
     const res = await fetch('/api/whatsapp/contact-map', {
       method:'POST',
       headers:{ 'Content-Type':'application/json' },
       body: JSON.stringify({
         user_id: currentUser.id,
-        instance,
-        lid,
-        lead_id: selected.id,
+        instance: state.instance || 'prospecto',
+        lid: state.lid,
+        lead_id: lead.id,
         phone_real: phoneReal,
-        push_name: pushName || selected.nome || ''
+        push_name: state.pushName || lead.nome || ''
       })
     });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
 
-    activeConversationLeadV38 = selected.id;
+    debugContactMapV418('[associate-success]', data);
+    await fetchContactMapsV418();
+    activeConversationLeadV38 = lead.id;
     await fetchEvolutionResponsesV34({ silent:true });
     try { renderInboxV41(); } catch(e) {}
     try { renderConversationsV38(); } catch(e) {}
-    notify(`Conversa vinculada ao lead ${selected.nome || 'selecionado'}.`);
+    closeContactMapDrawerV418();
+    notify(`Conversa vinculada ao lead ${lead.nome || 'selecionado'}.`);
   } catch (error) {
+    debugContactMapV418('[associate-error]', { error:error?.message || error });
     notify('Erro ao vincular conversa: ' + (error?.message || error), 'err');
   }
 }
 
+async function associateLidConversationToLeadV417(conversationKey) {
+  return openContactMapDrawerV418(conversationKey);
+}
+
+window.openContactMapDrawerV418 = openContactMapDrawerV418;
+window.closeContactMapDrawerV418 = closeContactMapDrawerV418;
+window.handleContactMapSearchInputV418 = handleContactMapSearchInputV418;
+window.associateContactMapLeadV418 = associateContactMapLeadV418;
 window.associateLidConversationToLeadV417 = associateLidConversationToLeadV417;
 
 
@@ -372,6 +607,7 @@ async function fetchEvolutionResponsesV34(options = {}) {
 
   try {
     await flushPendingOutgoingWhatsappMessagesV412();
+    await fetchContactMapsV418();
     const { data, error } = await sbClient
       .from('whatsapp_messages')
       .select('id,external_id,lead_id,instance,phone,phone_normalized,direction,message_type,body,status,occurred_at,read_at,created_at,raw_payload')
@@ -384,7 +620,7 @@ async function fetchEvolutionResponsesV34(options = {}) {
     const localMap = new Map(getLocalResponsesV34().map(item => [item.id, item]));
     const allMessages = [];
     (data || []).forEach(row => {
-      const message = mergeSupabaseWhatsappMessageV412(normalizeSupabaseWhatsappMessageV412(row));
+      const message = mergeSupabaseWhatsappMessageV412(applyContactMapToMessageV418(normalizeSupabaseWhatsappMessageV412(row)));
       allMessages.push(message);
       if (message.direction !== 'in') return;
       localMap.set(message.id, {

@@ -41,6 +41,15 @@ async function findExistingMap({ userId, instance, lid }) {
   return Array.isArray(data) ? data[0] || null : null;
 }
 
+
+async function listMaps({ userId }) {
+  const data = await supabaseFetch(
+    `whatsapp_contact_map?select=*&user_id=eq.${encodeURIComponent(userId)}&order=updated_at.desc&limit=1000`,
+    { method:'GET' }
+  );
+  return Array.isArray(data) ? data : [];
+}
+
 async function saveContactMap({ userId, instance, lid, leadId, phoneReal, pushName }) {
   const now = new Date().toISOString();
   const record = {
@@ -82,7 +91,6 @@ async function updateExistingMessages({ userId, instance, lid, leadId, phoneReal
       headers:{ Prefer:'return=representation' },
       body: JSON.stringify({
         lead_id: leadId,
-        phone: phoneReal,
         updated_at: new Date().toISOString()
       })
     }
@@ -92,12 +100,19 @@ async function updateExistingMessages({ userId, instance, lid, leadId, phoneReal
 
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
-  res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
+  res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
   res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
   if (req.method === 'OPTIONS') return res.status(200).end();
-  if (req.method !== 'POST') return res.status(405).json({ success:false, error:'Method not allowed' });
+  if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ success:false, error:'Method not allowed' });
 
   try {
+    if (req.method === 'GET') {
+      const userId = String(req.query?.user_id || req.query?.userId || '').trim();
+      if (!isValidUuid(userId)) throw new Error('user_id inválido ou ausente');
+      const maps = await listMaps({ userId });
+      return res.status(200).json({ success:true, maps });
+    }
+
     const body = req.body || {};
     const userId = String(body.user_id || body.userId || '').trim();
     const instance = String(body.instance || '').trim();

@@ -2797,3 +2797,137 @@ body.auth-locked .app{
 .conversations-v38-sidebar .conversation-item-v38-meta{
   display:none!important;
 }
+
+/* Drawer de associação LID -> Lead */
+.contact-map-drawer-v418 {
+  position: fixed;
+  inset: 0;
+  z-index: 9999;
+  pointer-events: none;
+  background: rgba(0, 0, 0, 0);
+  transition: background .18s ease;
+}
+.contact-map-drawer-v418.open {
+  pointer-events: auto;
+  background: rgba(0, 0, 0, .48);
+}
+.contact-map-drawer-v418-panel {
+  position: absolute;
+  top: 0;
+  right: 0;
+  height: 100%;
+  width: min(520px, 96vw);
+  background: #0f0f16;
+  border-left: 1px solid rgba(255,255,255,.10);
+  box-shadow: -22px 0 60px rgba(0,0,0,.55);
+  transform: translateX(102%);
+  transition: transform .22s ease;
+  padding: 24px;
+  overflow: auto;
+}
+.contact-map-drawer-v418.open .contact-map-drawer-v418-panel {
+  transform: translateX(0);
+}
+.contact-map-drawer-head-v418 {
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap:16px;
+  margin-bottom:18px;
+}
+.contact-map-drawer-title-v418 {
+  color:#fff;
+  font-size:20px;
+  font-weight:800;
+  letter-spacing:.02em;
+}
+.contact-map-drawer-subtitle-v418,
+.contact-map-help-v418,
+.contact-map-card-meta-v418,
+.contact-map-card-phone-v418 {
+  color:rgba(255,255,255,.55);
+  font-size:12px;
+  line-height:1.45;
+}
+.contact-map-close-v418 {
+  width:34px;
+  height:34px;
+  border:1px solid rgba(255,255,255,.12);
+  background:rgba(255,255,255,.04);
+  color:#fff;
+  border-radius:10px;
+  cursor:pointer;
+  font-size:20px;
+}
+.contact-map-context-v418 {
+  display:grid;
+  gap:10px;
+  padding:14px;
+  border:1px solid rgba(183,255,74,.20);
+  background:rgba(183,255,74,.06);
+  border-radius:14px;
+  margin-bottom:18px;
+}
+.contact-map-context-v418 div {
+  display:grid;
+  gap:2px;
+}
+.contact-map-context-v418 span,
+.contact-map-label-v418 {
+  color:rgba(255,255,255,.45);
+  font-size:11px;
+  text-transform:uppercase;
+  letter-spacing:.08em;
+}
+.contact-map-context-v418 strong {
+  color:#fff;
+  font-size:13px;
+  word-break:break-word;
+}
+.contact-map-label-v418 {
+  display:block;
+  margin-bottom:8px;
+}
+.contact-map-search-v418 {
+  width:100%;
+  box-sizing:border-box;
+  border:1px solid rgba(255,255,255,.14);
+  background:#09090d;
+  color:#fff;
+  border-radius:14px;
+  padding:14px 16px;
+  outline:none;
+}
+.contact-map-search-v418:focus {
+  border-color:rgba(183,255,74,.65);
+  box-shadow:0 0 0 3px rgba(183,255,74,.10);
+}
+.contact-map-help-v418 {
+  margin:8px 0 16px;
+}
+.contact-map-results-v418 {
+  display:grid;
+  gap:10px;
+}
+.contact-map-card-v418 {
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap:14px;
+  padding:14px;
+  border:1px solid rgba(255,255,255,.10);
+  background:rgba(255,255,255,.035);
+  border-radius:14px;
+}
+.contact-map-card-title-v418 {
+  color:#fff;
+  font-weight:800;
+  margin-bottom:3px;
+}
+.contact-map-empty-v418 {
+  padding:18px;
+  border:1px dashed rgba(255,255,255,.14);
+  color:rgba(255,255,255,.55);
+  border-radius:14px;
+  text-align:center;
+}
