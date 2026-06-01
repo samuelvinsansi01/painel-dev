@@ -211,26 +211,44 @@ async function sendActiveLeadWhatsappMessage() {
       response: data
     };
 
+    const messageId = typeof buildOutgoingWhatsappExternalIdV412 === 'function'
+      ? buildOutgoingWhatsappExternalIdV412('manual', data)
+      : 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+
     crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
     crm.messages.push({
-      id: 'manual_' + Date.now(),
+      id: messageId,
       direction: 'out',
       text,
       phone,
       at: sentAt,
       atLabel: sentAtLabel,
       chipName: cfg.chip?.name || cfg.chip?.nome || cfg.instance,
+      instance: cfg.instance,
       response: data
     });
 
     saveLeadCrm(activeLeadDrawerId, crm);
+
+    let persistence = { ok:false, pending:false };
+    if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+      persistence = await persistOutgoingWhatsappMessageV412({
+        id: messageId,
+        leadId: activeLeadDrawerId,
+        instance: cfg.instance,
+        phone,
+        text,
+        occurredAt: sentAt
+      });
+    }
+
     addLeadHistory(activeLeadDrawerId, `Mensagem enviada via WhatsApp por ${cfg.chip?.name || cfg.chip?.nome || cfg.instance}`, activeLeadDrawerData);
 
-    if (result) result.textContent = `Mensagem enviada em ${sentAtLabel}.`;
+    if (result) result.textContent = persistence.ok ? `Mensagem enviada e salva em ${sentAtLabel}.` : `Mensagem enviada em ${sentAtLabel}. Sincronização com banco pendente.`;
     if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
     if (typeof renderConversationsV38 === 'function') renderConversationsV38();
 
-    notify('Mensagem enviada via Evolution.');
+    notify(persistence.ok ? 'Mensagem enviada e salva.' : 'Mensagem enviada. Sincronização com banco pendente.', persistence.ok ? undefined : 'warn');
   } catch (err) {
     addLeadHistory(activeLeadDrawerId, `WhatsApp: falha ao enviar mensagem (${err?.message || 'erro'})`, activeLeadDrawerData);
     if (result) result.textContent = formatEvolutionErrorV41(err);
@@ -249,9 +267,9 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   const crm = ensureLeadCrm(leadId, lead || {});
   const now = new Date().toISOString();
   const label = crmNowLabel();
-  const messageId = typeof getEvolutionWhatsappExternalIdV412 === 'function'
-    ? getEvolutionWhatsappExternalIdV412(payload.response, 'manual_' + Date.now())
-    : 'manual_' + Date.now();
+  const messageId = typeof buildOutgoingWhatsappExternalIdV412 === 'function'
+    ? buildOutgoingWhatsappExternalIdV412('manual', payload.response || {})
+    : 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
 
   crm.whatsappStatus = {
     status: 'sent',

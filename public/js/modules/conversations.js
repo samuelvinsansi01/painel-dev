@@ -79,6 +79,19 @@ function getConversationMessagesV38(leadId) {
   return Array.from(unique.values()).sort((a,b) => String(a.at || '').localeCompare(String(b.at || '')));
 }
 
+function formatConversationListDateV38(value = '') {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const startOfDay = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((startOfDay(now) - startOfDay(date)) / 86400000);
+  if (diffDays === 0) return date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  if (diffDays === 1) return 'Ontem';
+  if (diffDays > 1 && diffDays < 7) return date.toLocaleDateString('pt-BR', { weekday:'long' });
+  return date.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+}
+
 function renderConversationListV38() {
   const box = document.getElementById('conversationListV38');
   if (!box) return;
@@ -97,12 +110,17 @@ function renderConversationListV38() {
     const messages = getConversationMessagesV38(item.leadId);
     const last = messages[messages.length - 1];
     const active = item.leadId === activeConversationLeadV38 ? 'active' : '';
+    const title = item.lead.nome || item.lead.name || 'Lead';
+    const preview = (last?.text || 'Sem mensagens').replace(/\s+/g, ' ').trim();
+    const dateLabel = formatConversationListDateV38(last?.at || item.lastAt || '');
     return `
-      <div class="conversation-item-v38 ${active}" onclick="openLeadConversationV4014()">
-        <div class="conversation-item-v38-title">${escHtml(item.lead.nome || item.lead.name || 'Lead')}</div>
-        <div class="conversation-item-v38-meta">
-          ${escHtml(item.lead.whatsapp || item.lead.phone || item.lead.telefone || '')}<br>
-          ${escHtml((last?.text || 'Sem mensagens').slice(0,80))}
+      <div class="conversation-item-v38 ${active}" onclick="openConversationV38('${escHtml(item.leadId)}')">
+        <div class="conversation-item-v38-main">
+          <div class="conversation-item-v38-top">
+            <div class="conversation-item-v38-title">${escHtml(title)}</div>
+            <div class="conversation-item-v38-date">${escHtml(dateLabel)}</div>
+          </div>
+          <div class="conversation-item-v38-preview">${escHtml(preview)}</div>
         </div>
       </div>
     `;

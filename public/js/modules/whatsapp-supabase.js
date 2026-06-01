@@ -87,6 +87,13 @@ function getEvolutionWhatsappExternalIdV412(response = {}, fallback = '') {
   );
 }
 
+function buildOutgoingWhatsappExternalIdV412(prefix = 'out', response = {}) {
+  const evolutionId = getEvolutionWhatsappExternalIdV412(response, '');
+  const safeEvolutionId = String(evolutionId || '').replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 80);
+  const suffix = Date.now() + '_' + Math.random().toString(36).slice(2, 10);
+  return [prefix, safeEvolutionId, suffix].filter(Boolean).join('_');
+}
+
 function normalizeSupabaseWhatsappMessageV412(row = {}) {
   return {
     id: row.external_id || row.id,
@@ -276,6 +283,19 @@ async function markConversationReadV412(conversationKey) {
   }
 }
 
+function formatConversationListDateV412(value = '') {
+  if (!value) return '';
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return '';
+  const now = new Date();
+  const start = d => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const diffDays = Math.round((start(now) - start(date)) / 86400000);
+  if (diffDays === 0) return date.toLocaleTimeString('pt-BR', { hour:'2-digit', minute:'2-digit' });
+  if (diffDays === 1) return 'Ontem';
+  if (diffDays > 1 && diffDays < 7) return date.toLocaleDateString('pt-BR', { weekday:'long' });
+  return date.toLocaleDateString('pt-BR', { day:'2-digit', month:'2-digit' });
+}
+
 function renderConversationListV38() {
   const box = document.getElementById('conversationListV38');
   if (!box) return;
@@ -293,12 +313,17 @@ function renderConversationListV38() {
     const messages = getConversationMessagesV38(item.leadId);
     const last = messages[messages.length - 1];
     const active = item.leadId === activeConversationLeadV38 ? 'active' : '';
+    const title = item.lead.nome || item.lead.name || 'Lead';
+    const preview = (last?.text || 'Sem mensagens').replace(/\s+/g, ' ').trim();
+    const dateLabel = formatConversationListDateV412(last?.at || item.lastAt || '');
     return `
       <div class="conversation-item-v38 ${active}" onclick="openConversationV38('${escHtml(item.leadId)}')">
-        <div class="conversation-item-v38-title">${escHtml(item.lead.nome || item.lead.name || 'Lead')}</div>
-        <div class="conversation-item-v38-meta">
-          ${escHtml(item.lead.whatsapp || item.lead.phone || item.lead.telefone || '')}<br>
-          ${escHtml((last?.text || 'Sem mensagens').slice(0,80))}
+        <div class="conversation-item-v38-main">
+          <div class="conversation-item-v38-top">
+            <div class="conversation-item-v38-title">${escHtml(title)}</div>
+            <div class="conversation-item-v38-date">${escHtml(dateLabel)}</div>
+          </div>
+          <div class="conversation-item-v38-preview">${escHtml(preview)}</div>
         </div>
       </div>
     `;
@@ -611,7 +636,7 @@ async function sendConversationReplyV38() {
       number: phone,
       text
     });
-    const messageId = getEvolutionWhatsappExternalIdV412(data, 'reply_' + Date.now());
+    const messageId = buildOutgoingWhatsappExternalIdV412('reply', data);
     const occurredAt = new Date().toISOString();
     if (realLeadId) {
       const crm = ensureLeadCrm(realLeadId, lead);
