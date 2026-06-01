@@ -40,7 +40,6 @@ async function persistOutgoing(body = {}) {
     lead_id: body.lead_id || body.leadId || null,
     instance,
     phone,
-    phone_normalized: normalizePhone(phone),
     direction: 'out',
     message_type: body.message_type || 'text',
     body: text,
@@ -50,11 +49,11 @@ async function persistOutgoing(body = {}) {
     raw_payload: body.raw_payload || body.response || null
   };
 
-  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages?on_conflict=instance,external_id`;
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages`;
   const headers = {
     apikey: backendKey,
     'Content-Type': 'application/json',
-    Prefer: 'resolution=merge-duplicates,return=representation'
+    Prefer: 'return=representation'
   };
   if (!backendKey.startsWith('sb_secret_')) headers.Authorization = `Bearer ${backendKey}`;
 
