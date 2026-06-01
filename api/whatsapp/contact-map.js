@@ -28,32 +28,32 @@ function parseRequestBody(req) {
   return req.body;
 }
 
-function getQueryValue(req, key) {
-  const direct = req?.query?.[key];
-  if (Array.isArray(direct)) return direct[0] || '';
-  if (direct) return direct;
+function getUserId(req, body = {}) {
+  const query = req?.query || {};
+  const qUserId = Array.isArray(query.user_id) ? query.user_id[0] : query.user_id;
+  const qUserIdCamel = Array.isArray(query.userId) ? query.userId[0] : query.userId;
+  const fromQuery = qUserId || qUserIdCamel || '';
+
+  let fromUrl = '';
   try {
     const host = req?.headers?.host || 'localhost';
-    const parsed = new URL(req?.url || '', `https://${host}`);
-    return parsed.searchParams.get(key) || '';
+    const rawUrl = req?.url || req?.originalUrl || '';
+    const url = new URL(rawUrl, `https://${host}`);
+    fromUrl = url.searchParams.get('user_id') || url.searchParams.get('userId') || '';
   } catch (e) {
-    return '';
+    fromUrl = '';
   }
+
+  const fromBody = body?.user_id || body?.userId || '';
+
+  return String(fromQuery || fromUrl || fromBody || '').trim();
 }
 
-function resolveUserId(req, body = null) {
-  const parsedBody = body || parseRequestBody(req);
-  return String(
-    getQueryValue(req, 'user_id') ||
-    getQueryValue(req, 'userId') ||
-    parsedBody?.user_id ||
-    parsedBody?.userId ||
-    ''
-  ).trim();
-}
-
-function isValidUuid(value = '') {
-  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(String(value || ''));
+function isValidUserId(value = '') {
+  const str = String(value || '').trim();
+  // O Supabase usa UUID, mas aqui aceitamos qualquer identificador não vazio
+  // que tenha formato seguro para filtro REST, evitando falso negativo por parsing da Vercel.
+  return /^[0-9a-zA-Z_-]{8,80}$/.test(str);
 }
 
 async function supabaseFetch(path, options = {}) {
@@ -140,7 +140,7 @@ export default async function handler(req, res) {
 
   try {
     const body = parseRequestBody(req);
-    const userId = resolveUserId(req, body);
+    const userId = getUserId(req, body);
     console.log('[contact-map][request]', {
       method: req.method,
       query: req.query || {},
@@ -150,7 +150,7 @@ export default async function handler(req, res) {
     });
 
     if (req.method === 'GET') {
-      if (!isValidUuid(userId)) throw new Error('user_id inválido ou ausente');
+      if (!isValidUserId(userId)) throw new Error('user_id inválido ou ausente');
       const maps = await listMaps({ userId });
       return res.status(200).json({ success:true, maps });
     }
@@ -161,7 +161,7 @@ export default async function handler(req, res) {
     const phoneReal = normalizePhone(body.phone_real || body.phoneReal || body.phone || '');
     const pushName = String(body.push_name || body.pushName || '').trim();
 
-    if (!isValidUuid(userId)) throw new Error('user_id inválido ou ausente');
+    if (!isValidUserId(userId)) throw new Error('user_id inválido ou ausente');
     if (!instance) throw new Error('instance ausente');
     if (!lid) throw new Error('lid ausente');
     if (!leadId) throw new Error('lead_id ausente');
