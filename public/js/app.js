@@ -306,8 +306,13 @@ document.addEventListener('DOMContentLoaded',setupMobileMenuV37);
 /* ════════════════════════════
    MENU CLEANUP V39
 ════════════════════════════ */
+function hasStaticFinalSidebarV414(sidebar = document.querySelector('.sidebar')) {
+  return !!(sidebar && sidebar.dataset.menuFinal === 'v41.4' && sidebar.querySelector('.menu-group-final'));
+}
+
 function cleanupSidebarMenuV39(){
   try {
+    if (hasStaticFinalSidebarV414()) return;
     if (typeof rebuildSidebarV40 === 'function') rebuildSidebarV40();
   } catch(e) {
     console.warn('cleanupSidebarMenuV39 protegido:', e?.message || e);
@@ -350,7 +355,7 @@ function ensureSidebarItemV40(sidebar, panel, icon, label, badge) {
 
 function rebuildSidebarV40() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar || sidebar.dataset.v411Grouped === 'true') return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.dataset.v411Grouped === 'true') return;
 
   const authBox =
     sidebar.querySelector('#authUserBox') ||
@@ -445,7 +450,7 @@ setTimeout(rebuildSidebarV40, 2000);
     }
 
     const sidebar = document.querySelector('.sidebar');
-    if (!sidebar || sidebar.dataset.v411Grouped === 'true') return;
+    if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.dataset.v411Grouped === 'true') return;
 
     const authBox = sidebar.querySelector('#authUserBox');
     let footer = document.getElementById('sidebarAuthFooterV40');
@@ -1668,7 +1673,7 @@ function createMenuGroupV41(title, items = []) {
   return frag;
 }
 function rebuildSidebarGroupedV41() {
-  const sidebar = document.querySelector('.sidebar'); if (!sidebar || sidebar.dataset.v41Grouped === 'true') return;
+  const sidebar = document.querySelector('.sidebar'); if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.dataset.v41Grouped === 'true') return;
   sidebar.innerHTML = '';
   const header=document.createElement('div'); header.className='sidebar-v41-header'; header.innerHTML='<div class="sidebar-v41-hello">Olá, Samuel 👋</div><div class="sidebar-v41-sub">CRM de Prospecção</div>'; sidebar.appendChild(header);
   sidebar.appendChild(createMenuItemV41('busca','🔎','Busca'));
@@ -1768,7 +1773,7 @@ function createExpandableMenuGroupV411(title, icon, items = [], open = false) {
 
 function rebuildSidebarGroupedV41() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar || sidebar.dataset.v411Grouped === 'true') return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.dataset.v411Grouped === 'true') return;
 
   sidebar.innerHTML = '';
 
@@ -2235,7 +2240,7 @@ if (document.readyState === 'loading') {
 ════════════════════════════ */
 function forceSidebarGroupedV412() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar) return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar)) return;
 
   // Se já está com o menu novo e possui grupos expansíveis, apenas atualiza badges.
   if (sidebar.querySelector('.sidebar-v411-group')) {
@@ -2268,7 +2273,7 @@ function disableLegacySidebarRebuildersV412() {
 
 function watchSidebarV412() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar || sidebar.__v412Watcher) return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.__v412Watcher) return;
   sidebar.__v412Watcher = true;
 
   const observer = new MutationObserver(() => {
@@ -2352,6 +2357,7 @@ function createExpandableMenuGroupV413(title, items = []) {
 function buildFinalSidebarV413() {
   const sidebar = document.querySelector('.sidebar');
   if (!sidebar) return false;
+  if (hasStaticFinalSidebarV414(sidebar)) return true;
 
   sidebar.innerHTML = '';
 
@@ -2405,7 +2411,7 @@ function buildFinalSidebarV413() {
 
 function ensureFinalSidebarV413() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar) return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar)) return;
 
   const txt = sidebar.textContent || '';
   const hasOldMenu = /PRINCIPAL|LEADS|ENVIO|RESULTADOS|Conectado|Fila WhatsApp/i.test(txt);
@@ -2416,7 +2422,7 @@ function ensureFinalSidebarV413() {
 
 function installSidebarWatchV413() {
   const sidebar = document.querySelector('.sidebar');
-  if (!sidebar || sidebar.__v413Watch) return;
+  if (!sidebar || hasStaticFinalSidebarV414(sidebar) || sidebar.__v413Watch) return;
   sidebar.__v413Watch = true;
 
   const observer = new MutationObserver(() => {
