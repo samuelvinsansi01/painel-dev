@@ -28,6 +28,8 @@ function getAllSearchableLeads() {
     Object.values(filaDisparo || {}).flat().forEach(lead => add(lead, 'Fila WhatsApp'));
   } catch {}
 
+  try { getLeadBaseData().forEach(lead => add(lead, 'Base permanente')); } catch {}
+
   return [...byId.values()];
 }
 

@@ -36,7 +36,12 @@ function importPreview() {
   // deduplication check
   const data = ensureWeekData();
   const valFila = getValData();
-  const existPhones = new Set([...getAllPhones(data), ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)]);
+  const permanent = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
+  const existPhones = new Set([
+    ...getAllPhones(data),
+    ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean),
+    ...permanent.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)
+  ]);
   const novos = validos.filter(i => {
     const ph = normalizePhone(extractPhone(i));
     return !existPhones.has(ph);
@@ -93,8 +98,17 @@ function importarLeads() {
 
   const data = ensureWeekData();
   const valFila = getValData();
-  const existPhones = new Set([...getAllPhones(data), ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)]);
-  const existSites  = new Set([...getAllSites(data),  ...valFila.map(v => extractDomain(v.site||'')).filter(Boolean)]);
+  const permanent = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
+  const existPhones = new Set([
+    ...getAllPhones(data),
+    ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean),
+    ...permanent.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)
+  ]);
+  const existSites  = new Set([
+    ...getAllSites(data),
+    ...valFila.map(v => extractDomain(v.site||'')).filter(Boolean),
+    ...permanent.map(v => extractDomain(v.site||'')).filter(Boolean)
+  ]);
 
   // dedup instagram também
   const instaFila = getInstaFila();

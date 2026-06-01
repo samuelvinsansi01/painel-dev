@@ -291,7 +291,11 @@ function removerDaAtribuicao(id) {
 ════════════════════════════ */
 const ZAP_BACKLOG_KEY = 'vin_zap_backlog';
 function getZapBacklog()   { return getStoredArray(ZAP_BACKLOG_KEY); }
-function saveZapBacklog(d) { localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveZapBacklog(d) {
+  localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d));
+  if (typeof mergeLeadsIntoPermanentBase === 'function') mergeLeadsIntoPermanentBase(d, { source:'Backlog WhatsApp' });
+  scheduleLegacyOperationalSyncV36();
+}
 
 function mandarParaBacklogZap(id) {
   const atrib = getAtribuicaoData();

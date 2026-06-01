@@ -5,6 +5,7 @@ const OPERATIONAL_SUPABASE_TABLE_V36 = 'operational_data';
 
 const OPERATIONAL_DATA_KEYS_V36 = {
   leadCrm: 'vs_lead_crm_v1',
+  permanentLeads: LEADS_BASE_KEY,
   weeklyLeads: EMPRESAS_KEY,
   weeklyHistory: HISTORY_KEY,
   monthlyTracking: ACOMP_KEY,
@@ -71,6 +72,7 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
   });
 
   try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
+  if (typeof reconcilePermanentLeadBase === 'function') reconcilePermanentLeadBase({ schedule:false });
   if (typeof updateBadges === 'function') updateBadges();
   if (typeof updateWhatsappQueueBadge === 'function') updateWhatsappQueueBadge();
   if (typeof updateChipsBadge === 'function') updateChipsBadge();

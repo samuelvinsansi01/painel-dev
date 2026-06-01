@@ -150,6 +150,84 @@ function getStoredObject(key) {
     return {};
   }
 }
+
+const PERMANENT_LEAD_STATUS_RANK = {
+  'Não enviada': 0,
+  'Em fila': 1,
+  'Enviada': 2,
+  'Não respondida': 3,
+  'Respondida': 4,
+  'Recusada': 5,
+  'Fechada': 6
+};
+
+function getLeadBaseData() {
+  return getStoredArray(LEADS_BASE_KEY);
+}
+
+function choosePermanentLeadStatus(previous = '', incoming = '') {
+  const before = previous || 'Não enviada';
+  const next = incoming || before;
+  const beforeRank = PERMANENT_LEAD_STATUS_RANK[before] ?? 0;
+  const nextRank = PERMANENT_LEAD_STATUS_RANK[next] ?? 0;
+
+  // A base permanente não pode regredir um lead que já recebeu mensagem.
+  if (beforeRank >= 2 && nextRank < beforeRank) return before;
+  return next;
+}
+
+function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = true } = {}) {
+  if (!Array.isArray(leads) || !leads.length) return getLeadBaseData();
+
+  const now = new Date().toISOString();
+  const map = new Map(getLeadBaseData().filter(lead => lead?.id).map(lead => [lead.id, lead]));
+
+  leads.forEach(lead => {
+    if (!lead?.id) return;
+    const previous = map.get(lead.id) || {};
+    map.set(lead.id, {
+      ...previous,
+      ...lead,
+      id: lead.id,
+      status: choosePermanentLeadStatus(previous.status, lead.status),
+      baseSource: metadata.source || lead.baseSource || previous.baseSource || 'Fluxo local',
+      permanentCreatedAt: previous.permanentCreatedAt || lead.permanentCreatedAt || lead.created_at || now,
+      permanentUpdatedAt: now
+    });
+  });
+
+  const merged = [...map.values()];
+  localStorage.setItem(LEADS_BASE_KEY, JSON.stringify(merged));
+
+  if (schedule) {
+    if (typeof scheduleSupabaseLeadSync === 'function') scheduleSupabaseLeadSync();
+    if (typeof scheduleLegacyOperationalSyncV36 === 'function') scheduleLegacyOperationalSyncV36();
+  }
+
+  return merged;
+}
+
+function reconcilePermanentLeadBase({ schedule = true } = {}) {
+  const gathered = [];
+  const collect = (items, source) => {
+    (Array.isArray(items) ? items : []).forEach(lead => {
+      if (lead?.id) gathered.push({ ...lead, baseSource: lead.baseSource || source });
+    });
+  };
+
+  try { collect(Object.values(getWeekData()?.days || {}).flat(), 'Agenda semanal'); } catch {}
+  try { collect(Object.values(getHistoryData()?.days || {}).flat(), 'Histórico semanal'); } catch {}
+  try { collect(getValData(), 'Validação'); } catch {}
+  try { collect(getAtribuicaoData(), 'Atribuição'); } catch {}
+  try { collect(getInstaFila(), 'Instagram'); } catch {}
+  try { collect(getZapBacklog(), 'Backlog WhatsApp'); } catch {}
+  try { collect(Object.values(getAcompData() || {}).flat(), 'Acompanhamento'); } catch {}
+  try { collect(Object.values(typeof getInstaWeek === 'function' ? getInstaWeek() : {}).flat(), 'Agenda Instagram'); } catch {}
+  try { collect(Object.values(filaDisparo || {}).flat(), 'Fila de disparo'); } catch {}
+
+  return mergeLeadsIntoPermanentBase(gathered, {}, { schedule });
+}
+
 function getWeekData()  {
   try {
     const data = JSON.parse(localStorage.getItem(EMPRESAS_KEY) || 'null');
@@ -158,13 +236,19 @@ function getWeekData()  {
     return null;
   }
 }
-function saveWeekData(d){ localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d)); scheduleSupabaseLeadSync(); scheduleLegacyOperationalSyncV36(); }
+function saveWeekData(d){
+  localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(Object.values(d?.days || {}).flat(), { source:'Agenda semanal' });
+  scheduleSupabaseLeadSync();
+  scheduleLegacyOperationalSyncV36();
+}
 function ensureWeekData() {
   let d = getWeekData(); const ws = currentWeekStartStr();
   if (!d || d.weekStart !== ws) {
     // Virada de semana detectada
     if (d) {
       const flat = Object.values(d.days||{}).flat();
+      mergeLeadsIntoPermanentBase(flat, { source:'Histórico semanal' });
 
       // Leads pós-envio (Enviada e além) → migrar para base mensal
       const STATUS_MENSAIS = ['Enviada','Respondida','Não respondida','Recusada','Fechada'];
@@ -238,7 +322,11 @@ function getHistoryData() {
    STORAGE — ACOMPANHAMENTO MENSAL
 ════════════════════════════ */
 function getAcompData()  { return getStoredObject(ACOMP_KEY); }
-function saveAcompData(d){ localStorage.setItem(ACOMP_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveAcompData(d){
+  localStorage.setItem(ACOMP_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(Object.values(d || {}).flat(), { source:'Acompanhamento' });
+  scheduleLegacyOperationalSyncV36();
+}
 function currentMonthKey() {
   const now = new Date();
   return `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
@@ -266,17 +354,29 @@ function getAllSites(d)  { return new Set(flattenWeekData(d).map(e => extractDom
    STORAGE — VALIDAÇÃO FILA
 ════════════════════════════ */
 function getValData()  { return getStoredArray(VAL_KEY); }
-function saveValData(d){ localStorage.setItem(VAL_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveValData(d){
+  localStorage.setItem(VAL_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Validação' });
+  scheduleLegacyOperationalSyncV36();
+}
 
 /* ════════════════════════════
    STORAGE — BASE DE ATRIBUIÇÃO
 ════════════════════════════ */
 function getAtribuicaoData()  { return getStoredArray(ATRIBUICAO_KEY); }
-function saveAtribuicaoData(d){ localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveAtribuicaoData(d){
+  localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Atribuição' });
+  scheduleLegacyOperationalSyncV36();
+}
 
 
 function getInstaFila()  { return getStoredArray(INSTA_KEY); }
-function saveInstaFila(d){ localStorage.setItem(INSTA_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveInstaFila(d){
+  localStorage.setItem(INSTA_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Instagram' });
+  scheduleLegacyOperationalSyncV36();
+}
 
 function recuperarValidacaoZapDoDia() {
   if (localStorage.getItem(RECUPERAR_VALIDACAO_ZAP_KEY) === '1') return 0;

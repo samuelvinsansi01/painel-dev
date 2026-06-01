@@ -172,36 +172,16 @@ async function loadSupabaseLeadsToLocalState({ preserveWorkflow = false } = {}) 
     site: item.website || '',
     googleUrl: item.maps_url || '',
     status: item.status || 'Não enviada',
+    pipelineStatus: item.pipeline_status || 'contato_enviado',
+    permanentCreatedAt: item.created_at || '',
+    baseSource: 'Supabase',
     criadoEm: item.created_at
       ? new Date(item.created_at).toLocaleDateString('pt-BR')
       : today
   }));
 
-  const localWeek = getWeekData();
-  const hasLocalWorkflow = Object.values(localWeek?.days || {}).flat().length > 0
-    || getValData().length > 0
-    || getAtribuicaoData().length > 0
-    || getInstaFila().length > 0
-    || getZapBacklog().length > 0;
-
-  if (!preserveWorkflow && !hasLocalWorkflow) {
-    const needsValidation = leads.filter(lead =>
-      !lead.status || lead.status === 'Não enviada' || lead.status === 'Em fila'
-    );
-    const processed = leads.filter(lead => !needsValidation.includes(lead));
-    const weekData = {
-      weekStart: currentWeekStartStr(),
-      days: processed.length ? { [today]: processed } : {}
-    };
-
-    saveWeekData(weekData);
-    saveValData(needsValidation.map(lead => ({
-      ...lead,
-      canal: 'pendente',
-      numStatus: 'pendente',
-      status: 'Não enviada',
-      importadoEm: lead.criadoEm || today
-    })));
+  if (typeof mergeLeadsIntoPermanentBase === 'function') {
+    mergeLeadsIntoPermanentBase(leads, { source:'Supabase' }, { schedule:false });
   }
   renderInicio();
   updateBadges();
@@ -384,6 +364,12 @@ function findLeadEverywhere(id) {
     const f = (fila || []).find(e => e.id === id);
     if (f) return f;
   }
+
+  const permanent = typeof getLeadBaseData === 'function'
+    ? getLeadBaseData().find(e => e.id === id)
+    : null;
+  if (permanent) return permanent;
+
   return null;
 }
 

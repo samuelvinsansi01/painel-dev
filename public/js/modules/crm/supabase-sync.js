@@ -74,6 +74,9 @@ async function upsertLeadToSupabase(lead = {}) {
 async function syncAllLocalLeadsToSupabase() {
   if (!isSupabaseReady()) return;
 
+  const permanentLeads = typeof reconcilePermanentLeadBase === 'function'
+    ? reconcilePermanentLeadBase({ schedule:false })
+    : (typeof getLeadBaseData === 'function' ? getLeadBaseData() : []);
   const data = ensureWeekData();
   const weekLeads = Object.values(data.days || {}).flat();
 
@@ -83,7 +86,7 @@ async function syncAllLocalLeadsToSupabase() {
   try { extras.push(...getInstaFila()); } catch {}
   try { extras.push(...getZapBacklog()); } catch {}
 
-  const all = [...weekLeads, ...extras];
+  const all = [...permanentLeads, ...weekLeads, ...extras];
   const unique = new Map();
   all.forEach(lead => {
     if (lead?.id) unique.set(lead.id, lead);
@@ -111,6 +114,9 @@ async function loadSupabaseAsPrimarySource(options = {}) {
   if (typeof loadSupabaseLeadCrmToLocalState === 'function') {
     await loadSupabaseLeadCrmToLocalState();
   }
+
+  await syncAllLocalLeadsToSupabase();
+  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36();
 
   setSyncState({
     lastLoadedAt: new Date().toISOString()

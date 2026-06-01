@@ -30,6 +30,7 @@
 
   renderRamoSelect();
   ensureWeekData();
+  if (typeof reconcilePermanentLeadBase === 'function') reconcilePermanentLeadBase();
   migrarChavesInstaWeek();
   sincronizarFilaComEnviados();
   const recuperadosValidacao = recuperarValidacaoZapDoDia();

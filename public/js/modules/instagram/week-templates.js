@@ -3,7 +3,11 @@
 ════════════════════════════ */
 // getInstaFila / saveInstaFila definidas acima — sem duplicata
 function getInstaWeek()    { return getStoredObject(INSTA_WEEK_KEY); }
-function saveInstaWeek(d)  { localStorage.setItem(INSTA_WEEK_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
+function saveInstaWeek(d)  {
+  localStorage.setItem(INSTA_WEEK_KEY, JSON.stringify(d));
+  if (typeof mergeLeadsIntoPermanentBase === 'function') mergeLeadsIntoPermanentBase(Object.values(d || {}).flat(), { source:'Agenda Instagram' });
+  scheduleLegacyOperationalSyncV36();
+}
 
 /* ── MIGRAÇÃO: normaliza chaves antigas para dd/mm/aaaa ── */
 function migrarChavesInstaWeek() {

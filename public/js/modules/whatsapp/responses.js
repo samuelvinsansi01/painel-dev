@@ -45,7 +45,9 @@ function findLeadByPhoneV34(phone) {
   if (!target) return null;
 
   const data = ensureWeekData ? ensureWeekData() : { days:{} };
-  const leads = flattenWeekData ? flattenWeekData(data) : [];
+  const weeklyLeads = flattenWeekData ? flattenWeekData(data) : [];
+  const permanentLeads = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
+  const leads = [...weeklyLeads, ...permanentLeads];
 
   for (const lead of leads) {
     const current = normalizePhoneV34(lead.whatsapp || lead.phone || lead.telefone || '');

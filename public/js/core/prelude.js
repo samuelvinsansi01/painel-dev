@@ -77,6 +77,7 @@ const INSTA_SCHED_KEY = 'vs_insta_sched_v1'; // cronograma instagram
 const FILA_DISPARO_KEY = 'vs_fila_disparo_v1'; // fila de disparo WhatsApp
 const RECUPERAR_VALIDACAO_ZAP_KEY = 'vs_recover_validacao_zap_v1';
 const LEAD_CRM_KEY   = 'vs_lead_crm_v1'; // notas, histórico e pipeline comercial
+const LEADS_BASE_KEY = 'vs_leads_base_v1'; // inventário permanente, independente da agenda semanal
 
 // Supabase — usado primeiro apenas para login Google.
 // Ainda não mexe nos leads e ainda não substitui o localStorage.
@@ -175,6 +176,7 @@ function renderAuthUser(user) {
 function clearLocalSessionData() {
   localStorage.removeItem('vs_empresas_v2');
   localStorage.removeItem('vs_lead_crm_v1');
+  localStorage.removeItem('vs_leads_base_v1');
   localStorage.removeItem(SYNC_STATE_KEY);
   updateAuthGate();
   try { rebuildSidebarV40(); } catch(e){}
@@ -248,6 +250,7 @@ async function loginGoogle() {
 async function logoutSupabase() {
   localStorage.removeItem('vs_empresas_v2');
   localStorage.removeItem('vs_lead_crm_v1');
+  localStorage.removeItem('vs_leads_base_v1');
 
   currentUser = null;
 

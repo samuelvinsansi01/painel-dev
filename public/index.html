@@ -218,6 +218,39 @@
     </div>
   </div>
 
+  <div class="stretch-card" style="margin-top:16px">
+    <div class="card-title" style="flex-shrink:0">
+      Base permanente de leads
+      <span id="leadBaseTotalBadge" class="history-badge"></span>
+    </div>
+    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:12px">
+      // inventário completo · leads antigos permanecem disponíveis mesmo fora da agenda semanal
+    </div>
+    <div class="status-tabs" id="leadBaseFilterTabs"></div>
+    <div class="btn-row" style="margin-bottom:10px">
+      <button class="btn btn-primary" onclick="prepareSelectedPermanentLeads()">Recuperar selecionados</button>
+      <button class="btn btn-ghost" onclick="selectVisiblePermanentPendingLeads()">Selecionar pendentes visíveis</button>
+      <span id="leadBaseSelectedLabel" style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted)">0 selecionados</span>
+    </div>
+    <div style="margin-bottom:10px;flex-shrink:0">
+      <input id="leadBaseSearch" type="text" placeholder="🔍 Buscar em toda a base por nome, site ou WhatsApp..."
+        oninput="leadBasePage=1;renderLeadBasePanel()"
+        style="background:var(--bg);border:1px solid var(--border2);border-radius:var(--radius);color:var(--text);font-family:'DM Mono',monospace;font-size:11px;padding:10px 13px;width:100%;outline:none;transition:border-color 0.2s"
+        onfocus="this.style.borderColor='var(--accent)'" onblur="this.style.borderColor='var(--border2)'"/>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr><th></th><th>Empresa</th><th>WhatsApp</th><th>Local atual</th><th>Status</th><th>Origem</th><th></th></tr>
+        </thead>
+        <tbody id="leadBaseTbody">
+          <tr><td colspan="7" class="table-empty">Carregando base permanente...</td></tr>
+        </tbody>
+      </table>
+      <div id="leadBasePagination"></div>
+    </div>
+  </div>
+
   <!-- SITES JÁ VISTOS — abaixo dos leads ativos -->
   <div class="card" style="margin-top:16px">
     <div class="card-title">Sites já vistos <span id="excludedCount" style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
@@ -1317,6 +1350,7 @@
   <script src="js/core/legacy-state.js"></script>
   <script src="js/modules/assignment.js"></script>
   <script src="js/core/navigation-storage.js"></script>
+  <script src="js/modules/leads-base.js"></script>
   <script src="js/modules/imports-validation.js"></script>
   <script src="js/modules/imports/home-dashboard.js"></script>
   <script src="js/modules/imports/workflow-actions.js"></script>

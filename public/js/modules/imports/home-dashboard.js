@@ -103,6 +103,7 @@ function renderInicio() {
   const sel = document.getElementById('exportDaySelect');
   if (sel) sel.innerHTML = '<option value="">Exportar dia...</option>' + weekDays.map(d => `<option value="${d}">${dayLabel(d)}</option>`).join('');
   renderHistory();
+  if (typeof renderLeadBasePanel === 'function') renderLeadBasePanel();
   renderExcluidos();
   renderFollowUpsHome();
 }
