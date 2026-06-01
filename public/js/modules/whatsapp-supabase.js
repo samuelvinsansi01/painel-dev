@@ -40,6 +40,26 @@ function getPhoneFromConversationKeyV412(key = '') {
   return isPhoneConversationKeyV412(key) ? String(key).slice(6) : '';
 }
 
+function getFallbackContactIdentityByPhoneV416(phone = '') {
+  const normalizedPhone = normalizeWhatsappDigitsV412(phone);
+  if (!normalizedPhone) return { name:'', isLid:false, remoteJid:'', subtitle:'' };
+
+  const messages = getSupabaseWhatsappMessagesV412()
+    .filter(item => phonesMatchV412(item.phone, normalizedPhone))
+    .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')));
+
+  const withPushName = messages.find(item => String(item.pushName || '').trim());
+  const anyLid = messages.find(item => item.isLid || /@lid$/i.test(String(item.remoteJid || '')));
+  const name = String(withPushName?.pushName || '').trim();
+  const isLid = !!anyLid || (!String(normalizedPhone).startsWith('55') && String(normalizedPhone).length > 12);
+  return {
+    name,
+    isLid,
+    remoteJid: String(anyLid?.remoteJid || withPushName?.remoteJid || '').trim(),
+    subtitle: isLid ? `Identificador WhatsApp: ${normalizedPhone}` : normalizedPhone
+  };
+}
+
 function loadSupabaseWhatsappMessagesCacheV412() {
   try {
     const data = JSON.parse(localStorage.getItem(WHATSAPP_MESSAGES_CACHE_V412_KEY) || '[]');
@@ -105,7 +125,46 @@ function buildOutgoingWhatsappExternalIdV412(prefix = 'out', response = {}) {
   return [prefix, safeEvolutionId, suffix].filter(Boolean).join('_');
 }
 
+function getWhatsappRawPayloadV416(rowOrMessage = {}) {
+  const raw = rowOrMessage.raw_payload || rowOrMessage.rawPayload || null;
+  if (!raw) return null;
+  if (typeof raw === 'object') return raw;
+  try { return JSON.parse(raw); } catch(e) { return null; }
+}
+
+function getWhatsappPushNameV416(rowOrMessage = {}) {
+  const raw = getWhatsappRawPayloadV416(rowOrMessage);
+  return String(
+    rowOrMessage.pushName ||
+    rowOrMessage.push_name ||
+    rowOrMessage.pushname ||
+    raw?.data?.pushName ||
+    raw?.data?.pushname ||
+    raw?.pushName ||
+    raw?.pushname ||
+    ''
+  ).trim();
+}
+
+function getWhatsappRemoteJidV416(rowOrMessage = {}) {
+  const raw = getWhatsappRawPayloadV416(rowOrMessage);
+  return String(
+    rowOrMessage.remoteJid ||
+    rowOrMessage.remote_jid ||
+    raw?.data?.key?.remoteJid ||
+    raw?.data?.remoteJid ||
+    raw?.remoteJid ||
+    ''
+  ).trim();
+}
+
+function isWhatsappLidMessageV416(rowOrMessage = {}) {
+  const remoteJid = getWhatsappRemoteJidV416(rowOrMessage);
+  return /@lid$/i.test(remoteJid);
+}
+
 function normalizeSupabaseWhatsappMessageV412(row = {}) {
+  const rawPayload = getWhatsappRawPayloadV416(row);
   return {
     id: row.external_id || row.id,
     dbId: row.id || '',
@@ -118,7 +177,11 @@ function normalizeSupabaseWhatsappMessageV412(row = {}) {
     status: row.status || '',
     receivedAt: row.occurred_at || row.created_at || '',
     readAt: row.read_at || '',
-    read: !!row.read_at
+    read: !!row.read_at,
+    rawPayload,
+    pushName: getWhatsappPushNameV416(row),
+    remoteJid: getWhatsappRemoteJidV416(row),
+    isLid: isWhatsappLidMessageV416(row)
   };
 }
 
@@ -212,7 +275,7 @@ async function fetchEvolutionResponsesV34(options = {}) {
     await flushPendingOutgoingWhatsappMessagesV412();
     const { data, error } = await sbClient
       .from('whatsapp_messages')
-      .select('id,external_id,lead_id,instance,phone,phone_normalized,direction,message_type,body,status,occurred_at,read_at,created_at')
+      .select('id,external_id,lead_id,instance,phone,phone_normalized,direction,message_type,body,status,occurred_at,read_at,created_at,raw_payload')
       .eq('user_id', currentUser.id)
       .order('occurred_at', { ascending: false })
       .limit(500);
@@ -357,10 +420,21 @@ function getConversationLeadFromKeyV412(key = '') {
   if (isPhoneConversationKeyV412(key)) {
     const phone = getPhoneFromConversationKeyV412(key);
     const lead = findLeadByPhoneV412(phone);
+    const fallbackIdentity = getFallbackContactIdentityByPhoneV416(phone);
     return {
       leadId: lead?.id || '',
-      lead: lead || { id:key, nome:`Número ${phone}`, phone, whatsapp:phone },
-      phone
+      lead: lead || {
+        id:key,
+        nome:fallbackIdentity.name || `Número ${phone}`,
+        phone,
+        whatsapp:phone,
+        isLid:fallbackIdentity.isLid,
+        whatsappIdentifier: fallbackIdentity.isLid ? phone : '',
+        subtitle: fallbackIdentity.subtitle || phone
+      },
+      phone,
+      isLid: fallbackIdentity.isLid,
+      subtitle: fallbackIdentity.subtitle || phone
     };
   }
   const lead = findLeadEverywhere(key) || { id:key, nome:'Lead' };
@@ -437,7 +511,10 @@ function getConversationMessagesV38(conversationKey) {
       status: message.status,
       at: message.receivedAt,
       atLabel: message.receivedAt ? new Date(message.receivedAt).toLocaleString('pt-BR') : '',
-      read: message.read
+      read: message.read,
+      pushName: message.pushName || '',
+      remoteJid: message.remoteJid || '',
+      isLid: !!message.isLid
     });
   });
 
@@ -492,12 +569,16 @@ function renderConversationChatV38() {
   const lead = resolved.lead || { nome:'Lead' };
   const messages = getConversationMessagesV38(activeConversationLeadV38);
   const phone = normalizeWhatsappDigitsV412(resolved.phone || lead.whatsapp || lead.phone || lead.telefone || '');
-  const canReply = !!phone;
+  const canReply = !!phone && !lead.isLid;
+  const chatTitle = lead.nome || lead.name || 'Lead';
+  const chatMeta = lead.isLid
+    ? (lead.subtitle || `Identificador WhatsApp: ${phone}`)
+    : (phone ? (resolved.leadId ? `Chip: ${messages.find(m => m.instance)?.instance || 'prospecto'}` : phone) : 'sem telefone');
 
   box.innerHTML = `
     <div class="conversation-chat-header-v38">
-      <div class="conversation-chat-title-v38">${escHtml(lead.nome || lead.name || 'Lead')}</div>
-      <div class="conversation-chat-meta-v38">${escHtml(phone || 'sem telefone')}</div>
+      <div class="conversation-chat-title-v38">${escHtml(chatTitle)}</div>
+      <div class="conversation-chat-meta-v38">${escHtml(chatMeta)}</div>
     </div>
 
     <div class="conversation-messages-v38">
@@ -809,7 +890,7 @@ function renderInboxV41() {
       <div>
         <div class="inbox-v41-title">${escHtml(item.lead?.nome || 'Lead')}</div>
         <div class="inbox-v41-message">${escHtml(item.text || '[mensagem sem texto]')}</div>
-        <div class="inbox-v41-meta">${item.pending ? 'lead não identificado · ' : ''}whatsapp · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div>
+        <div class="inbox-v41-meta">${item.pending ? (item.lead?.isLid ? 'contato via LID · ' : 'lead não identificado · ') : ''}${item.lead?.subtitle ? escHtml(item.lead.subtitle) + ' · ' : ''}whatsapp · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div>
       </div>
       <div class="inbox-v41-actions">
         <button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.conversationKey || item.leadId)}')">Abrir</button>${item.leadId ? `<button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button>` : '<span class="queue-v27-status erro">sem lead</span>'}
