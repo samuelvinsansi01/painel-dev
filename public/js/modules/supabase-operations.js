@@ -30,6 +30,7 @@ const OPERATIONAL_DATA_KEYS_V36 = {
   dispatchLogs: 'vs_dispatch_v30_log',
   dispatchRuntime: 'vs_dispatch_runtime_v32',
   evolutionResponses: 'vs_evolution_responses_v34',
+  whatsappOutbox: 'vs_whatsapp_outbox_v412',
   evolutionSettings: 'vs_evolution_settings_v1'
 };
 
@@ -175,16 +176,67 @@ create table if not exists public.operational_data (
 
 alter table public.operational_data enable row level security;
 
+drop policy if exists "operational_data_select_own" on public.operational_data;
 create policy "operational_data_select_own"
 on public.operational_data for select
 using (auth.uid() = user_id);
 
+drop policy if exists "operational_data_insert_own" on public.operational_data;
 create policy "operational_data_insert_own"
 on public.operational_data for insert
 with check (auth.uid() = user_id);
 
+drop policy if exists "operational_data_update_own" on public.operational_data;
 create policy "operational_data_update_own"
 on public.operational_data for update
+using (auth.uid() = user_id)
+with check (auth.uid() = user_id);
+
+create table if not exists public.whatsapp_messages (
+  id uuid primary key default gen_random_uuid(),
+  external_id text not null,
+  user_id uuid references auth.users(id) on delete cascade,
+  lead_id text,
+  instance text not null,
+  phone text,
+  phone_normalized text,
+  direction text not null check (direction in ('in', 'out')),
+  message_type text not null default 'text',
+  body text not null default '',
+  status text,
+  occurred_at timestamptz not null default now(),
+  read_at timestamptz,
+  updated_at timestamptz not null default now(),
+  created_at timestamptz not null default now()
+);
+
+alter table public.whatsapp_messages add column if not exists user_id uuid references auth.users(id) on delete cascade;
+alter table public.whatsapp_messages add column if not exists lead_id text;
+alter table public.whatsapp_messages add column if not exists phone_normalized text;
+alter table public.whatsapp_messages add column if not exists read_at timestamptz;
+alter table public.whatsapp_messages add column if not exists updated_at timestamptz not null default now();
+
+create unique index if not exists whatsapp_messages_instance_external_id
+on public.whatsapp_messages(instance, external_id);
+
+create index if not exists whatsapp_messages_user_occurred_at
+on public.whatsapp_messages(user_id, occurred_at desc);
+
+alter table public.whatsapp_messages enable row level security;
+
+drop policy if exists "whatsapp_messages_select_own" on public.whatsapp_messages;
+create policy "whatsapp_messages_select_own"
+on public.whatsapp_messages for select
+using (auth.uid() = user_id);
+
+drop policy if exists "whatsapp_messages_insert_own" on public.whatsapp_messages;
+create policy "whatsapp_messages_insert_own"
+on public.whatsapp_messages for insert
+with check (auth.uid() = user_id);
+
+drop policy if exists "whatsapp_messages_update_own" on public.whatsapp_messages;
+create policy "whatsapp_messages_update_own"
+on public.whatsapp_messages for update
 using (auth.uid() = user_id)
 with check (auth.uid() = user_id);
 `;

@@ -108,7 +108,20 @@ async function dispatchOneItemV32(item, chip) {
     queueItem.sentAtLabel = crmNowLabel();
     queueItem.sentBlock = registerChipSendV31 ? registerChipSendV31(chip) : '';
     queueItem.response = data;
+    queueItem.externalId = typeof getEvolutionWhatsappExternalIdV412 === 'function'
+      ? getEvolutionWhatsappExternalIdV412(data, queueItem.id)
+      : queueItem.id;
     saveWhatsappQueueV27(queue);
+    if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+      persistOutgoingWhatsappMessageV412({
+        id: queueItem.externalId,
+        leadId: queueItem.leadId || '',
+        instance: chipConfigV405.instance,
+        phone,
+        text,
+        occurredAt: queueItem.sentAt
+      }).catch(() => {});
+    }
 
     if (queueItem.leadId) {
       addLeadHistory(queueItem.leadId, `Mensagem enviada em massa via ${chip.name} · Template: ${queueItem.templateName}`, findLeadEverywhere(queueItem.leadId) || {});

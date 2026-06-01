@@ -7,7 +7,7 @@ function normalizePhone(value = '') {
   return String(value).replace(/\D/g, '');
 }
 
-function extractMessage(payload = {}) {
+function extractMessage(payload = {}, userId = '') {
   const data = payload.data || payload;
   const key = data.key || {};
   const msg = data.message || data.messageData || {};
@@ -39,6 +39,7 @@ function extractMessage(payload = {}) {
 
   return {
     externalId: key.id || data.id || `evt_${Date.now()}_${Math.random().toString(36).slice(2)}`,
+    userId,
     instance: String(payload.instance || data.instance || '').trim(),
     phone,
     direction: Boolean(key.fromMe || data.fromMe) ? 'out' : 'in',
@@ -46,6 +47,20 @@ function extractMessage(payload = {}) {
     body: text,
     occurredAt: new Date().toISOString()
   };
+}
+
+function getUserId(req, payload = {}) {
+  return String(
+    req.query?.user_id ||
+    req.headers['x-supabase-user-id'] ||
+    payload.user_id ||
+    payload.data?.user_id ||
+    ''
+  ).trim();
+}
+
+function isValidUuid(value = '') {
+  return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(value);
 }
 
 function getProvidedSecret(req) {
@@ -79,6 +94,7 @@ async function persistMessage(message) {
     headers,
     body: JSON.stringify({
       external_id: message.externalId,
+      user_id: message.userId,
       instance: message.instance,
       phone: message.phone,
       direction: message.direction,
@@ -113,7 +129,15 @@ export default async function handler(req, res) {
   }
 
   try {
-    const message = extractMessage(req.body || {});
+    const userId = getUserId(req, req.body || {});
+    if (!isValidUuid(userId)) {
+      return res.status(400).json({
+        success: false,
+        error: 'Webhook sem user_id válido. Copie novamente a URL exibida no CRM.'
+      });
+    }
+
+    const message = extractMessage(req.body || {}, userId);
 
     if (!message.phone || !message.instance) {
       return res.status(200).json({

@@ -199,6 +199,19 @@ async function startDispatchV30() {
         item.sentAt = new Date().toISOString();
         item.sentAtLabel = crmNowLabel();
         item.response = data;
+        item.externalId = typeof getEvolutionWhatsappExternalIdV412 === 'function'
+          ? getEvolutionWhatsappExternalIdV412(data, item.id)
+          : item.id;
+        if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+          persistOutgoingWhatsappMessageV412({
+            id: item.externalId,
+            leadId: item.leadId || '',
+            instance: chipConfigV405.instance,
+            phone,
+            text,
+            occurredAt: item.sentAt
+          }).catch(() => {});
+        }
         sent++;
         addDispatchLogV30(`Enviado: ${item.nome} · ${chip.name} · bloco ${item.sentBlock || '--'}`);
         if (item.leadId) addLeadHistory(item.leadId, `Mensagem enviada em massa via ${chip.name} · Template: ${item.templateName}`, findLeadEverywhere(item.leadId) || {});

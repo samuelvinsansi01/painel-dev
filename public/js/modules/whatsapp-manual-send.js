@@ -249,6 +249,9 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   const crm = ensureLeadCrm(leadId, lead || {});
   const now = new Date().toISOString();
   const label = crmNowLabel();
+  const messageId = typeof getEvolutionWhatsappExternalIdV412 === 'function'
+    ? getEvolutionWhatsappExternalIdV412(payload.response, 'manual_' + Date.now())
+    : 'manual_' + Date.now();
 
   crm.whatsappStatus = {
     status: 'sent',
@@ -270,7 +273,7 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
 
   crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
   crm.messages.push({
-    id: 'manual_' + Date.now(),
+    id: messageId,
     direction: 'out',
     text: payload.text || '',
     phone: payload.phone || '',
@@ -284,6 +287,16 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   crm.pipelineStatus = crm.pipelineStatus || 'contato_enviado';
 
   saveLeadCrm(leadId, crm);
+  if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+    persistOutgoingWhatsappMessageV412({
+      id: messageId,
+      leadId,
+      instance: payload.instance || '',
+      phone: payload.phone || '',
+      text: payload.text || '',
+      occurredAt: now
+    }).catch(() => {});
+  }
 
   try {
     addLeadHistory(leadId, `Mensagem enviada via WhatsApp por ${payload.chipName || payload.instance || 'Evolution'}`, lead || {});

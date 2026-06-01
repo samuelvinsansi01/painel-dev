@@ -19,7 +19,9 @@ function saveLocalResponsesV34(list) {
 }
 
 function getWebhookUrlV34() {
-  return `${window.location.origin}/api/webhook/evolution`;
+  const userId = typeof currentUser !== 'undefined' ? currentUser?.id : '';
+  const query = userId ? `?user_id=${encodeURIComponent(userId)}` : '';
+  return `${window.location.origin}/api/webhook/evolution${query}`;
 }
 
 function renderWebhookUrlV34() {

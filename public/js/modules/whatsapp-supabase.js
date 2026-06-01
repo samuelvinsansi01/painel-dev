@@ -1,6 +1,46 @@
 /* ════════════════════════════
    SUPABASE WHATSAPP MESSAGES V41.2
 ════════════════════════════ */
+const WHATSAPP_OUTBOX_V412_KEY = 'vs_whatsapp_outbox_v412';
+
+function getPendingOutgoingWhatsappMessagesV412() {
+  try {
+    const data = JSON.parse(localStorage.getItem(WHATSAPP_OUTBOX_V412_KEY) || '[]');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+
+function savePendingOutgoingWhatsappMessagesV412(list = []) {
+  localStorage.setItem(WHATSAPP_OUTBOX_V412_KEY, JSON.stringify(list.slice(-500)));
+}
+
+function queuePendingOutgoingWhatsappMessageV412(message = {}) {
+  if (!message.id || !message.instance) return;
+  const list = getPendingOutgoingWhatsappMessagesV412();
+  const key = `${message.instance}:${message.id}`;
+  const pending = {
+    ...message,
+    userId: message.userId || currentUser?.id || '',
+    queuedAt: message.queuedAt || new Date().toISOString()
+  };
+  const index = list.findIndex(item => `${item.instance}:${item.id}` === key);
+  if (index >= 0) list[index] = { ...list[index], ...pending };
+  else list.push(pending);
+  savePendingOutgoingWhatsappMessagesV412(list);
+}
+
+function getEvolutionWhatsappExternalIdV412(response = {}, fallback = '') {
+  return String(
+    response?.key?.id ||
+    response?.id ||
+    response?.messageId ||
+    response?.message?.key?.id ||
+    fallback
+  );
+}
+
 function normalizeSupabaseWhatsappMessageV412(row = {}) {
   return {
     id: row.external_id || row.id,
@@ -105,6 +145,7 @@ async function fetchEvolutionResponsesV34(options = {}) {
   if (!sbClient || !currentUser?.id) return [];
 
   try {
+    await flushPendingOutgoingWhatsappMessagesV412();
     const { data, error } = await sbClient
       .from('whatsapp_messages')
       .select('id,external_id,lead_id,instance,phone,phone_normalized,direction,message_type,body,status,occurred_at,read_at,created_at')
@@ -248,23 +289,68 @@ function getConversationEvolutionConfigV412(leadId) {
   return instance ? { ...fallback, instance } : fallback;
 }
 
-async function persistOutgoingWhatsappMessageV412({ id, leadId, instance, phone, text, occurredAt }) {
-  if (!sbClient || !currentUser?.id || !instance) return;
+async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
+  const queueOnFailure = options.queueOnFailure !== false;
+  const payload = {
+    id: String(message.id || '').trim(),
+    leadId: String(message.leadId || '').trim(),
+    instance: String(message.instance || '').trim(),
+    phone: String(message.phone || '').replace(/\D/g, ''),
+    text: String(message.text || ''),
+    occurredAt: message.occurredAt || new Date().toISOString(),
+    userId: message.userId || currentUser?.id || ''
+  };
+
+  if (!payload.id || !payload.instance || !payload.userId || !sbClient || currentUser?.id !== payload.userId) {
+    if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+    return { ok:false, pending:queueOnFailure, error:'Supabase indisponível ou sessão ausente' };
+  }
+
   const { error } = await sbClient
     .from('whatsapp_messages')
     .upsert({
-      external_id: id,
-      user_id: currentUser.id,
-      lead_id: leadId,
-      instance: String(instance).trim(),
-      phone,
+      external_id: payload.id,
+      user_id: payload.userId,
+      lead_id: payload.leadId || null,
+      instance: payload.instance,
+      phone: payload.phone,
       direction: 'out',
       message_type: 'text',
-      body: text,
+      body: payload.text,
       status: 'sent',
-      occurred_at: occurredAt
+      occurred_at: payload.occurredAt,
+      updated_at: new Date().toISOString()
     }, { onConflict: 'instance,external_id' });
-  if (error) console.warn('[whatsapp_messages] saída:', error.message);
+  if (error) {
+    console.warn('[whatsapp_messages] saída:', error.message);
+    if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+    return { ok:false, pending:queueOnFailure, error:error.message };
+  }
+
+  return { ok:true, pending:false };
+}
+
+async function flushPendingOutgoingWhatsappMessagesV412() {
+  if (!sbClient || !currentUser?.id) return { sent:0, pending:getPendingOutgoingWhatsappMessagesV412().length };
+  const list = getPendingOutgoingWhatsappMessagesV412();
+  const remaining = [];
+  let sent = 0;
+
+  for (const message of list) {
+    if (message.userId && message.userId !== currentUser.id) {
+      remaining.push(message);
+      continue;
+    }
+    const result = await persistOutgoingWhatsappMessageV412(
+      { ...message, userId:currentUser.id },
+      { queueOnFailure:false }
+    );
+    if (result.ok) sent++;
+    else remaining.push(message);
+  }
+
+  savePendingOutgoingWhatsappMessagesV412(remaining);
+  return { sent, pending:remaining.length };
 }
 
 async function sendConversationReplyV38() {
@@ -289,7 +375,7 @@ async function sendConversationReplyV38() {
       number: phone,
       text
     });
-    const messageId = 'reply_' + Date.now();
+    const messageId = getEvolutionWhatsappExternalIdV412(data, 'reply_' + Date.now());
     const occurredAt = new Date().toISOString();
     const crm = ensureLeadCrm(activeConversationLeadV38, lead);
     crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
@@ -306,16 +392,16 @@ async function sendConversationReplyV38() {
     });
     saveLeadCrm(activeConversationLeadV38, crm);
     addLeadHistory(activeConversationLeadV38, 'Resposta enviada pela Central de Conversas', lead);
-    persistOutgoingWhatsappMessageV412({
+    const persistence = await persistOutgoingWhatsappMessageV412({
       id: messageId,
       leadId: activeConversationLeadV38,
       instance: cfg.instance,
       phone,
       text,
       occurredAt
-    }).catch(() => {});
+    });
     renderConversationsV38();
-    notify('Resposta enviada.');
+    notify(persistence.ok ? 'Resposta enviada e salva.' : 'Resposta enviada. Sincronização com banco pendente.', persistence.ok ? undefined : 'warn');
   } catch (err) {
     notify('Erro ao responder: ' + formatEvolutionErrorV41(err), 'err');
   }
