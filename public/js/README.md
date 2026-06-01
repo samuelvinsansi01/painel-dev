@@ -38,17 +38,22 @@ bootstrap before the compatibility layers are applied.
 30. `modules/dispatch/queue-state.js`: queue synchronization and item actions.
 31. `modules/dispatch/schedule-config.js`: automatic schedule and Evolution dispatch config.
 32. `modules/dispatch/legacy-batch-send.js`: legacy single-queue batch sending.
-33. `modules/instagram.js`: Instagram allocation, queue, and tracking flows.
-34. `modules/tracking.js`: tracking export and the remaining tracking actions.
-35. `app.js`: final bootstrap, timeline helpers, and startup checks.
-36. `compatibility/sidebar-legacy.js`: guarded mobile and legacy sidebar handlers.
-37. `modules/chips-compatibility.js`: chip form compatibility and Evolution config resolution.
-38. `modules/whatsapp-manual-send.js`: manual WhatsApp sending compatibility layers.
-39. `compatibility/queue-conversation.js`: safe queue and conversation compatibility helpers.
-40. `modules/import-inbox.js`: import classification, inbox, badges, and grouped menu compatibility.
-41. `modules/whatsapp-supabase.js`: authenticated WhatsApp message synchronization.
-42. `compatibility/sidebar-recovery.js`: guarded legacy sidebar recovery routines.
-43. `compatibility/stability-guards.js`: final queue, Instagram, and null-data guards.
+33. `modules/instagram.js`: Instagram queue base and sent-state actions.
+34. `modules/instagram/redirects.js`: redirect link creation and updates.
+35. `modules/instagram/settings.js`: chip, business category, and template settings.
+36. `modules/instagram/assignment.js`: manual leads and Instagram attribution queue.
+37. `modules/instagram/week-templates.js`: weekly Instagram state and message templates.
+38. `modules/instagram/dashboard.js`: backlog, daily allocation, and status dashboard.
+39. `modules/tracking.js`: tracking export and the remaining tracking actions.
+40. `app.js`: final bootstrap, timeline helpers, and startup checks.
+41. `compatibility/sidebar-legacy.js`: guarded mobile and legacy sidebar handlers.
+42. `modules/chips-compatibility.js`: chip form compatibility and Evolution config resolution.
+43. `modules/whatsapp-manual-send.js`: manual WhatsApp sending compatibility layers.
+44. `compatibility/queue-conversation.js`: safe queue and conversation compatibility helpers.
+45. `modules/import-inbox.js`: import classification, inbox, badges, and grouped menu compatibility.
+46. `modules/whatsapp-supabase.js`: authenticated WhatsApp message synchronization.
+47. `compatibility/sidebar-recovery.js`: guarded legacy sidebar recovery routines.
+48. `compatibility/stability-guards.js`: final queue, Instagram, and null-data guards.
 
 When moving code between files, preserve this dependency order or replace the
 shared global explicitly.
