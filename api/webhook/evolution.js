@@ -124,8 +124,34 @@ export default async function handler(req, res) {
     });
   }
 
-  if (EVOLUTION_WEBHOOK_SECRET && getProvidedSecret(req) !== EVOLUTION_WEBHOOK_SECRET) {
-    return res.status(401).json({ success: false, error: 'Webhook não autorizado' });
+  const receivedSecret = getProvidedSecret(req);
+  const expectedSecret = EVOLUTION_WEBHOOK_SECRET;
+  const receivedUserIdForLog = String(
+    req.query?.user_id ||
+    req.headers['x-supabase-user-id'] ||
+    req.body?.user_id ||
+    req.body?.data?.user_id ||
+    ''
+  ).trim();
+
+  if (expectedSecret && receivedSecret !== expectedSecret) {
+    console.error('[webhook/evolution][401]', {
+      reason: 'secret_mismatch',
+      expectedSecret,
+      receivedSecret,
+      receivedUserId: receivedUserIdForLog,
+      resolvedUserId: receivedUserIdForLog,
+      hasExpectedSecret: Boolean(expectedSecret),
+      hasReceivedSecret: Boolean(receivedSecret),
+      method: req.method,
+      url: req.url
+    });
+
+    return res.status(401).json({
+      success: false,
+      error: 'Webhook não autorizado',
+      reason: 'secret_mismatch'
+    });
   }
 
   try {
