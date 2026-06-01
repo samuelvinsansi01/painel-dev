@@ -1102,7 +1102,8 @@ const SYNC_STATE_KEY = 'vs_supabase_sync_state_v1';
 
 function getSyncState() {
   try {
-    return JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || '{}');
+    const state = JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || '{}');
+    return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
   } catch {
     return {};
   }

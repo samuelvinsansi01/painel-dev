@@ -62,6 +62,10 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
   const data = snapshot.data || {};
   Object.entries(OPERATIONAL_DATA_KEYS_V36).forEach(([name, key]) => {
     if (data[name] === undefined) return;
+    if (data[name] === null) {
+      localStorage.removeItem(key);
+      return;
+    }
     localStorage.setItem(key, JSON.stringify(data[name]));
   });
 

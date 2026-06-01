@@ -16,7 +16,7 @@
   (document.getElementById('loteEsperaMin')||{}).value = 60;
   if (cfg.horarioInicio) (document.getElementById('horarioInicio')||{}).value = cfg.horarioInicio;
 
-  atualizarStatsDisparo();
+  if (typeof atualizarStatsDisparo === 'function') atualizarStatsDisparo();
 
   // init chips — prioridade chip 2 com final 8457
   const chips = getChips();

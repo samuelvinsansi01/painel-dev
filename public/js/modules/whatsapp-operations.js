@@ -314,7 +314,8 @@ const WHATSAPP_QUEUE_CONTROL_KEY = 'vs_whatsapp_queue_control_v28';
 
 function getWhatsappQueueControl() {
   try {
-    return JSON.parse(localStorage.getItem(WHATSAPP_QUEUE_CONTROL_KEY) || '{"paused":false}');
+    const control = JSON.parse(localStorage.getItem(WHATSAPP_QUEUE_CONTROL_KEY) || '{"paused":false}');
+    return control && typeof control === 'object' && !Array.isArray(control) ? control : { paused:false };
   } catch {
     return { paused:false };
   }
@@ -441,6 +442,7 @@ function saveWhatsappChipsV29(list){
 function getChipUsageV29(){
   try {
     const usage = JSON.parse(localStorage.getItem(CHIP_USAGE_DAY_KEY) || '{}');
+    if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return { day: todayUsageKeyV29(), chips:{} };
     if (usage.day !== todayUsageKeyV29()) return { day: todayUsageKeyV29(), chips:{} };
     return usage;
   } catch { return { day: todayUsageKeyV29(), chips:{} }; }
@@ -983,7 +985,8 @@ let dispatchRunningV32 = false;
 
 function getDispatchRuntimeV32() {
   try {
-    return JSON.parse(localStorage.getItem('vs_dispatch_runtime_v32') || '{}');
+    const runtime = JSON.parse(localStorage.getItem('vs_dispatch_runtime_v32') || '{}');
+    return runtime && typeof runtime === 'object' && !Array.isArray(runtime) ? runtime : {};
   } catch {
     return {};
   }

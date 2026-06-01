@@ -701,7 +701,7 @@ function atribInstaExcluir(id) {
    INSTAGRAM — STORAGE
 ════════════════════════════ */
 // getInstaFila / saveInstaFila definidas acima — sem duplicata
-function getInstaWeek()    { try { return JSON.parse(localStorage.getItem(INSTA_WEEK_KEY)||'{}'); } catch { return {}; } }
+function getInstaWeek()    { return getStoredObject(INSTA_WEEK_KEY); }
 function saveInstaWeek(d)  { localStorage.setItem(INSTA_WEEK_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ── MIGRAÇÃO: normaliza chaves antigas para dd/mm/aaaa ── */
@@ -709,6 +709,10 @@ function migrarChavesInstaWeek() {
   const raw = localStorage.getItem(INSTA_WEEK_KEY);
   if (!raw) return;
   let data; try { data = JSON.parse(raw); } catch { return; }
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    localStorage.removeItem(INSTA_WEEK_KEY);
+    return;
+  }
 
   let alterou = false;
   const novo = {};

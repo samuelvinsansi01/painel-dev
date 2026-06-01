@@ -290,7 +290,7 @@ function removerDaAtribuicao(id) {
    BACKLOG FILA ZAP
 ════════════════════════════ */
 const ZAP_BACKLOG_KEY = 'vin_zap_backlog';
-function getZapBacklog()   { try { return JSON.parse(localStorage.getItem(ZAP_BACKLOG_KEY)||'[]'); } catch { return []; } }
+function getZapBacklog()   { return getStoredArray(ZAP_BACKLOG_KEY); }
 function saveZapBacklog(d) { localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 function mandarParaBacklogZap(id) {

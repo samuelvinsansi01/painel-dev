@@ -131,7 +131,30 @@ function scheduleSupabaseLeadSync() {
 /* ════════════════════════════
    STORAGE — EMPRESAS
 ════════════════════════════ */
-function getWeekData()  { try { return JSON.parse(localStorage.getItem(EMPRESAS_KEY)||'null'); } catch { return null; } }
+function getStoredArray(key) {
+  try {
+    const data = JSON.parse(localStorage.getItem(key) || 'null');
+    return Array.isArray(data) ? data : [];
+  } catch {
+    return [];
+  }
+}
+function getStoredObject(key) {
+  try {
+    const data = JSON.parse(localStorage.getItem(key) || 'null');
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : {};
+  } catch {
+    return {};
+  }
+}
+function getWeekData()  {
+  try {
+    const data = JSON.parse(localStorage.getItem(EMPRESAS_KEY) || 'null');
+    return data && typeof data === 'object' && !Array.isArray(data) ? data : null;
+  } catch {
+    return null;
+  }
+}
 function saveWeekData(d){ localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d)); scheduleSupabaseLeadSync(); scheduleLegacyOperationalSyncV36(); }
 function ensureWeekData() {
   let d = getWeekData(); const ws = currentWeekStartStr();
@@ -191,14 +214,27 @@ function ensureWeekData() {
     }
     d = { weekStart: ws, days: {} }; saveWeekData(d);
   }
+  if (!d.days || typeof d.days !== 'object' || Array.isArray(d.days)) {
+    d.days = {};
+    saveWeekData(d);
+  }
   return d;
 }
-function getHistoryData() { try { return JSON.parse(localStorage.getItem(HISTORY_KEY)||'null'); } catch { return null; } }
+function getHistoryData() {
+  try {
+    const data = JSON.parse(localStorage.getItem(HISTORY_KEY) || 'null');
+    if (!data || typeof data !== 'object' || Array.isArray(data)) return null;
+    data.days = data.days && typeof data.days === 'object' && !Array.isArray(data.days) ? data.days : {};
+    return data;
+  } catch {
+    return null;
+  }
+}
 
 /* ════════════════════════════
    STORAGE — ACOMPANHAMENTO MENSAL
 ════════════════════════════ */
-function getAcompData()  { try { return JSON.parse(localStorage.getItem(ACOMP_KEY)||'{}'); } catch { return {}; } }
+function getAcompData()  { return getStoredObject(ACOMP_KEY); }
 function saveAcompData(d){ localStorage.setItem(ACOMP_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 function currentMonthKey() {
   const now = new Date();
@@ -226,17 +262,17 @@ function getAllSites(d)  { return new Set(flattenWeekData(d).map(e => extractDom
 /* ════════════════════════════
    STORAGE — VALIDAÇÃO FILA
 ════════════════════════════ */
-function getValData()  { try { return JSON.parse(localStorage.getItem(VAL_KEY)||'[]'); } catch { return []; } }
+function getValData()  { return getStoredArray(VAL_KEY); }
 function saveValData(d){ localStorage.setItem(VAL_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    STORAGE — BASE DE ATRIBUIÇÃO
 ════════════════════════════ */
-function getAtribuicaoData()  { try { return JSON.parse(localStorage.getItem(ATRIBUICAO_KEY)||'[]'); } catch { return []; } }
+function getAtribuicaoData()  { return getStoredArray(ATRIBUICAO_KEY); }
 function saveAtribuicaoData(d){ localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 
-function getInstaFila()  { try { return JSON.parse(localStorage.getItem(INSTA_KEY)||'[]'); } catch { return []; } }
+function getInstaFila()  { return getStoredArray(INSTA_KEY); }
 function saveInstaFila(d){ localStorage.setItem(INSTA_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 function recuperarValidacaoZapDoDia() {
@@ -276,26 +312,33 @@ function recuperarValidacaoZapDoDia() {
 /* ════════════════════════════
    STORAGE — INSTA CRONOGRAMA
 ════════════════════════════ */
-function getInstaSched()  { try { return JSON.parse(localStorage.getItem(INSTA_SCHED_KEY)||'{}'); } catch { return {}; } }
+function getInstaSched()  { return getStoredObject(INSTA_SCHED_KEY); }
 function saveInstaSched(d){ localStorage.setItem(INSTA_SCHED_KEY, JSON.stringify(d)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    STORAGE — CHIPS
 ════════════════════════════ */
-function getChips()  { try { return JSON.parse(localStorage.getItem(CHIPS_KEY)||'[]'); } catch { return []; } }
+function getChips()  { return getStoredArray(CHIPS_KEY); }
 function saveChips(c){ localStorage.setItem(CHIPS_KEY, JSON.stringify(c)); scheduleLegacyOperationalSyncV36(); }
 function getChipById(id) { return getChips().find(c => c.id === id); }
 
 /* ════════════════════════════
    STORAGE — RAMOS
 ════════════════════════════ */
-function getRamos()  { try { return JSON.parse(localStorage.getItem(RAMOS_KEY)||'null') || RAMOS_DEFAULT; } catch { return RAMOS_DEFAULT; } }
+function getRamos()  {
+  try {
+    const data = JSON.parse(localStorage.getItem(RAMOS_KEY) || 'null');
+    return Array.isArray(data) ? data : RAMOS_DEFAULT;
+  } catch {
+    return RAMOS_DEFAULT;
+  }
+}
 function saveRamos(r){ localStorage.setItem(RAMOS_KEY, JSON.stringify(r)); scheduleLegacyOperationalSyncV36(); }
 
 /* ════════════════════════════
    EXCLUDED DOMAINS
 ════════════════════════════ */
-function getExcludedDomains() { try { return JSON.parse(localStorage.getItem(EXCLUDED_KEY)||'[]'); } catch { return []; } }
+function getExcludedDomains() { return getStoredArray(EXCLUDED_KEY); }
 function saveExcludedDomains(arr) { localStorage.setItem(EXCLUDED_KEY, JSON.stringify(arr)); scheduleLegacyOperationalSyncV36(); }
 function extractDomain(site) {
   try { return new URL(site.trim()).hostname.replace(/^www\./,'').toLowerCase(); } catch { return null; }

@@ -1302,7 +1302,12 @@ function toggleLoteHist(id) {
 // ── Configuração por lote (ramo — sem imagem aqui) ────────────────
 const LOTE_CFG_KEY = 'vs_lote_cfg_v1';
 function getLoteCfg() {
-  try { return JSON.parse(localStorage.getItem(LOTE_CFG_KEY)||'{}'); } catch(e) { return {}; }
+  try {
+    const cfg = JSON.parse(localStorage.getItem(LOTE_CFG_KEY) || '{}');
+    return cfg && typeof cfg === 'object' && !Array.isArray(cfg) ? cfg : {};
+  } catch(e) {
+    return {};
+  }
 }
 function saveLoteCfg(cfg) {
   try { localStorage.setItem(LOTE_CFG_KEY, JSON.stringify(cfg)); } catch(e) {}
@@ -1939,7 +1944,7 @@ function saveEvoConfig() {
   };
   localStorage.setItem(EVO_KEY, JSON.stringify(cfg));
   scheduleLegacyOperationalSyncV36();
-  atualizarStatsDisparo();
+  if (typeof atualizarStatsDisparo === 'function') atualizarStatsDisparo();
 }
 function toggleLoteConfig() {
   const fields = document.getElementById('loteConfigFields');

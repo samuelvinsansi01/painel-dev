@@ -5,7 +5,8 @@ const EVOLUTION_SETTINGS_KEY = 'vs_evolution_settings_v1';
 
 function getEvolutionSettings() {
   try {
-    return JSON.parse(localStorage.getItem(EVOLUTION_SETTINGS_KEY) || '{}');
+    const settings = JSON.parse(localStorage.getItem(EVOLUTION_SETTINGS_KEY) || '{}');
+    return settings && typeof settings === 'object' && !Array.isArray(settings) ? settings : {};
   } catch {
     return {};
   }
