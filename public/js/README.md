@@ -1,8 +1,8 @@
 # JavaScript modules
 
 The dashboard uses classic browser scripts. Keep the script order in `index.html`:
-later files depend on globals declared by earlier files, and `app.js` contains the
-final initialization and compatibility overrides.
+later files depend on globals declared by earlier files. `app.js` runs the final
+bootstrap before the compatibility layers are applied.
 
 ## Load order
 
@@ -20,7 +20,15 @@ final initialization and compatibility overrides.
 12. `modules/legacy-dispatch.js`: legacy chip dispatch and scheduling flows.
 13. `modules/instagram.js`: Instagram allocation, queue, and tracking flows.
 14. `modules/tracking.js`: tracking export and the remaining tracking actions.
-15. `app.js`: initialization and compatibility overrides kept at the end.
+15. `app.js`: final bootstrap, timeline helpers, and startup checks.
+16. `compatibility/sidebar-legacy.js`: guarded mobile and legacy sidebar handlers.
+17. `modules/chips-compatibility.js`: chip form compatibility and Evolution config resolution.
+18. `modules/whatsapp-manual-send.js`: manual WhatsApp sending compatibility layers.
+19. `compatibility/queue-conversation.js`: safe queue and conversation compatibility helpers.
+20. `modules/import-inbox.js`: import classification, inbox, badges, and grouped menu compatibility.
+21. `modules/whatsapp-supabase.js`: authenticated WhatsApp message synchronization.
+22. `compatibility/sidebar-recovery.js`: guarded legacy sidebar recovery routines.
+23. `compatibility/stability-guards.js`: final queue, Instagram, and null-data guards.
 
 When moving code between files, preserve this dependency order or replace the
 shared global explicitly.
