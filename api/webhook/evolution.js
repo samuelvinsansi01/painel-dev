@@ -11,50 +11,74 @@ function stripJid(value = '') {
   return String(value || '').split('@')[0];
 }
 
+function candidateFromJid(value = '') {
+  return normalizePhone(stripJid(value));
+}
+
 function pickPhoneSource({ remoteJid = '', from = '', sender = '', participant = '', direction = 'in' } = {}) {
   const remote = String(remoteJid || '');
   const senderValue = String(sender || '');
   const fromValue = String(from || '');
   const participantValue = String(participant || '');
 
-  // Evolution/Baileys can send LID identifiers in remoteJid. In that case,
-  // the real WhatsApp phone usually comes in sender as @s.whatsapp.net.
-  if (remote.endsWith('@lid') && senderValue.endsWith('@s.whatsapp.net')) {
+  const phoneCandidateRemoteJid = candidateFromJid(remote);
+  const phoneCandidateFrom = candidateFromJid(fromValue);
+  const phoneCandidateSender = candidateFromJid(senderValue);
+  const phoneCandidateParticipant = candidateFromJid(participantValue);
+
+  const remoteIsLid = remote.endsWith('@lid');
+  const senderIsWhatsapp = senderValue.endsWith('@s.whatsapp.net') || senderValue.endsWith('@c.us');
+  const inbound = direction !== 'out';
+
+  // In incoming @lid events, Evolution/Baileys may expose the connected chip in
+  // sender. Do not use it as the lead phone, otherwise the conversation becomes
+  // the user's own number.
+  const rejectedBecauseOwnInstance = Boolean(inbound && remoteIsLid && senderIsWhatsapp && phoneCandidateSender);
+
+  const candidates = [];
+
+  if (phoneCandidateRemoteJid && !remoteIsLid) {
+    candidates.push({ source: 'remoteJid', raw: remote, phone: phoneCandidateRemoteJid, reason: 'remoteJid_whatsapp' });
+  }
+
+  if (phoneCandidateFrom && !fromValue.endsWith('@lid')) {
+    candidates.push({ source: 'from', raw: fromValue, phone: phoneCandidateFrom, reason: 'from_available' });
+  }
+
+  if (phoneCandidateParticipant && !participantValue.endsWith('@lid')) {
+    candidates.push({ source: 'participant', raw: participantValue, phone: phoneCandidateParticipant, reason: 'participant_available' });
+  }
+
+  if (phoneCandidateSender && !senderValue.endsWith('@lid') && !rejectedBecauseOwnInstance) {
+    candidates.push({ source: 'sender', raw: senderValue, phone: phoneCandidateSender, reason: 'sender_available_not_own_instance' });
+  }
+
+  if (candidates.length) {
     return {
-      source: 'sender',
-      raw: senderValue,
-      reason: 'remoteJid_lid_sender_whatsapp'
+      ...candidates[0],
+      phoneCandidateRemoteJid,
+      phoneCandidateFrom,
+      phoneCandidateSender,
+      phoneCandidateParticipant,
+      selectedPhone: candidates[0].phone,
+      rejectedBecauseOwnInstance
     };
   }
 
-  if (fromValue && !fromValue.endsWith('@lid')) {
-    return {
-      source: 'from',
-      raw: fromValue,
-      reason: 'from_available'
-    };
-  }
-
-  if (senderValue && !senderValue.endsWith('@lid')) {
-    return {
-      source: 'sender',
-      raw: senderValue,
-      reason: 'sender_available'
-    };
-  }
-
-  if (participantValue && !participantValue.endsWith('@lid')) {
-    return {
-      source: 'participant',
-      raw: participantValue,
-      reason: 'participant_available'
-    };
-  }
-
+  // Temporary fallback: keep the LID numeric identifier when no real contact
+  // phone exists in the payload. This preserves the message and logs enough data
+  // to improve mapping later, without misassigning it to the chip number.
   return {
     source: 'remoteJid',
     raw: remote,
-    reason: 'fallback_remoteJid'
+    phone: phoneCandidateRemoteJid,
+    reason: remoteIsLid ? 'fallback_remoteJid_lid_no_real_phone' : 'fallback_remoteJid',
+    phoneCandidateRemoteJid,
+    phoneCandidateFrom,
+    phoneCandidateSender,
+    phoneCandidateParticipant,
+    selectedPhone: phoneCandidateRemoteJid,
+    rejectedBecauseOwnInstance
   };
 }
 
@@ -75,7 +99,7 @@ function extractMessage(payload = {}, userId = '') {
   const participant = key.participant || data.participant || '';
   const direction = Boolean(key.fromMe || data.fromMe) ? 'out' : 'in';
   const phoneSource = pickPhoneSource({ remoteJid, from, sender, participant, direction });
-  const phone = normalizePhone(stripJid(phoneSource.raw));
+  const phone = phoneSource.selectedPhone || phoneSource.phone || normalizePhone(stripJid(phoneSource.raw));
 
   const text =
     msg.conversation ||
@@ -114,6 +138,12 @@ function extractMessage(payload = {}, userId = '') {
       phoneSource: phoneSource.source,
       phoneSourceRaw: phoneSource.raw,
       phoneSourceReason: phoneSource.reason,
+      phoneCandidateRemoteJid: phoneSource.phoneCandidateRemoteJid || '',
+      phoneCandidateFrom: phoneSource.phoneCandidateFrom || '',
+      phoneCandidateSender: phoneSource.phoneCandidateSender || '',
+      phoneCandidateParticipant: phoneSource.phoneCandidateParticipant || '',
+      selectedPhone: phoneSource.selectedPhone || phone,
+      rejectedBecauseOwnInstance: Boolean(phoneSource.rejectedBecauseOwnInstance),
       phoneExtracted: phone,
       phoneNormalized: phone,
       keyFromMe: key.fromMe,
@@ -310,6 +340,12 @@ export default async function handler(req, res) {
       phoneSource: message.debug?.phoneSource || '',
       phoneSourceRaw: message.debug?.phoneSourceRaw || '',
       phoneSourceReason: message.debug?.phoneSourceReason || '',
+      phoneCandidateRemoteJid: message.debug?.phoneCandidateRemoteJid || '',
+      phoneCandidateFrom: message.debug?.phoneCandidateFrom || '',
+      phoneCandidateSender: message.debug?.phoneCandidateSender || '',
+      phoneCandidateParticipant: message.debug?.phoneCandidateParticipant || '',
+      selectedPhone: message.debug?.selectedPhone || message.phone,
+      rejectedBecauseOwnInstance: Boolean(message.debug?.rejectedBecauseOwnInstance),
       phoneExtracted: message.debug?.phoneExtracted || message.phone,
       phoneNormalized: message.debug?.phoneNormalized || message.phone,
       pushName: message.debug?.pushName || '',
