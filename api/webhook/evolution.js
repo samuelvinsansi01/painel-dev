@@ -45,7 +45,21 @@ function extractMessage(payload = {}, userId = '') {
     direction: Boolean(key.fromMe || data.fromMe) ? 'out' : 'in',
     messageType,
     body: text,
-    occurredAt: new Date().toISOString()
+    occurredAt: new Date().toISOString(),
+    debug: {
+      event: payload.event || data.event || payload.type || data.type || '',
+      remoteJid,
+      from: data.from || payload.from || '',
+      sender: data.sender || payload.sender || '',
+      participant: key.participant || data.participant || '',
+      pushName: data.pushName || data.pushname || payload.pushName || payload.pushname || '',
+      phoneExtracted: phone,
+      phoneNormalized: phone,
+      keyFromMe: key.fromMe,
+      dataFromMe: data.fromMe,
+      rawInstance: payload.instance || data.instance || '',
+      bodyPreview: String(text || '').slice(0, 240)
+    }
   };
 }
 
@@ -71,6 +85,54 @@ function getProvidedSecret(req) {
     authorization.replace(/^Bearer\s+/i, '') ||
     ''
   );
+}
+
+async function findLeadByPhoneForDebug(userId, phone) {
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!backendKey || !phone) {
+    return {
+      query: null,
+      lead: null,
+      error: !backendKey ? 'SUPABASE_SECRET_KEY ausente' : 'phone ausente'
+    };
+  }
+
+  const baseUrl = SUPABASE_URL.replace(/\/$/, '');
+  const encodedPhone = encodeURIComponent(phone);
+  const encodedUserId = encodeURIComponent(userId || '');
+  const query = `${baseUrl}/rest/v1/leads?select=id,company_name,name,phone,user_id&phone=eq.${encodedPhone}&user_id=eq.${encodedUserId}&limit=1`;
+  const headers = {
+    apikey: backendKey,
+    'Content-Type': 'application/json'
+  };
+  if (!backendKey.startsWith('sb_secret_')) {
+    headers.Authorization = `Bearer ${backendKey}`;
+  }
+
+  try {
+    const res = await fetch(query, { method: 'GET', headers });
+    const raw = await res.text();
+    let data = null;
+    try { data = JSON.parse(raw); } catch { data = raw; }
+    if (!res.ok) {
+      return {
+        query: `leads phone=eq.${phone} user_id=eq.${userId}`,
+        lead: null,
+        error: `Supabase HTTP ${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`
+      };
+    }
+    return {
+      query: `leads phone=eq.${phone} user_id=eq.${userId}`,
+      lead: Array.isArray(data) ? data[0] || null : null,
+      error: null
+    };
+  } catch (error) {
+    return {
+      query: `leads phone=eq.${phone} user_id=eq.${userId}`,
+      lead: null,
+      error: error?.message || 'lead lookup error'
+    };
+  }
 }
 
 async function persistMessage(message) {
@@ -172,6 +234,26 @@ export default async function handler(req, res) {
         ignored: 'Evento sem telefone ou instância'
       });
     }
+
+    const leadDebug = await findLeadByPhoneForDebug(userId, message.phone);
+    console.log('[webhook/evolution][incoming-debug]', {
+      instance: message.instance,
+      event: message.debug?.event || '',
+      remoteJid: message.debug?.remoteJid || '',
+      from: message.debug?.from || '',
+      sender: message.debug?.sender || '',
+      participant: message.debug?.participant || '',
+      phoneExtracted: message.debug?.phoneExtracted || message.phone,
+      phoneNormalized: message.debug?.phoneNormalized || message.phone,
+      pushName: message.debug?.pushName || '',
+      body: message.debug?.bodyPreview || '',
+      direction: message.direction,
+      leadIdFound: leadDebug.lead?.id || null,
+      leadNameFound: leadDebug.lead?.company_name || leadDebug.lead?.name || null,
+      leadPhoneFound: leadDebug.lead?.phone || null,
+      leadLookupQuery: leadDebug.query,
+      leadLookupError: leadDebug.error
+    });
 
     const stored = await persistMessage(message);
 
