@@ -227,6 +227,44 @@ async function findLeadByPhoneForDebug(userId, phone) {
   }
 }
 
+
+async function findContactMapByLid(userId, instance, lid) {
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!backendKey || !userId || !instance || !lid) {
+    return { map:null, query:null, error:!backendKey ? 'SUPABASE_SECRET_KEY ausente' : null };
+  }
+
+  const baseUrl = SUPABASE_URL.replace(/\/$/, '');
+  const query = `${baseUrl}/rest/v1/whatsapp_contact_map?select=*&user_id=eq.${encodeURIComponent(userId)}&instance=eq.${encodeURIComponent(instance)}&lid=eq.${encodeURIComponent(lid)}&limit=1`;
+  const headers = { apikey: backendKey, 'Content-Type': 'application/json' };
+  if (!backendKey.startsWith('sb_secret_')) headers.Authorization = `Bearer ${backendKey}`;
+
+  try {
+    const res = await fetch(query, { method:'GET', headers });
+    const raw = await res.text();
+    let data = raw;
+    try { data = JSON.parse(raw); } catch(e) {}
+    if (!res.ok) {
+      return {
+        map:null,
+        query:`whatsapp_contact_map user_id=eq.${userId} instance=eq.${instance} lid=eq.${lid}`,
+        error:`Supabase HTTP ${res.status}: ${typeof data === 'string' ? data : JSON.stringify(data)}`
+      };
+    }
+    return {
+      map:Array.isArray(data) ? data[0] || null : null,
+      query:`whatsapp_contact_map user_id=eq.${userId} instance=eq.${instance} lid=eq.${lid}`,
+      error:null
+    };
+  } catch (error) {
+    return {
+      map:null,
+      query:`whatsapp_contact_map user_id=eq.${userId} instance=eq.${instance} lid=eq.${lid}`,
+      error:error?.message || 'contact map lookup error'
+    };
+  }
+}
+
 async function persistMessage(message) {
   const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
   if (!backendKey) {
@@ -329,8 +367,26 @@ export default async function handler(req, res) {
       });
     }
 
-    const leadDebug = await findLeadByPhoneForDebug(userId, message.phone);
-    message.leadId = leadDebug.lead?.id || null;
+    const lidForMap = message.debug?.phoneSourceReason === 'fallback_remoteJid_lid_no_real_phone'
+      ? message.phone
+      : '';
+    const contactMapDebug = lidForMap
+      ? await findContactMapByLid(userId, message.instance, lidForMap)
+      : { map:null, query:null, error:null };
+
+    if (contactMapDebug.map?.lead_id) {
+      message.leadId = contactMapDebug.map.lead_id;
+      if (contactMapDebug.map.phone_real) {
+        message.phone = normalizePhone(contactMapDebug.map.phone_real);
+        message.debug.mappedPhoneReal = message.phone;
+        message.debug.mappedFromLid = lidForMap;
+      }
+    }
+
+    const leadDebug = message.leadId
+      ? { lead:{ id:message.leadId, company_name:null, phone:message.phone }, query:'lead_id via whatsapp_contact_map', error:null }
+      : await findLeadByPhoneForDebug(userId, message.phone);
+    message.leadId = message.leadId || leadDebug.lead?.id || null;
 
     console.log('[webhook/evolution][incoming-debug]', {
       instance: message.instance,
@@ -356,6 +412,14 @@ export default async function handler(req, res) {
       leadIdFound: leadDebug.lead?.id || null,
       leadNameFound: leadDebug.lead?.company_name || null,
       leadPhoneFound: leadDebug.lead?.phone || null,
+      contactMapLid: lidForMap || null,
+      contactMapFound: Boolean(contactMapDebug.map),
+      contactMapLeadId: contactMapDebug.map?.lead_id || null,
+      contactMapPhoneReal: contactMapDebug.map?.phone_real || null,
+      contactMapQuery: contactMapDebug.query,
+      contactMapError: contactMapDebug.error,
+      mappedPhoneReal: message.debug?.mappedPhoneReal || null,
+      mappedFromLid: message.debug?.mappedFromLid || null,
       leadLookupQuery: leadDebug.query,
       leadLookupError: leadDebug.error
     });

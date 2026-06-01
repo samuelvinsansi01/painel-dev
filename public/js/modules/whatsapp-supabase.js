@@ -80,6 +80,105 @@ function getSupabaseWhatsappMessagesV412() {
 }
 
 
+/* Mapeamento manual seguro LID -> Lead/telefone real */
+function getAllKnownLeadsForWhatsappMapV417() {
+  const map = new Map();
+  const add = (lead) => {
+    if (!lead || !lead.id) return;
+    const normalized = {
+      ...lead,
+      nome: lead.nome || lead.companyName || lead.company_name || lead.title || 'Lead sem nome',
+      whatsapp: normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || '')
+    };
+    if (!map.has(normalized.id)) map.set(normalized.id, normalized);
+  };
+
+  try { (typeof getLeadBaseData === 'function' ? getLeadBaseData() : []).forEach(add); } catch(e) {}
+  try { (typeof getAtribuicaoData === 'function' ? getAtribuicaoData() : []).forEach(add); } catch(e) {}
+  try { (typeof getValData === 'function' ? getValData() : []).forEach(add); } catch(e) {}
+  try { (typeof getZapBacklog === 'function' ? getZapBacklog() : []).forEach(add); } catch(e) {}
+  try { (typeof getInstaFila === 'function' ? getInstaFila() : []).forEach(add); } catch(e) {}
+  try { Object.values(typeof getWeekData === 'function' ? (getWeekData()?.days || {}) : {}).flat().forEach(add); } catch(e) {}
+  try { Object.values(typeof filaDisparo !== 'undefined' ? (filaDisparo || {}) : {}).flat().forEach(add); } catch(e) {}
+  try { (typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : []).forEach(item => { add(item); if (item.leadId) add(findLeadEverywhere(item.leadId)); }); } catch(e) {}
+  return Array.from(map.values());
+}
+
+function findWhatsappLeadCandidatesForMapV417(query = '') {
+  const q = normalizeStr ? normalizeStr(query || '') : String(query || '').toLowerCase();
+  return getAllKnownLeadsForWhatsappMapV417()
+    .filter(lead => {
+      const haystack = [lead.nome, lead.whatsapp, lead.phone, lead.telefone, lead.site, lead.instagram].filter(Boolean).join(' ');
+      const norm = normalizeStr ? normalizeStr(haystack) : haystack.toLowerCase();
+      return !q || norm.includes(q) || String(lead.whatsapp || '').includes(String(query || '').replace(/\D/g, ''));
+    })
+    .slice(0, 20);
+}
+
+async function associateLidConversationToLeadV417(conversationKey) {
+  const resolved = getConversationLeadFromKeyV412(conversationKey || activeConversationLeadV38);
+  const lid = normalizeWhatsappDigitsV412(resolved.phone || getPhoneFromConversationKeyV412(conversationKey || activeConversationLeadV38));
+  if (!lid || !(resolved.isLid || resolved.lead?.isLid)) {
+    notify('Esta conversa não parece ser um identificador LID.', 'warn');
+    return;
+  }
+  if (!currentUser?.id) { notify('Usuário não autenticado.', 'warn'); return; }
+
+  const query = prompt('Digite parte do nome ou telefone do lead para vincular a esta conversa:');
+  if (query === null) return;
+  const candidates = findWhatsappLeadCandidatesForMapV417(query);
+  if (!candidates.length) {
+    notify('Nenhum lead encontrado com esse termo.', 'warn');
+    return;
+  }
+
+  let selected = candidates[0];
+  if (candidates.length > 1) {
+    const list = candidates.map((lead, i) => `${i + 1}. ${lead.nome || 'Lead sem nome'} — ${lead.whatsapp || lead.phone || lead.telefone || 'sem telefone'}`).join('\n');
+    const picked = prompt(`Escolha o número do lead:\n\n${list}`, '1');
+    if (picked === null) return;
+    const index = Math.max(0, Math.min(candidates.length - 1, Number(picked) - 1));
+    selected = candidates[index];
+  }
+
+  const phoneReal = normalizeWhatsappDigitsV412(selected.whatsapp || selected.phone || selected.telefone || '');
+  if (!phoneReal) { notify('Lead selecionado está sem telefone.', 'warn'); return; }
+
+  const latestMessage = getSupabaseWhatsappMessagesV412()
+    .filter(msg => phonesMatchV412(msg.phone, lid))
+    .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))[0];
+  const instance = String(latestMessage?.instance || resolved.instance || '').trim() || 'prospecto';
+  const pushName = String(resolved.lead?.nome || latestMessage?.pushName || '').trim();
+
+  try {
+    const res = await fetch('/api/whatsapp/contact-map', {
+      method:'POST',
+      headers:{ 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        user_id: currentUser.id,
+        instance,
+        lid,
+        lead_id: selected.id,
+        phone_real: phoneReal,
+        push_name: pushName || selected.nome || ''
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
+
+    activeConversationLeadV38 = selected.id;
+    await fetchEvolutionResponsesV34({ silent:true });
+    try { renderInboxV41(); } catch(e) {}
+    try { renderConversationsV38(); } catch(e) {}
+    notify(`Conversa vinculada ao lead ${selected.nome || 'selecionado'}.`);
+  } catch (error) {
+    notify('Erro ao vincular conversa: ' + (error?.message || error), 'err');
+  }
+}
+
+window.associateLidConversationToLeadV417 = associateLidConversationToLeadV417;
+
+
 function getPendingOutgoingWhatsappMessagesV412() {
   try {
     const data = JSON.parse(localStorage.getItem(WHATSAPP_OUTBOX_V412_KEY) || '[]');
@@ -575,10 +674,17 @@ function renderConversationChatV38() {
     ? (lead.subtitle || `Identificador WhatsApp: ${phone}`)
     : (phone ? (resolved.leadId ? `Chip: ${messages.find(m => m.instance)?.instance || 'prospecto'}` : phone) : 'sem telefone');
 
+  const associationButton = lead.isLid && !resolved.leadId
+    ? `<button class="btn btn-ghost" onclick="associateLidConversationToLeadV417('${escHtml(activeConversationLeadV38)}')">Associar ao lead</button>`
+    : '';
+
   box.innerHTML = `
     <div class="conversation-chat-header-v38">
-      <div class="conversation-chat-title-v38">${escHtml(chatTitle)}</div>
-      <div class="conversation-chat-meta-v38">${escHtml(chatMeta)}</div>
+      <div>
+        <div class="conversation-chat-title-v38">${escHtml(chatTitle)}</div>
+        <div class="conversation-chat-meta-v38">${escHtml(chatMeta)}</div>
+      </div>
+      ${associationButton}
     </div>
 
     <div class="conversation-messages-v38">
@@ -893,7 +999,7 @@ function renderInboxV41() {
         <div class="inbox-v41-meta">${item.pending ? (item.lead?.isLid ? 'contato via LID · ' : 'lead não identificado · ') : ''}${item.lead?.subtitle ? escHtml(item.lead.subtitle) + ' · ' : ''}whatsapp · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div>
       </div>
       <div class="inbox-v41-actions">
-        <button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.conversationKey || item.leadId)}')">Abrir</button>${item.leadId ? `<button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button>` : '<span class="queue-v27-status erro">sem lead</span>'}
+        <button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.conversationKey || item.leadId)}')">Abrir</button>${item.leadId ? `<button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button>` : (item.lead?.isLid ? `<button class="btn btn-ghost" onclick="associateLidConversationToLeadV417('${escHtml(item.conversationKey || '')}')">Associar</button>` : '<span class="queue-v27-status erro">sem lead</span>')}
       </div>
     </div>
   `).join('');
