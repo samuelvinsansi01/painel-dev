@@ -19,6 +19,39 @@ function normalizePhone(value = '') {
   return digits;
 }
 
+
+function parseRequestBody(req) {
+  if (!req?.body) return {};
+  if (typeof req.body === 'string') {
+    try { return JSON.parse(req.body); } catch (e) { return {}; }
+  }
+  return req.body;
+}
+
+function getQueryValue(req, key) {
+  const direct = req?.query?.[key];
+  if (Array.isArray(direct)) return direct[0] || '';
+  if (direct) return direct;
+  try {
+    const host = req?.headers?.host || 'localhost';
+    const parsed = new URL(req?.url || '', `https://${host}`);
+    return parsed.searchParams.get(key) || '';
+  } catch (e) {
+    return '';
+  }
+}
+
+function resolveUserId(req, body = null) {
+  const parsedBody = body || parseRequestBody(req);
+  return String(
+    getQueryValue(req, 'user_id') ||
+    getQueryValue(req, 'userId') ||
+    parsedBody?.user_id ||
+    parsedBody?.userId ||
+    ''
+  ).trim();
+}
+
 function isValidUuid(value = '') {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{12}$/i.test(String(value || ''));
 }
@@ -106,15 +139,22 @@ export default async function handler(req, res) {
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ success:false, error:'Method not allowed' });
 
   try {
+    const body = parseRequestBody(req);
+    const userId = resolveUserId(req, body);
+    console.log('[contact-map][request]', {
+      method: req.method,
+      query: req.query || {},
+      url: req.url,
+      body: req.method === 'GET' ? null : body,
+      userIdResolved: userId
+    });
+
     if (req.method === 'GET') {
-      const userId = String(req.query?.user_id || req.query?.userId || '').trim();
       if (!isValidUuid(userId)) throw new Error('user_id inválido ou ausente');
       const maps = await listMaps({ userId });
       return res.status(200).json({ success:true, maps });
     }
 
-    const body = req.body || {};
-    const userId = String(body.user_id || body.userId || '').trim();
     const instance = String(body.instance || '').trim();
     const lid = normalizePhone(body.lid || body.phone_lid || '');
     const leadId = String(body.lead_id || body.leadId || '').trim();
