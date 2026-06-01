@@ -543,3 +543,150 @@ async function sendActiveLeadWhatsappMessage() {
 }
 
 
+
+/* ════════════════════════════
+   EVOLUTION LID DEBUG V14
+   Diagnóstico seguro: não altera dados, só tenta descobrir se a Evolution
+   expõe telefone real para um @lid via endpoints disponíveis.
+════════════════════════════ */
+function normalizeEvolutionLidV14(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (raw.includes('@')) return raw;
+  return `${raw.replace(/\D/g, '')}@lid`;
+}
+
+function getEvolutionDebugSettingsV14() {
+  const settings = (typeof getEvolutionConfigForChipV405 === 'function')
+    ? getEvolutionConfigForChipV405()
+    : getEvolutionSettings();
+  return {
+    url: String(settings?.url || '').replace(/\/$/, ''),
+    instance: String(settings?.instance || '').trim(),
+    apiKey: String(settings?.apiKey || '').trim()
+  };
+}
+
+async function fetchEvolutionDebugEndpointV14(label, url, options = {}) {
+  const startedAt = Date.now();
+  try {
+    const res = await fetch(url, options);
+    const text = await res.text();
+    let data = text;
+    try { data = JSON.parse(text); } catch {}
+    return {
+      label,
+      ok: res.ok,
+      status: res.status,
+      elapsedMs: Date.now() - startedAt,
+      url,
+      data
+    };
+  } catch (error) {
+    return {
+      label,
+      ok: false,
+      status: 0,
+      elapsedMs: Date.now() - startedAt,
+      url,
+      error: error?.message || String(error)
+    };
+  }
+}
+
+function findPossiblePhonesInObjectV14(value) {
+  const found = new Set();
+  const visit = (node) => {
+    if (node == null) return;
+    if (typeof node === 'string' || typeof node === 'number') {
+      const str = String(node);
+      const matches = str.match(/55\d{10,13}/g) || [];
+      matches.forEach((m) => found.add(m));
+      return;
+    }
+    if (Array.isArray(node)) {
+      node.slice(0, 5000).forEach(visit);
+      return;
+    }
+    if (typeof node === 'object') {
+      Object.values(node).slice(0, 5000).forEach(visit);
+    }
+  };
+  visit(value);
+  return Array.from(found);
+}
+
+async function debugEvolutionLidV14(lidValue) {
+  const settings = getEvolutionDebugSettingsV14();
+  const jid = normalizeEvolutionLidV14(lidValue);
+  const lidDigits = String(jid).split('@')[0].replace(/\D/g, '');
+
+  if (!settings.url || !settings.instance || !settings.apiKey) {
+    console.warn('[evolution][lid-debug] Configuração Evolution incompleta.', settings);
+    return { ok: false, error: 'Configuração Evolution incompleta.', settings };
+  }
+  if (!jid || !lidDigits) {
+    console.warn('[evolution][lid-debug] Informe um @lid válido.');
+    return { ok: false, error: 'Informe um @lid válido.' };
+  }
+
+  const headers = (typeof getEvolutionHeadersV405 === 'function')
+    ? getEvolutionHeadersV405(settings)
+    : getEvolutionHeaders(settings);
+
+  const encodedJid = encodeURIComponent(jid);
+  const encodedInstance = encodeURIComponent(settings.instance);
+
+  const attempts = [
+    {
+      label: 'contact/profile/jid',
+      url: `${settings.url}/contact/profile/${encodedJid}`,
+      options: { method: 'GET', headers }
+    },
+    {
+      label: 'contact/profile/instance/jid',
+      url: `${settings.url}/contact/profile/${encodedInstance}/${encodedJid}`,
+      options: { method: 'GET', headers }
+    },
+    {
+      label: 'chat/whatsappNumbers/lidDigits',
+      url: `${settings.url}/chat/whatsappNumbers/${encodedInstance}`,
+      options: { method: 'POST', headers, body: JSON.stringify({ numbers: [lidDigits] }) }
+    },
+    {
+      label: 'contacts/fetchContacts/instance',
+      url: `${settings.url}/contacts/fetchContacts/${encodedInstance}`,
+      options: { method: 'GET', headers }
+    },
+    {
+      label: 'contacts/fetchContacts',
+      url: `${settings.url}/contacts/fetchContacts` + `?instance=${encodedInstance}`,
+      options: { method: 'GET', headers }
+    }
+  ];
+
+  console.group('[evolution][lid-debug] resolver LID');
+  console.log('input:', lidValue);
+  console.log('jid:', jid);
+  console.log('settings:', { url: settings.url, instance: settings.instance, hasApiKey: Boolean(settings.apiKey) });
+
+  const results = [];
+  for (const attempt of attempts) {
+    const result = await fetchEvolutionDebugEndpointV14(attempt.label, attempt.url, attempt.options);
+    result.possiblePhones = findPossiblePhonesInObjectV14(result.data);
+    results.push(result);
+    console.log(result.label, {
+      ok: result.ok,
+      status: result.status,
+      elapsedMs: result.elapsedMs,
+      possiblePhones: result.possiblePhones,
+      data: result.data,
+      error: result.error
+    });
+  }
+  console.groupEnd();
+
+  return { ok: true, jid, lidDigits, results };
+}
+
+window.debugEvolutionLidV14 = debugEvolutionLidV14;
