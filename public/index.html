@@ -745,6 +745,34 @@
     <button class="btn btn-ghost" onclick="abrirModalNovoChip()">+ Adicionar chip</button>
   </div>
 
+  <div class="persistence-v36-card">
+    <div class="persistence-v36-title">Webhook das conversas</div>
+    <div class="persistence-v36-text">
+      Use esta URL na instância Evolution com o evento MESSAGES_UPSERT e webhook por eventos desativado.
+    </div>
+    <div id="webhookUrlEvolutionV412" class="responses-v34-url"></div>
+    <div class="persistence-v36-actions">
+      <button class="btn btn-primary" onclick="copyWebhookUrlV34()">Copiar URL do webhook</button>
+    </div>
+    <div class="persistence-v36-text">
+      Se EVOLUTION_WEBHOOK_SECRET estiver configurado na Vercel, acrescente &amp;secret=SEU_SEGREDO ao final da URL cadastrada na Evolution.
+    </div>
+  </div>
+
+  <div class="persistence-v36-card">
+    <div class="persistence-v36-title">Persistência Supabase</div>
+    <div class="persistence-v36-text">
+      Sincroniza dados operacionais criados no CRM: campanhas, templates, fila, chips, logs, respostas e configurações.
+      O localStorage continua como cache de segurança.
+    </div>
+    <div class="persistence-v36-actions">
+      <button class="btn btn-primary" onclick="syncOperationalDataToSupabaseV36()">Enviar dados locais</button>
+      <button class="btn btn-ghost" onclick="loadOperationalDataFromSupabaseV36()">Carregar do Supabase</button>
+      <button class="btn btn-ghost" onclick="showPersistenceSchemaV36()">Ver tabelas necessárias</button>
+    </div>
+    <div id="persistenceV36Status" class="persistence-v36-status">// aguardando ação</div>
+  </div>
+
   <!-- CONFIGURAÇÃO DE DISPARO -->
   <div class="card" style="margin-top:16px">
     <div class="card-title">Configuração de disparo</div>
@@ -1028,19 +1056,6 @@
       <div id="evoTestResult" class="evo-test-result"></div>
     </div>
   </div>
-    <div class="persistence-v36-card">
-      <div class="persistence-v36-title">Persistência Supabase</div>
-      <div class="persistence-v36-text">
-        Sincroniza dados operacionais criados no CRM: campanhas, templates, fila, chips, logs, respostas e configurações.
-        O localStorage continua como cache de segurança.
-      </div>
-      <div class="persistence-v36-actions">
-        <button class="btn btn-primary" onclick="syncOperationalDataToSupabaseV36()">Enviar dados locais</button>
-        <button class="btn btn-ghost" onclick="loadOperationalDataFromSupabaseV36()">Carregar do Supabase</button>
-        <button class="btn btn-ghost" onclick="showPersistenceSchemaV36()">Ver tabelas necessárias</button>
-      </div>
-      <div id="persistenceV36Status" class="persistence-v36-status">// aguardando ação</div>
-    </div>
 </div>
 
 

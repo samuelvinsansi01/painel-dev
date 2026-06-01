@@ -25,8 +25,10 @@ function getWebhookUrlV34() {
 }
 
 function renderWebhookUrlV34() {
-  const box = document.getElementById('webhookUrlV34');
-  if (box) box.textContent = getWebhookUrlV34();
+  ['webhookUrlV34', 'webhookUrlEvolutionV412'].forEach(id => {
+    const box = document.getElementById(id);
+    if (box) box.textContent = getWebhookUrlV34();
+  });
 }
 
 function copyWebhookUrlV34() {

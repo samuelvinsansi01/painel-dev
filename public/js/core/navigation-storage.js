@@ -74,7 +74,10 @@ function switchPanel(name) {
   if (name==='kanban')         renderKanban();
   if (name==='followups')      renderFollowups();
   if (name==='acompanhamento') renderAcompanhamento();
-  if (name==='configuracoes')  renderConfiguracoes();
+  if (name==='configuracoes')  {
+    renderConfiguracoes();
+    if (typeof renderWebhookUrlV34 === 'function') renderWebhookUrlV34();
+  }
   updateBadges();
 }
 

@@ -140,6 +140,7 @@ async function validateEvolutionNumber() {
 
 function renderEvolutionPanel() {
   renderEvolutionSettings();
+  if (typeof renderWebhookUrlV34 === 'function') renderWebhookUrlV34();
 }
 
 
