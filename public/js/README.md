@@ -16,32 +16,39 @@ bootstrap before the compatibility layers are applied.
 8. `modules/crm/presentations.js`: lead presentation links.
 9. `modules/crm/dashboard-kanban.js`: executive metrics, kanban, and CRM polish.
 10. `modules/evolution.js`: Evolution API integration and lead messaging.
-11. `modules/whatsapp-operations.js`: WhatsApp queue, chips, dispatch, and audit.
-12. `modules/supabase-operations.js`: operational data persistence.
-13. `modules/conversations.js`: conversation synchronization.
-14. `core/legacy-state.js`: defaults, shared state, pagination, and date helpers.
-15. `modules/assignment.js`: attribution and WhatsApp backlog actions.
-16. `core/navigation-storage.js`: navigation and local storage helpers.
-17. `modules/imports-validation.js`: imports, filters, and number validation.
-18. `modules/legacy-dispatch.js`: link validation and routing into attribution.
-19. `modules/dispatch/chip-slots.js`: per-chip batch state and send controls.
-20. `modules/dispatch/chip-panels.js`: chip accordions and WhatsApp panel render.
-21. `modules/dispatch/company-list.js`: company list and per-chip queue render.
-22. `modules/dispatch/batch-images.js`: IndexedDB storage for batch images.
-23. `modules/dispatch/queue-state.js`: queue synchronization and item actions.
-24. `modules/dispatch/schedule-config.js`: automatic schedule and Evolution dispatch config.
-25. `modules/dispatch/legacy-batch-send.js`: legacy single-queue batch sending.
-26. `modules/instagram.js`: Instagram allocation, queue, and tracking flows.
-27. `modules/tracking.js`: tracking export and the remaining tracking actions.
-28. `app.js`: final bootstrap, timeline helpers, and startup checks.
-29. `compatibility/sidebar-legacy.js`: guarded mobile and legacy sidebar handlers.
-30. `modules/chips-compatibility.js`: chip form compatibility and Evolution config resolution.
-31. `modules/whatsapp-manual-send.js`: manual WhatsApp sending compatibility layers.
-32. `compatibility/queue-conversation.js`: safe queue and conversation compatibility helpers.
-33. `modules/import-inbox.js`: import classification, inbox, badges, and grouped menu compatibility.
-34. `modules/whatsapp-supabase.js`: authenticated WhatsApp message synchronization.
-35. `compatibility/sidebar-recovery.js`: guarded legacy sidebar recovery routines.
-36. `compatibility/stability-guards.js`: final queue, Instagram, and null-data guards.
+11. `modules/whatsapp-operations.js`: WhatsApp queue base, campaigns, and templates.
+12. `modules/whatsapp/queue-control.js`: queue pause state and template preparation.
+13. `modules/whatsapp/chips.js`: chip configuration and daily usage distribution.
+14. `modules/whatsapp/dispatch-preview.js`: initial dispatch preview and execution.
+15. `modules/whatsapp/dispatch-schedule.js`: dispatch rhythm and block rules.
+16. `modules/whatsapp/dispatch-runtime.js`: timed dispatch loop and runtime state.
+17. `modules/whatsapp/responses.js`: Evolution webhook response handling.
+18. `modules/whatsapp/audit.js`: queue audit cards, list, and CSV export.
+19. `modules/supabase-operations.js`: operational data persistence.
+20. `modules/conversations.js`: conversation synchronization.
+21. `core/legacy-state.js`: defaults, shared state, pagination, and date helpers.
+22. `modules/assignment.js`: attribution and WhatsApp backlog actions.
+23. `core/navigation-storage.js`: navigation and local storage helpers.
+24. `modules/imports-validation.js`: imports, filters, and number validation.
+25. `modules/legacy-dispatch.js`: link validation and routing into attribution.
+26. `modules/dispatch/chip-slots.js`: per-chip batch state and send controls.
+27. `modules/dispatch/chip-panels.js`: chip accordions and WhatsApp panel render.
+28. `modules/dispatch/company-list.js`: company list and per-chip queue render.
+29. `modules/dispatch/batch-images.js`: IndexedDB storage for batch images.
+30. `modules/dispatch/queue-state.js`: queue synchronization and item actions.
+31. `modules/dispatch/schedule-config.js`: automatic schedule and Evolution dispatch config.
+32. `modules/dispatch/legacy-batch-send.js`: legacy single-queue batch sending.
+33. `modules/instagram.js`: Instagram allocation, queue, and tracking flows.
+34. `modules/tracking.js`: tracking export and the remaining tracking actions.
+35. `app.js`: final bootstrap, timeline helpers, and startup checks.
+36. `compatibility/sidebar-legacy.js`: guarded mobile and legacy sidebar handlers.
+37. `modules/chips-compatibility.js`: chip form compatibility and Evolution config resolution.
+38. `modules/whatsapp-manual-send.js`: manual WhatsApp sending compatibility layers.
+39. `compatibility/queue-conversation.js`: safe queue and conversation compatibility helpers.
+40. `modules/import-inbox.js`: import classification, inbox, badges, and grouped menu compatibility.
+41. `modules/whatsapp-supabase.js`: authenticated WhatsApp message synchronization.
+42. `compatibility/sidebar-recovery.js`: guarded legacy sidebar recovery routines.
+43. `compatibility/stability-guards.js`: final queue, Instagram, and null-data guards.
 
 When moving code between files, preserve this dependency order or replace the
 shared global explicitly.
