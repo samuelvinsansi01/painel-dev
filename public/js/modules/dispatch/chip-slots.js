@@ -186,8 +186,26 @@ async function dispararLoteChip(slot) {
       // MSG 1 — Apresentação
       const payload1 = { number: numero, options: { delay: 1000 }, textMessage: { text: item.mensagem } };
       const res1 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload1) });
-      if (!res1.ok) throw new Error(`HTTP ${res1.status}`);
+      const data1 = await res1.json().catch(() => ({}));
+      if (!res1.ok) throw new Error((data1 && (data1.message || data1.error)) || `HTTP ${res1.status}`);
       log(`  ① apresentação enviada`);
+
+      // Persistir o envio inicial no histórico de conversas somente após sucesso na Evolution.
+      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+        const persistence = await persistOutgoingWhatsappMessageV412({
+          id: typeof getEvolutionWhatsappExternalIdV412 === 'function'
+            ? getEvolutionWhatsappExternalIdV412(data1, item.id)
+            : '',
+          leadId: item.leadId || item.id || '',
+          instance: chip.instance,
+          phone: numero,
+          text: item.mensagem || '',
+          occurredAt: new Date().toISOString(),
+          response: data1
+        }, { queueOnFailure: true });
+        if (persistence?.ok) log(`  ↳ conversa salva no banco`);
+        else log(`  ↳ <span style="color:var(--warning)">conversa pendente de sincronização</span>`);
+      }
       await new Promise(r => setTimeout(r, MSG_DELAY));
 
       // MSG 2 — Imagem do lote
