@@ -209,7 +209,6 @@ renderAuthUser(currentUser);
     if (currentUser) {
       let operationalLoaded = false;
       try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
-      try { if (typeof loadWhatsappInstancesFromSupabaseV414 === 'function') await loadWhatsappInstancesFromSupabaseV414(); } catch(e){}
       if (typeof loadSupabaseAsPrimarySource === 'function') {
         await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
       } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
@@ -227,7 +226,6 @@ renderAuthUser(currentUser);
   if (currentUser) {
     let operationalLoaded = false;
     try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
-    try { if (typeof loadWhatsappInstancesFromSupabaseV414 === 'function') await loadWhatsappInstancesFromSupabaseV414(); } catch(e){}
     await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
   }
 }

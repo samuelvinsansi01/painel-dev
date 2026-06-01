@@ -128,6 +128,7 @@ function extractMessage(payload = {}, userId = '') {
     messageType,
     body: text,
     occurredAt: new Date().toISOString(),
+    rawPayload: payload || null,
     debug: {
       event: payload.event || data.event || payload.type || data.type || '',
       remoteJid,
@@ -255,7 +256,8 @@ async function persistMessage(message) {
       message_type: message.messageType,
       body: message.body,
       status: message.direction === 'in' ? 'received' : 'sent',
-      occurred_at: message.occurredAt
+      occurred_at: message.occurredAt,
+      raw_payload: message.direction === 'in' ? (message.rawPayload || null) : null
     })
   });
 
@@ -359,6 +361,17 @@ export default async function handler(req, res) {
     });
 
     const stored = await persistMessage(message);
+
+    if (message.direction === 'in') {
+      console.log('[webhook/evolution][raw-payload-saved]', {
+        id: stored?.id || null,
+        externalId: message.externalId,
+        instance: message.instance,
+        phone: message.phone,
+        hasRawPayload: Boolean(message.rawPayload),
+        rawPayloadKeys: message.rawPayload && typeof message.rawPayload === 'object' ? Object.keys(message.rawPayload).slice(0, 20) : []
+      });
+    }
 
     return res.status(200).json({
       success: true,
