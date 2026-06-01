@@ -7,6 +7,57 @@ function normalizePhone(value = '') {
   return String(value).replace(/\D/g, '');
 }
 
+function stripJid(value = '') {
+  return String(value || '').split('@')[0];
+}
+
+function pickPhoneSource({ remoteJid = '', from = '', sender = '', participant = '', direction = 'in' } = {}) {
+  const remote = String(remoteJid || '');
+  const senderValue = String(sender || '');
+  const fromValue = String(from || '');
+  const participantValue = String(participant || '');
+
+  // Evolution/Baileys can send LID identifiers in remoteJid. In that case,
+  // the real WhatsApp phone usually comes in sender as @s.whatsapp.net.
+  if (remote.endsWith('@lid') && senderValue.endsWith('@s.whatsapp.net')) {
+    return {
+      source: 'sender',
+      raw: senderValue,
+      reason: 'remoteJid_lid_sender_whatsapp'
+    };
+  }
+
+  if (fromValue && !fromValue.endsWith('@lid')) {
+    return {
+      source: 'from',
+      raw: fromValue,
+      reason: 'from_available'
+    };
+  }
+
+  if (senderValue && !senderValue.endsWith('@lid')) {
+    return {
+      source: 'sender',
+      raw: senderValue,
+      reason: 'sender_available'
+    };
+  }
+
+  if (participantValue && !participantValue.endsWith('@lid')) {
+    return {
+      source: 'participant',
+      raw: participantValue,
+      reason: 'participant_available'
+    };
+  }
+
+  return {
+    source: 'remoteJid',
+    raw: remote,
+    reason: 'fallback_remoteJid'
+  };
+}
+
 function extractMessage(payload = {}, userId = '') {
   const data = payload.data || payload;
   const key = data.key || {};
@@ -19,7 +70,13 @@ function extractMessage(payload = {}, userId = '') {
     data.sender ||
     '';
 
-  const phone = normalizePhone(String(remoteJid).split('@')[0]);
+  const from = data.from || payload.from || '';
+  const sender = data.sender || payload.sender || '';
+  const participant = key.participant || data.participant || '';
+  const direction = Boolean(key.fromMe || data.fromMe) ? 'out' : 'in';
+  const phoneSource = pickPhoneSource({ remoteJid, from, sender, participant, direction });
+  const phone = normalizePhone(stripJid(phoneSource.raw));
+
   const text =
     msg.conversation ||
     msg.extendedTextMessage?.text ||
@@ -42,17 +99,21 @@ function extractMessage(payload = {}, userId = '') {
     userId,
     instance: String(payload.instance || data.instance || '').trim(),
     phone,
-    direction: Boolean(key.fromMe || data.fromMe) ? 'out' : 'in',
+    leadId: null,
+    direction,
     messageType,
     body: text,
     occurredAt: new Date().toISOString(),
     debug: {
       event: payload.event || data.event || payload.type || data.type || '',
       remoteJid,
-      from: data.from || payload.from || '',
-      sender: data.sender || payload.sender || '',
-      participant: key.participant || data.participant || '',
+      from,
+      sender,
+      participant,
       pushName: data.pushName || data.pushname || payload.pushName || payload.pushname || '',
+      phoneSource: phoneSource.source,
+      phoneSourceRaw: phoneSource.raw,
+      phoneSourceReason: phoneSource.reason,
       phoneExtracted: phone,
       phoneNormalized: phone,
       keyFromMe: key.fromMe,
@@ -100,7 +161,7 @@ async function findLeadByPhoneForDebug(userId, phone) {
   const baseUrl = SUPABASE_URL.replace(/\/$/, '');
   const encodedPhone = encodeURIComponent(phone);
   const encodedUserId = encodeURIComponent(userId || '');
-  const query = `${baseUrl}/rest/v1/leads?select=id,company_name,name,phone,user_id&phone=eq.${encodedPhone}&user_id=eq.${encodedUserId}&limit=1`;
+  const query = `${baseUrl}/rest/v1/leads?select=id,company_name,phone,user_id&phone=eq.${encodedPhone}&user_id=eq.${encodedUserId}&limit=1`;
   const headers = {
     apikey: backendKey,
     'Content-Type': 'application/json'
@@ -157,6 +218,7 @@ async function persistMessage(message) {
     body: JSON.stringify({
       external_id: message.externalId,
       user_id: message.userId,
+      lead_id: message.leadId || null,
       instance: message.instance,
       phone: message.phone,
       direction: message.direction,
@@ -236,6 +298,8 @@ export default async function handler(req, res) {
     }
 
     const leadDebug = await findLeadByPhoneForDebug(userId, message.phone);
+    message.leadId = leadDebug.lead?.id || null;
+
     console.log('[webhook/evolution][incoming-debug]', {
       instance: message.instance,
       event: message.debug?.event || '',
@@ -243,13 +307,16 @@ export default async function handler(req, res) {
       from: message.debug?.from || '',
       sender: message.debug?.sender || '',
       participant: message.debug?.participant || '',
+      phoneSource: message.debug?.phoneSource || '',
+      phoneSourceRaw: message.debug?.phoneSourceRaw || '',
+      phoneSourceReason: message.debug?.phoneSourceReason || '',
       phoneExtracted: message.debug?.phoneExtracted || message.phone,
       phoneNormalized: message.debug?.phoneNormalized || message.phone,
       pushName: message.debug?.pushName || '',
       body: message.debug?.bodyPreview || '',
       direction: message.direction,
       leadIdFound: leadDebug.lead?.id || null,
-      leadNameFound: leadDebug.lead?.company_name || leadDebug.lead?.name || null,
+      leadNameFound: leadDebug.lead?.company_name || null,
       leadPhoneFound: leadDebug.lead?.phone || null,
       leadLookupQuery: leadDebug.query,
       leadLookupError: leadDebug.error
