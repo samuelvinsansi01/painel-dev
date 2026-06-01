@@ -80,27 +80,14 @@ if (typeof sincronizarFilaComEnviados === 'function') {
 }
 
 /* Corrige fila WhatsApp quebrando se estado operacional vem nulo */
-if (typeof renderFilaZap === 'function') {
-  const oldRenderFilaZapV416 = renderFilaZap;
+const renderFilaZapOriginalV416 = typeof renderFilaZap === 'function' ? renderFilaZap : null;
+if (renderFilaZapOriginalV416) {
   renderFilaZap = function() {
     try {
-      return oldRenderFilaZapV416();
+      return renderFilaZapOriginalV416();
     } catch(e) {
       console.warn('renderFilaZap protegido:', e?.message || e);
-      const panel = document.getElementById('panel-fila-zap') || document.getElementById('panel-whatsappQueue');
-      if (panel) {
-        panel.innerHTML = `
-          <div class="page-header">
-            <div class="page-title">WhatsApp <span>Fila.</span></div>
-            <div class="page-sub">// fila protegida · dados operacionais inconsistentes</div>
-          </div>
-          <div class="stretch-card">
-            <div class="audit-v35-empty">
-              // A fila foi protegida contra dados nulos. Recarregue os dados do Supabase ou adicione leads novamente à fila.
-            </div>
-          </div>
-        `;
-      }
+      if (typeof renderFilaZapSafeV4110 === 'function') return renderFilaZapSafeV4110();
     }
   };
 }
@@ -276,7 +263,7 @@ function renderFilaZapSafeV418() {
   try { updateBadges(); } catch(e) {}
 }
 
-function renderFilaZap() {
+function renderFilaZapFallbackV418() {
   return renderFilaZapSafeV418();
 }
 
@@ -285,7 +272,7 @@ window.addEventListener('error', function(e){
   if (msg.includes('delayMin') || msg.includes('Cannot convert undefined or null to object')) {
     console.warn('Erro WhatsApp/Fila protegido V41.8:', msg);
     e.preventDefault?.();
-    setTimeout(() => { try { renderFilaZapSafeV418(); } catch(err){} }, 30);
+    setTimeout(() => { try { renderFilaZap(); } catch(err){} }, 30);
   }
 });
 
@@ -294,7 +281,7 @@ window.addEventListener('error', function(e){
    V41.10 — FILA WHATSAPP ESTÁVEL
 ════════════════════════════ */
 function getFilaWhatsappConfigV4110(){
-  return typeof loadEvoConfig === 'function' ? loadEvoConfig() : {
+  const defaults = {
     horarioInicio:'08:00',
     delayMin:120,
     delayMax:120,
@@ -302,6 +289,12 @@ function getFilaWhatsappConfigV4110(){
     loteEsperaMin:60,
     loteAtivo:1
   };
+  try {
+    const cfg = typeof loadEvoConfig === 'function' ? loadEvoConfig() : null;
+    return cfg && typeof cfg === 'object' ? { ...defaults, ...cfg } : defaults;
+  } catch {
+    return defaults;
+  }
 }
 
 function getFilaWhatsappItemsV4110(){
@@ -369,7 +362,7 @@ function renderFilaZapSafeV4110(){
   try { updateBadges(); } catch(e) {}
 }
 
-function renderFilaZap(){
+function renderFilaZapFallbackV4110(){
   return renderFilaZapSafeV4110();
 }
 
@@ -378,6 +371,6 @@ window.addEventListener('error', function(e){
   if (msg.includes('delayMin') || msg.includes('delayMax') || msg.includes('loteTamanho')) {
     console.warn('Config da fila protegida V41.10:', msg);
     e.preventDefault?.();
-    setTimeout(renderFilaZapSafeV4110, 50);
+    setTimeout(() => { try { renderFilaZap(); } catch(err){} }, 50);
   }
 }, true);
