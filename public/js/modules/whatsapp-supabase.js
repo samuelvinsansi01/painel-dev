@@ -2,6 +2,52 @@
    SUPABASE WHATSAPP MESSAGES V41.2
 ════════════════════════════ */
 const WHATSAPP_OUTBOX_V412_KEY = 'vs_whatsapp_outbox_v412';
+const WHATSAPP_MESSAGES_CACHE_V412_KEY = 'vs_whatsapp_messages_cache_v412';
+let supabaseWhatsappMessagesCacheV412 = [];
+
+function normalizeWhatsappDigitsV412(value = '') {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (digits.startsWith('00')) digits = digits.slice(2);
+  if (digits.startsWith('55')) return digits;
+  if (digits.length === 10 || digits.length === 11) return '55' + digits;
+  return digits;
+}
+
+function getWhatsappConversationKeyV412(message = {}) {
+  const leadId = String(message.leadId || message.lead_id || '').trim();
+  if (leadId) return leadId;
+  const phone = normalizeWhatsappDigitsV412(message.phone_normalized || message.phone || '');
+  return phone ? `phone:${phone}` : '';
+}
+
+function isPhoneConversationKeyV412(key = '') {
+  return String(key || '').startsWith('phone:');
+}
+
+function getPhoneFromConversationKeyV412(key = '') {
+  return isPhoneConversationKeyV412(key) ? String(key).slice(6) : '';
+}
+
+function loadSupabaseWhatsappMessagesCacheV412() {
+  try {
+    const data = JSON.parse(localStorage.getItem(WHATSAPP_MESSAGES_CACHE_V412_KEY) || '[]');
+    supabaseWhatsappMessagesCacheV412 = Array.isArray(data) ? data : [];
+  } catch {
+    supabaseWhatsappMessagesCacheV412 = [];
+  }
+  return supabaseWhatsappMessagesCacheV412;
+}
+
+function saveSupabaseWhatsappMessagesCacheV412(messages = []) {
+  supabaseWhatsappMessagesCacheV412 = Array.isArray(messages) ? messages.slice(0, 500) : [];
+  try { localStorage.setItem(WHATSAPP_MESSAGES_CACHE_V412_KEY, JSON.stringify(supabaseWhatsappMessagesCacheV412)); } catch(e) {}
+}
+
+function getSupabaseWhatsappMessagesV412() {
+  return supabaseWhatsappMessagesCacheV412.length ? supabaseWhatsappMessagesCacheV412 : loadSupabaseWhatsappMessagesCacheV412();
+}
+
 
 function getPendingOutgoingWhatsappMessagesV412() {
   try {
@@ -156,8 +202,10 @@ async function fetchEvolutionResponsesV34(options = {}) {
     if (error) throw error;
 
     const localMap = new Map(getLocalResponsesV34().map(item => [item.id, item]));
+    const allMessages = [];
     (data || []).forEach(row => {
       const message = mergeSupabaseWhatsappMessageV412(normalizeSupabaseWhatsappMessageV412(row));
+      allMessages.push(message);
       if (message.direction !== 'in') return;
       localMap.set(message.id, {
         ...(localMap.get(message.id) || {}),
@@ -165,6 +213,9 @@ async function fetchEvolutionResponsesV34(options = {}) {
         applied: !!message.leadId
       });
     });
+    saveSupabaseWhatsappMessagesCacheV412(
+      allMessages.sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))
+    );
 
     saveLocalResponsesV34(
       Array.from(localMap.values())
@@ -186,18 +237,24 @@ async function fetchEvolutionResponsesV34(options = {}) {
   }
 }
 
-async function markConversationReadV412(leadId) {
-  if (!leadId) return;
+async function markConversationReadV412(conversationKey) {
+  if (!conversationKey) return;
   const now = new Date().toISOString();
-  const crm = ensureLeadCrm(leadId, findLeadEverywhere(leadId) || {});
-  (crm.messages || []).forEach(item => {
-    if (item.direction === 'in') item.read = true;
-  });
-  saveLeadCrm(leadId, crm);
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const leadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  const phone = resolved.phone;
+
+  if (leadId) {
+    const crm = ensureLeadCrm(leadId, findLeadEverywhere(leadId) || {});
+    (crm.messages || []).forEach(item => { if (item.direction === 'in') item.read = true; });
+    saveLeadCrm(leadId, crm);
+  }
 
   const responses = getLocalResponsesV34();
   responses.forEach(item => {
-    if (item.leadId === leadId) {
+    const sameLead = leadId && item.leadId === leadId;
+    const samePhone = phone && phonesMatchV412(item.phone, phone);
+    if (sameLead || samePhone) {
       item.read = true;
       item.readAt = item.readAt || now;
     }
@@ -205,13 +262,16 @@ async function markConversationReadV412(leadId) {
   saveLocalResponsesV34(responses);
 
   if (sbClient && currentUser?.id) {
-    const { error } = await sbClient
+    let query = sbClient
       .from('whatsapp_messages')
       .update({ read_at: now, updated_at: now })
       .eq('user_id', currentUser.id)
-      .eq('lead_id', leadId)
       .eq('direction', 'in')
       .is('read_at', null);
+    if (leadId) query = query.eq('lead_id', leadId);
+    else if (phone) query = query.or(`phone.eq.${phone},phone_normalized.eq.${phone}`);
+    else return;
+    const { error } = await query;
     if (error) console.warn('[whatsapp_messages] leitura:', error.message);
   }
 }
@@ -254,16 +314,189 @@ function openConversationV38(leadId) {
   try { renderInboxV41(); } catch(e) {}
 }
 
+
+/* Fonte principal: Supabase whatsapp_messages para Conversas/Caixa de Entrada */
+function getConversationLeadFromKeyV412(key = '') {
+  if (!key) return { leadId:'', lead:{ nome:'Lead' }, phone:'' };
+  if (isPhoneConversationKeyV412(key)) {
+    const phone = getPhoneFromConversationKeyV412(key);
+    const lead = findLeadByPhoneV412(phone);
+    return {
+      leadId: lead?.id || '',
+      lead: lead || { id:key, nome:`Número ${phone}`, phone, whatsapp:phone },
+      phone
+    };
+  }
+  const lead = findLeadEverywhere(key) || { id:key, nome:'Lead' };
+  const phone = normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || '');
+  return { leadId:key, lead, phone };
+}
+
+function getAllConversationLeadsV38() {
+  const crm = typeof getLeadCrmStoreSafeV4015 === 'function'
+    ? getLeadCrmStoreSafeV4015()
+    : (typeof getLeadCrmStore === 'function' ? getLeadCrmStore() : {});
+  const messages = getSupabaseWhatsappMessagesV412();
+  const map = new Map();
+
+  messages.forEach(message => {
+    const key = getWhatsappConversationKeyV412(message);
+    if (!key) return;
+    const resolved = getConversationLeadFromKeyV412(key);
+    const lastAt = message.receivedAt || message.at || '';
+    const current = map.get(key) || { leadId:key, lead:resolved.lead, crm:crm[resolved.leadId] || {}, lastAt:'' };
+    current.lead = resolved.lead;
+    current.crm = crm[resolved.leadId] || current.crm || {};
+    if (String(lastAt).localeCompare(String(current.lastAt || '')) > 0) current.lastAt = lastAt;
+    map.set(key, current);
+  });
+
+  Object.entries(crm || {}).forEach(([leadId, data]) => {
+    const hasMessages = Array.isArray(data.messages) && data.messages.length;
+    const hasResponse = !!data.lastResponseAt || data.pipelineStatus === 'respondeu';
+    if (!hasMessages && !hasResponse) return;
+    const lead = findLeadEverywhere(leadId) || { id: leadId, nome: data.nome || 'Lead' };
+    const lastAt = data.lastResponseAt || data.lastWhatsappMessage?.sentAt || '';
+    const current = map.get(leadId) || { leadId, lead, crm:data, lastAt:'' };
+    current.lead = lead;
+    current.crm = data;
+    if (String(lastAt).localeCompare(String(current.lastAt || '')) > 0) current.lastAt = lastAt;
+    map.set(leadId, current);
+  });
+
+  try {
+    (typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : []).forEach(item => {
+      if (!item.leadId || item.status !== 'Enviado') return;
+      const lead = findLeadEverywhere(item.leadId) || { id:item.leadId, nome:item.nome || 'Lead' };
+      const crmData = crm[item.leadId] || {};
+      const lastAt = item.sentAt || item.updatedAt || item.createdAt || '';
+      const current = map.get(item.leadId) || { leadId:item.leadId, lead, crm:crmData, lastAt:'' };
+      if (String(lastAt).localeCompare(String(current.lastAt || '')) > 0) current.lastAt = lastAt;
+      map.set(item.leadId, current);
+    });
+  } catch(e) {}
+
+  return Array.from(map.values()).sort((a,b) => String(b.lastAt || '').localeCompare(String(a.lastAt || '')));
+}
+
+function getConversationMessagesV38(conversationKey) {
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const realLeadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  const phone = resolved.phone;
+  const messages = [];
+
+  getSupabaseWhatsappMessagesV412().forEach(message => {
+    const key = getWhatsappConversationKeyV412(message);
+    const sameKey = key === conversationKey;
+    const sameLead = realLeadId && message.leadId === realLeadId;
+    const samePhone = phone && phonesMatchV412(message.phone, phone);
+    if (!sameKey && !sameLead && !samePhone) return;
+    messages.push({
+      id: message.id,
+      dbId: message.dbId,
+      direction: message.direction,
+      text: message.text,
+      phone: message.phone,
+      instance: message.instance,
+      status: message.status,
+      at: message.receivedAt,
+      atLabel: message.receivedAt ? new Date(message.receivedAt).toLocaleString('pt-BR') : '',
+      read: message.read
+    });
+  });
+
+  if (realLeadId) {
+    try {
+      const crm = ensureLeadCrm(realLeadId, findLeadEverywhere(realLeadId) || {});
+      (crm.messages || []).forEach(msg => messages.push(msg));
+      if (crm.lastWhatsappMessage) {
+        messages.push({
+          id:'last_' + realLeadId,
+          direction:'out',
+          text:crm.lastWhatsappMessage.text || '',
+          at:crm.lastWhatsappMessage.sentAt || '',
+          atLabel:crm.lastWhatsappMessage.sentAtLabel || '',
+          chipName:crm.lastWhatsappMessage.chipName || ''
+        });
+      }
+    } catch(e) {}
+    try {
+      (typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [])
+        .filter(item => item.leadId === realLeadId && item.status === 'Enviado')
+        .forEach(item => messages.push({
+          id:item.id,
+          direction:'out',
+          text:item.templateText || item.templateName || 'Mensagem enviada',
+          at:item.sentAt || item.updatedAt || item.createdAt || '',
+          atLabel:item.sentAtLabel || item.createdAtLabel || '',
+          chipName:item.chipName || ''
+        }));
+    } catch(e) {}
+  }
+
+  const unique = new Map();
+  messages.forEach(message => {
+    const key = message.dbId || message.id || `${message.direction}_${message.at}_${message.text}`;
+    unique.set(key, message);
+  });
+
+  return Array.from(unique.values()).sort((a,b) => String(a.at || '').localeCompare(String(b.at || '')));
+}
+
+function renderConversationChatV38() {
+  const box = document.getElementById('conversationChatV38');
+  if (!box) return;
+
+  if (!activeConversationLeadV38) {
+    box.innerHTML = '<div class="conversation-empty-v38">// selecione uma conversa</div>';
+    return;
+  }
+
+  const resolved = getConversationLeadFromKeyV412(activeConversationLeadV38);
+  const lead = resolved.lead || { nome:'Lead' };
+  const messages = getConversationMessagesV38(activeConversationLeadV38);
+  const phone = normalizeWhatsappDigitsV412(resolved.phone || lead.whatsapp || lead.phone || lead.telefone || '');
+  const canReply = !!phone;
+
+  box.innerHTML = `
+    <div class="conversation-chat-header-v38">
+      <div class="conversation-chat-title-v38">${escHtml(lead.nome || lead.name || 'Lead')}</div>
+      <div class="conversation-chat-meta-v38">${escHtml(phone || 'sem telefone')}</div>
+    </div>
+
+    <div class="conversation-messages-v38">
+      ${messages.length ? messages.map(msg => `
+        <div class="message-bubble-v38 ${msg.direction === 'out' ? 'out' : 'in'}">
+          ${escHtml(msg.text || '[mensagem sem texto]')}
+          <div class="message-time-v38">${escHtml(msg.atLabel || (msg.at ? new Date(msg.at).toLocaleString('pt-BR') : ''))}${msg.instance ? ' · ' + escHtml(msg.instance) : (msg.chipName ? ' · ' + escHtml(msg.chipName) : '')}</div>
+        </div>
+      `).join('') : '<div class="conversation-empty-v38">// sem mensagens registradas</div>'}
+    </div>
+
+    <div class="conversation-reply-v38">
+      <textarea id="conversationReplyTextV38" placeholder="Responder este lead..." ${canReply ? '' : 'disabled'}></textarea>
+      <button class="btn btn-primary" onclick="sendConversationReplyV38()" ${canReply ? '' : 'disabled'}>Responder</button>
+    </div>
+  `;
+}
+
 function getConversationEvolutionConfigV412(leadId) {
+  const resolved = getConversationLeadFromKeyV412(leadId);
+  const realLeadId = resolved.leadId || (!isPhoneConversationKeyV412(leadId) ? leadId : '');
+  const phone = resolved.phone;
   const responses = getLocalResponsesV34()
-    .filter(item => item.leadId === leadId && item.instance)
+    .filter(item => ((realLeadId && item.leadId === realLeadId) || (phone && phonesMatchV412(item.phone, phone))) && item.instance)
     .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')));
-  const crm = getLeadCrmStoreSafeV4015()[leadId] || {};
+  const crm = realLeadId ? (getLeadCrmStoreSafeV4015()[realLeadId] || {}) : {};
   const messages = Array.isArray(crm.messages) ? crm.messages.slice().reverse() : [];
+  const supabaseMessages = getSupabaseWhatsappMessagesV412()
+    .filter(item => ((realLeadId && item.leadId === realLeadId) || (phone && phonesMatchV412(item.phone, phone))) && item.instance)
+    .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')));
   const queue = typeof getWhatsappQueueV27 === 'function' ? getWhatsappQueueV27() : [];
-  const lastQueue = queue.filter(item => item.leadId === leadId && item.chipInstance).slice(-1)[0];
+  const lastQueue = queue.filter(item => item.leadId === realLeadId && item.chipInstance).slice(-1)[0];
   const instance =
     responses[0]?.instance ||
+    supabaseMessages[0]?.instance ||
     messages.find(item => item.instance)?.instance ||
     lastQueue?.chipInstance ||
     '';
@@ -314,6 +547,7 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
       lead_id: payload.leadId || null,
       instance: payload.instance,
       phone: payload.phone,
+      phone_normalized: normalizeWhatsappDigitsV412(payload.phone),
       direction: 'out',
       message_type: 'text',
       body: payload.text,
@@ -355,10 +589,12 @@ async function flushPendingOutgoingWhatsappMessagesV412() {
 
 async function sendConversationReplyV38() {
   if (!activeConversationLeadV38) return;
-  const lead = findLeadEverywhere(activeConversationLeadV38) || {};
+  const resolved = getConversationLeadFromKeyV412(activeConversationLeadV38);
+  const lead = resolved.lead || {};
+  const realLeadId = resolved.leadId || (!isPhoneConversationKeyV412(activeConversationLeadV38) ? activeConversationLeadV38 : '');
   const text = (document.getElementById('conversationReplyTextV38')?.value || '').trim();
-  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
-  const cfg = getConversationEvolutionConfigV412(activeConversationLeadV38);
+  const phone = normalizeWhatsappDigitsV412(resolved.phone || lead.whatsapp || lead.phone || lead.telefone || '');
+  const cfg = getConversationEvolutionConfigV412(realLeadId || activeConversationLeadV38);
 
   if (!text) { notify('Digite uma resposta.', 'warn'); return; }
   if (!phone) { notify('Lead sem telefone.', 'warn'); return; }
@@ -377,24 +613,26 @@ async function sendConversationReplyV38() {
     });
     const messageId = getEvolutionWhatsappExternalIdV412(data, 'reply_' + Date.now());
     const occurredAt = new Date().toISOString();
-    const crm = ensureLeadCrm(activeConversationLeadV38, lead);
-    crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
-    crm.messages.push({
-      id: messageId,
-      direction: 'out',
-      text,
-      phone,
-      instance: cfg.instance,
-      at: occurredAt,
-      atLabel: crmNowLabel(),
-      chipName: cfg.chip?.nome || cfg.chip?.name || cfg.instance,
-      response: data
-    });
-    saveLeadCrm(activeConversationLeadV38, crm);
-    addLeadHistory(activeConversationLeadV38, 'Resposta enviada pela Central de Conversas', lead);
+    if (realLeadId) {
+      const crm = ensureLeadCrm(realLeadId, lead);
+      crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
+      crm.messages.push({
+        id: messageId,
+        direction: 'out',
+        text,
+        phone,
+        instance: cfg.instance,
+        at: occurredAt,
+        atLabel: crmNowLabel(),
+        chipName: cfg.chip?.nome || cfg.chip?.name || cfg.instance,
+        response: data
+      });
+      saveLeadCrm(realLeadId, crm);
+      addLeadHistory(realLeadId, 'Resposta enviada pela Central de Conversas', lead);
+    }
     const persistence = await persistOutgoingWhatsappMessageV412({
       id: messageId,
-      leadId: activeConversationLeadV38,
+      leadId: realLeadId,
       instance: cfg.instance,
       phone,
       text,
@@ -408,40 +646,42 @@ async function sendConversationReplyV38() {
 }
 
 function getInboxItemsV41() {
-  const crm = getLeadCrmStoreSafeV4015 ? getLeadCrmStoreSafeV4015() : {};
-  const responses = typeof getLocalResponsesV34 === 'function' ? getLocalResponsesV34() : [];
   const items = new Map();
 
-  Object.entries(crm || {}).forEach(([leadId, data]) => {
-    const incoming = (Array.isArray(data.messages) ? data.messages : []).filter(message => message.direction === 'in');
-    if (!incoming.length) return;
-    const last = incoming.slice().sort((a,b) => String(b.at || '').localeCompare(String(a.at || '')))[0];
-    const lead = findLeadEverywhere(leadId) || { id:leadId, nome:data.nome || 'Lead' };
-    items.set(last.id || `in_${leadId}`, {
-      id:last.id || `in_${leadId}`,
-      leadId,
-      lead,
-      text:last.text || '',
-      channel:'whatsapp',
-      at:last.at || data.lastResponseAt || '',
-      unread:!last.read
+  getSupabaseWhatsappMessagesV412()
+    .filter(message => message.direction === 'in')
+    .forEach(message => {
+      const conversationKey = getWhatsappConversationKeyV412(message);
+      const resolved = getConversationLeadFromKeyV412(conversationKey);
+      const id = message.dbId || message.id || conversationKey;
+      items.set(id, {
+        id,
+        conversationKey,
+        leadId: resolved.leadId || '',
+        lead: resolved.lead,
+        text: message.text || '',
+        channel:'whatsapp',
+        at: message.receivedAt || '',
+        unread: !message.read,
+        pending: !resolved.leadId
+      });
     });
-  });
 
+  const responses = typeof getLocalResponsesV34 === 'function' ? getLocalResponsesV34() : [];
   responses.forEach(response => {
     if (items.has(response.id)) return;
-    const lead = response.leadId
-      ? (findLeadEverywhere(response.leadId) || { id:response.leadId, nome:'Lead' })
-      : { nome:`Número ${response.phone || 'não identificado'}` };
+    const conversationKey = response.leadId || (response.phone ? `phone:${normalizeWhatsappDigitsV412(response.phone)}` : '');
+    const resolved = getConversationLeadFromKeyV412(conversationKey);
     items.set(response.id, {
-      id:response.id,
-      leadId:response.leadId || '',
-      lead,
-      text:response.text || '',
+      id: response.id,
+      conversationKey,
+      leadId: resolved.leadId || response.leadId || '',
+      lead: resolved.lead,
+      text: response.text || '',
       channel:'whatsapp',
-      at:response.receivedAt || '',
-      unread:!response.read,
-      pending:!response.leadId
+      at: response.receivedAt || '',
+      unread: !response.read,
+      pending: !resolved.leadId
     });
   });
 
@@ -471,7 +711,7 @@ function renderInboxV41() {
         <div class="inbox-v41-meta">${item.pending ? 'lead não identificado · ' : ''}whatsapp · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div>
       </div>
       <div class="inbox-v41-actions">
-        ${item.leadId ? `<button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.leadId)}')">Responder</button><button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button>` : '<span class="queue-v27-status erro">vinculação pendente</span>'}
+        <button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.conversationKey || item.leadId)}')">Abrir</button>${item.leadId ? `<button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button>` : '<span class="queue-v27-status erro">sem lead</span>'}
       </div>
     </div>
   `).join('');
@@ -490,3 +730,5 @@ if (document.readyState === 'loading') {
 }
 
 
+
+function openConversationFromInboxV41(conversationKey) { activeConversationLeadV38 = conversationKey; if (typeof switchPanel === 'function') switchPanel('conversations'); setTimeout(()=>{ try{renderConversationsV38();}catch(e){} },100); }

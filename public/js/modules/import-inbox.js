@@ -1,7 +1,7 @@
 /* ════════════════════════════
    V41 — IMPORTAÇÃO + MENU + INBOX + CONVERSAS
 ════════════════════════════ */
-const IMPORT_RULES_V41 = { minRating: 4.3, minReviews: 20 };
+const IMPORT_RULES_V41 = { minRating: 4.3, minReviews: 15 };
 
 function normalizeWhatsappV41(value = '') {
   let digits = String(value || '').replace(/\D/g, '').replace(/^0+/, '');
