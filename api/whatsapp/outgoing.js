@@ -2,6 +2,11 @@ const SUPABASE_URL = process.env.SUPABASE_URL || 'https://txyknazfufashgzlxkqh.s
 const SUPABASE_SECRET_KEY = process.env.SUPABASE_SECRET_KEY;
 const SUPABASE_SERVICE_ROLE_KEY = process.env.SUPABASE_SERVICE_ROLE_KEY;
 
+function debugOutgoingApi(step, data = {}) {
+  try { console.log(`[api/whatsapp/outgoing] ${step}`, JSON.stringify(data)); }
+  catch (e) { console.log(`[api/whatsapp/outgoing] ${step}`, data); }
+}
+
 function normalizePhone(value = '') {
   let digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -21,6 +26,7 @@ function makeExternalId(value = '') {
 }
 
 async function persistOutgoing(body = {}) {
+  debugOutgoingApi('request:body', body);
   const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
   if (!backendKey) throw new Error('SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY ausente na Vercel');
 
@@ -49,6 +55,8 @@ async function persistOutgoing(body = {}) {
     raw_payload: body.raw_payload || body.response || null
   };
 
+  debugOutgoingApi('record:prepared', record);
+
   const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages`;
   const headers = {
     apikey: backendKey,
@@ -64,6 +72,7 @@ async function persistOutgoing(body = {}) {
   });
 
   const raw = await res.text();
+  debugOutgoingApi('supabase:response', { status: res.status, ok: res.ok, raw });
   let data = raw;
   try { data = JSON.parse(raw); } catch(e) {}
 
@@ -85,6 +94,7 @@ export default async function handler(req, res) {
     const stored = await persistOutgoing(req.body || {});
     return res.status(200).json({ success:true, stored:true, id:stored?.id || null, external_id:stored?.external_id || null });
   } catch (error) {
+    debugOutgoingApi('error', { error: error?.message || error });
     return res.status(500).json({ success:false, error:error?.message || 'Erro ao salvar mensagem enviada' });
   }
 }

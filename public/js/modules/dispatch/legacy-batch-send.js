@@ -1,3 +1,13 @@
+
+function debugDispatchPersistV413(step, data = {}) {
+  try {
+    console.groupCollapsed(`[dispatch][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[dispatch][persist] ${step}`, data);
+  }
+}
 /* ════════════════════════════
    DISPARO — LOTES
 ════════════════════════════ */
@@ -80,6 +90,7 @@ async function dispararLote() {
       log(`  ① apresentação enviada`);
 
       // Persistir o envio inicial no histórico de conversas somente após sucesso na Evolution.
+      debugDispatchPersistV413('persist-function-check', { file: 'legacy-batch-send.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
       if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
         const persistence = await persistOutgoingWhatsappMessageV412({
           id: typeof getEvolutionWhatsappExternalIdV412 === 'function'

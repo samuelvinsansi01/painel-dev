@@ -1,3 +1,13 @@
+
+function debugDispatchPersistV413(step, data = {}) {
+  try {
+    console.groupCollapsed(`[dispatch][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[dispatch][persist] ${step}`, data);
+  }
+}
 /* ════════════════════════════
    ENVIO MANUAL FIX V40.12
 ════════════════════════════ */
@@ -231,7 +241,8 @@ async function sendActiveLeadWhatsappMessage() {
     saveLeadCrm(activeLeadDrawerId, crm);
 
     let persistence = { ok:false, pending:false };
-    if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+    debugDispatchPersistV413('persist-function-check', { file: 'whatsapp-manual-send.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
+      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
       persistence = await persistOutgoingWhatsappMessageV412({
         id: messageId,
         leadId: activeLeadDrawerId,
@@ -306,7 +317,8 @@ async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
 
   saveLeadCrm(leadId, crm);
   let persistence = { ok:false, pending:false };
-  if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+  debugDispatchPersistV413('persist-function-check', { file: 'whatsapp-manual-send.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
+      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
     persistence = await persistOutgoingWhatsappMessageV412({
       id: messageId,
       leadId,

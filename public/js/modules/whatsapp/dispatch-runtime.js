@@ -1,3 +1,13 @@
+
+function debugDispatchPersistV413(step, data = {}) {
+  try {
+    console.groupCollapsed(`[dispatch][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[dispatch][persist] ${step}`, data);
+  }
+}
 /* ════════════════════════════
    DISPARO TEMPORIZADO V32
 ════════════════════════════ */
@@ -112,7 +122,8 @@ async function dispatchOneItemV32(item, chip) {
       ? getEvolutionWhatsappExternalIdV412(data, queueItem.id)
       : queueItem.id;
     saveWhatsappQueueV27(queue);
-    if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+    debugDispatchPersistV413('persist-function-check', { file: 'dispatch-runtime.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
+      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
       persistOutgoingWhatsappMessageV412({
         id: queueItem.externalId,
         leadId: queueItem.leadId || '',

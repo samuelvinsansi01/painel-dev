@@ -1,3 +1,13 @@
+
+function debugDispatchPersistV413(step, data = {}) {
+  try {
+    console.groupCollapsed(`[dispatch][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[dispatch][persist] ${step}`, data);
+  }
+}
 /* ════════════════════════════
    DISPARO INICIAL V30
 ════════════════════════════ */
@@ -202,7 +212,8 @@ async function startDispatchV30() {
         item.externalId = typeof getEvolutionWhatsappExternalIdV412 === 'function'
           ? getEvolutionWhatsappExternalIdV412(data, item.id)
           : item.id;
-        if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+        debugDispatchPersistV413('persist-function-check', { file: 'dispatch-preview.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
+      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
           persistOutgoingWhatsappMessageV412({
             id: item.externalId,
             leadId: item.leadId || '',

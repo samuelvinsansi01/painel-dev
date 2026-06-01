@@ -1,3 +1,13 @@
+
+function debugDispatchPersistV413(step, data = {}) {
+  try {
+    console.groupCollapsed(`[dispatch][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[dispatch][persist] ${step}`, data);
+  }
+}
 /* ─── Per-chip state (indexed 0 = Chip1, 1 = Chip2) ─── */
 const chipSlotState = [
   { filaLotes:[], loteAtual:0, lotesTotal:0, aguardandoLote:false, disparoEmAndamento:false, loteEsperaFim:null, loteEsperaTimer:null, loteCountdownInt:null, loteHistorico:[], retryItems:[], retryDisparado:false, ultimoLoteFimTs:null, pausado:false },
@@ -191,6 +201,7 @@ async function dispararLoteChip(slot) {
       log(`  ① apresentação enviada`);
 
       // Persistir o envio inicial no histórico de conversas somente após sucesso na Evolution.
+      debugDispatchPersistV413('persist-function-check', { file: 'chip-slots.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
       if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
         const persistence = await persistOutgoingWhatsappMessageV412({
           id: typeof getEvolutionWhatsappExternalIdV412 === 'function'

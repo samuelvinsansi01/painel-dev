@@ -3,6 +3,17 @@
 ════════════════════════════ */
 const WHATSAPP_OUTBOX_V412_KEY = 'vs_whatsapp_outbox_v412';
 const WHATSAPP_MESSAGES_CACHE_V412_KEY = 'vs_whatsapp_messages_cache_v412';
+const WHATSAPP_MESSAGES_DEBUG_V413 = true;
+function debugWhatsappPersistV413(step, data = {}) {
+  if (!WHATSAPP_MESSAGES_DEBUG_V413) return;
+  try {
+    console.groupCollapsed(`[whatsapp_messages][persist] ${step}`);
+    console.log(data);
+    console.groupEnd();
+  } catch (e) {
+    console.log(`[whatsapp_messages][persist] ${step}`, data);
+  }
+}
 let supabaseWhatsappMessagesCacheV412 = [];
 
 function normalizeWhatsappDigitsV412(value = '') {
@@ -561,6 +572,7 @@ async function getCurrentSupabaseUserIdV412() {
 }
 
 async function persistOutgoingWhatsappMessageViaApiV412(payload = {}) {
+  debugWhatsappPersistV413('api:start', payload);
   try {
     const res = await fetch('/api/whatsapp/outgoing', {
       method: 'POST',
@@ -580,16 +592,19 @@ async function persistOutgoingWhatsappMessageViaApiV412(payload = {}) {
       })
     });
     const data = await res.json().catch(() => ({}));
+    debugWhatsappPersistV413('api:response', { status: res.status, ok: res.ok, data });
     if (!res.ok || data?.success === false) {
       throw new Error(data?.error || `HTTP ${res.status}`);
     }
     return { ok:true, pending:false, via:'api', data };
   } catch (error) {
+    debugWhatsappPersistV413('api:error', { error: error?.message || error });
     return { ok:false, pending:true, error:error?.message || 'Falha no endpoint de persistência' };
   }
 }
 
 async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
+  debugWhatsappPersistV413('start', { message, options });
   const queueOnFailure = options.queueOnFailure !== false;
   const userId = message.userId || await getCurrentSupabaseUserIdV412();
   const payload = {
@@ -603,12 +618,16 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
     response: message.response || null
   };
 
+  debugWhatsappPersistV413('payload', payload);
+
   if (!payload.id || !payload.instance || !payload.phone || !payload.text || !payload.userId) {
+    debugWhatsappPersistV413('blocked:missing-data', { payload, missing: { id:!payload.id, instance:!payload.instance, phone:!payload.phone, text:!payload.text, userId:!payload.userId } });
     if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
     return { ok:false, pending:queueOnFailure, error:'Dados insuficientes para salvar mensagem enviada' };
   }
 
   if (sbClient && currentUser?.id === payload.userId) {
+    debugWhatsappPersistV413('client:insert:start', { external_id: payload.id, user_id: payload.userId, lead_id: payload.leadId || null, instance: payload.instance, phone: payload.phone, body: payload.text, occurred_at: payload.occurredAt });
     const { error } = await sbClient
       .from('whatsapp_messages')
       .insert({
@@ -626,15 +645,23 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
         raw_payload: payload.response || null
       });
 
-    if (!error) return { ok:true, pending:false, via:'supabase' };
+    if (!error) {
+      debugWhatsappPersistV413('client:insert:success', { external_id: payload.id });
+      return { ok:true, pending:false, via:'supabase' };
+    }
+    debugWhatsappPersistV413('client:insert:error', { error: error.message, details: error });
     console.warn('[whatsapp_messages] saída via client:', error.message);
   }
 
   const apiResult = await persistOutgoingWhatsappMessageViaApiV412(payload);
-  if (apiResult.ok) return apiResult;
+  if (apiResult.ok) {
+    debugWhatsappPersistV413('success:api', apiResult);
+    return apiResult;
+  }
 
   console.warn('[whatsapp_messages] saída via api:', apiResult.error);
   if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+  debugWhatsappPersistV413('failed:queued', { queueOnFailure, apiResult });
   return { ok:false, pending:queueOnFailure, error:apiResult.error };
 }
 
