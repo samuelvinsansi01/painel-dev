@@ -547,46 +547,97 @@ function getConversationEvolutionConfigV412(leadId) {
   return instance ? { ...fallback, instance } : fallback;
 }
 
+async function getCurrentSupabaseUserIdV412() {
+  if (currentUser?.id) return currentUser.id;
+  try {
+    if (!sbClient?.auth?.getUser) return '';
+    const { data } = await sbClient.auth.getUser();
+    if (data?.user?.id) {
+      currentUser = data.user;
+      return data.user.id;
+    }
+  } catch(e) {}
+  return '';
+}
+
+async function persistOutgoingWhatsappMessageViaApiV412(payload = {}) {
+  try {
+    const res = await fetch('/api/whatsapp/outgoing', {
+      method: 'POST',
+      headers: { 'Content-Type':'application/json' },
+      body: JSON.stringify({
+        id: payload.id,
+        external_id: payload.id,
+        user_id: payload.userId,
+        lead_id: payload.leadId || null,
+        instance: payload.instance,
+        phone: payload.phone,
+        phone_normalized: normalizeWhatsappDigitsV412(payload.phone),
+        body: payload.text,
+        text: payload.text,
+        status: 'sent',
+        occurred_at: payload.occurredAt,
+        raw_payload: payload.response || null
+      })
+    });
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok || data?.success === false) {
+      throw new Error(data?.error || `HTTP ${res.status}`);
+    }
+    return { ok:true, pending:false, via:'api', data };
+  } catch (error) {
+    return { ok:false, pending:true, error:error?.message || 'Falha no endpoint de persistência' };
+  }
+}
+
 async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
   const queueOnFailure = options.queueOnFailure !== false;
+  const userId = message.userId || await getCurrentSupabaseUserIdV412();
   const payload = {
-    id: String(message.id || '').trim(),
+    id: String(message.id || '').trim() || buildOutgoingWhatsappExternalIdV412('out', message.response || {}),
     leadId: String(message.leadId || '').trim(),
     instance: String(message.instance || '').trim(),
     phone: String(message.phone || '').replace(/\D/g, ''),
     text: String(message.text || ''),
     occurredAt: message.occurredAt || new Date().toISOString(),
-    userId: message.userId || currentUser?.id || ''
+    userId,
+    response: message.response || null
   };
 
-  if (!payload.id || !payload.instance || !payload.userId || !sbClient || currentUser?.id !== payload.userId) {
+  if (!payload.id || !payload.instance || !payload.phone || !payload.text || !payload.userId) {
     if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
-    return { ok:false, pending:queueOnFailure, error:'Supabase indisponível ou sessão ausente' };
+    return { ok:false, pending:queueOnFailure, error:'Dados insuficientes para salvar mensagem enviada' };
   }
 
-  const { error } = await sbClient
-    .from('whatsapp_messages')
-    .upsert({
-      external_id: payload.id,
-      user_id: payload.userId,
-      lead_id: payload.leadId || null,
-      instance: payload.instance,
-      phone: payload.phone,
-      phone_normalized: normalizeWhatsappDigitsV412(payload.phone),
-      direction: 'out',
-      message_type: 'text',
-      body: payload.text,
-      status: 'sent',
-      occurred_at: payload.occurredAt,
-      updated_at: new Date().toISOString()
-    }, { onConflict: 'instance,external_id' });
-  if (error) {
-    console.warn('[whatsapp_messages] saída:', error.message);
-    if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
-    return { ok:false, pending:queueOnFailure, error:error.message };
+  if (sbClient && currentUser?.id === payload.userId) {
+    const { error } = await sbClient
+      .from('whatsapp_messages')
+      .insert({
+        external_id: payload.id,
+        user_id: payload.userId,
+        lead_id: payload.leadId || null,
+        instance: payload.instance,
+        phone: payload.phone,
+        phone_normalized: normalizeWhatsappDigitsV412(payload.phone),
+        direction: 'out',
+        message_type: 'text',
+        body: payload.text,
+        status: 'sent',
+        occurred_at: payload.occurredAt,
+        updated_at: new Date().toISOString(),
+        raw_payload: payload.response || null
+      });
+
+    if (!error) return { ok:true, pending:false, via:'supabase' };
+    console.warn('[whatsapp_messages] saída via client:', error.message);
   }
 
-  return { ok:true, pending:false };
+  const apiResult = await persistOutgoingWhatsappMessageViaApiV412(payload);
+  if (apiResult.ok) return apiResult;
+
+  console.warn('[whatsapp_messages] saída via api:', apiResult.error);
+  if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+  return { ok:false, pending:queueOnFailure, error:apiResult.error };
 }
 
 async function flushPendingOutgoingWhatsappMessagesV412() {

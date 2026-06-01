@@ -261,7 +261,7 @@ async function sendActiveLeadWhatsappMessage() {
 /* ════════════════════════════
    DRAWER WHATSAPP STATE V40.14
 ════════════════════════════ */
-function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
+async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   if (!leadId) return;
 
   const crm = ensureLeadCrm(leadId, lead || {});
@@ -305,15 +305,17 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   crm.pipelineStatus = crm.pipelineStatus || 'contato_enviado';
 
   saveLeadCrm(leadId, crm);
+  let persistence = { ok:false, pending:false };
   if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
-    persistOutgoingWhatsappMessageV412({
+    persistence = await persistOutgoingWhatsappMessageV412({
       id: messageId,
       leadId,
       instance: payload.instance || '',
       phone: payload.phone || '',
       text: payload.text || '',
-      occurredAt: now
-    }).catch(() => {});
+      occurredAt: now,
+      response: payload.response || null
+    });
   }
 
   try {
@@ -326,6 +328,7 @@ function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   try { renderConversationsV38(); } catch(e) {}
   try { updateConversationsBadgeV38(); } catch(e) {}
   try { renderKanban(); } catch(e) {}
+  return persistence;
 }
 
 function openLeadConversationV4014() {
@@ -374,7 +377,7 @@ async function sendActiveLeadWhatsappMessage() {
       text
     });
 
-    markLeadWhatsappSentV4014(activeLeadDrawerId, activeLeadDrawerData, {
+    const persistence = await markLeadWhatsappSentV4014(activeLeadDrawerId, activeLeadDrawerData, {
       text,
       phone,
       instance: cfg.instance,
@@ -382,8 +385,8 @@ async function sendActiveLeadWhatsappMessage() {
       response: data
     });
 
-    if (result) result.textContent = `Mensagem enviada em ${crmNowLabel()}.`;
-    notify('Mensagem enviada via Evolution.');
+    if (result) result.textContent = persistence?.ok ? `Mensagem enviada e salva em ${crmNowLabel()}.` : `Mensagem enviada em ${crmNowLabel()}. Sincronização com banco pendente.`;
+    notify(persistence?.ok ? 'Mensagem enviada e salva.' : 'Mensagem enviada via Evolution. Sincronização com banco pendente.', persistence?.ok ? undefined : 'warn');
   } catch (err) {
     try {
       addLeadHistory(activeLeadDrawerId, `WhatsApp: falha ao enviar mensagem (${err?.message || 'erro'})`, activeLeadDrawerData);
