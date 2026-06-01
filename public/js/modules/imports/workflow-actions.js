@@ -119,16 +119,112 @@ function editWhatsapp(id, day) {
   </div>`;
   document.getElementById(`waInput_${id}`).focus();
 }
-function saveWhatsapp(id, day) {
+function normalizeWhatsappForLeadSaveV43(value = '') {
+  let digits = String(value || '').replace(/\D/g, '').replace(/^0+/, '');
+  if (!digits) return '';
+  if (digits.startsWith('55') && (digits.length === 12 || digits.length === 13)) return digits;
+  if (digits.length === 10 || digits.length === 11) return '55' + digits;
+  if (!digits.startsWith('55') && digits.length > 11) {
+    const last11 = digits.slice(-11);
+    if (last11.length === 11) return '55' + last11;
+  }
+  return digits;
+}
+
+function applyWhatsappToLeadV43(lead, phone) {
+  if (!lead) return lead;
+  lead.whatsapp = phone;
+  lead.phone = phone;
+  lead.telefone = phone;
+  lead.updatedAt = new Date().toISOString();
+  return lead;
+}
+
+function updateWhatsappInLocalCollectionsV43(id, phone) {
+  if (!id) return;
+
+  const patchLead = lead => {
+    if (lead && String(lead.id) === String(id)) applyWhatsappToLeadV43(lead, phone);
+    return lead;
+  };
+
+  try {
+    const base = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
+    if (Array.isArray(base) && base.some(lead => String(lead?.id) === String(id))) {
+      const patched = base.map(patchLead);
+      localStorage.setItem(LEADS_BASE_KEY, JSON.stringify(patched));
+    }
+  } catch (err) { console.warn('[inicio][whatsapp] base local:', err); }
+
+  try {
+    const atrib = typeof getAtribuicaoData === 'function' ? getAtribuicaoData() : [];
+    if (Array.isArray(atrib) && atrib.some(lead => String(lead?.id) === String(id))) {
+      localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(atrib.map(patchLead)));
+    }
+  } catch (err) { console.warn('[inicio][whatsapp] atribuição:', err); }
+
+  try {
+    const val = typeof getValData === 'function' ? getValData() : [];
+    if (Array.isArray(val) && val.some(lead => String(lead?.id) === String(id))) {
+      localStorage.setItem(VAL_KEY, JSON.stringify(val.map(patchLead)));
+    }
+  } catch (err) { console.warn('[inicio][whatsapp] validação:', err); }
+
+  try {
+    const acomp = typeof getAcompData === 'function' ? getAcompData() : {};
+    let touched = false;
+    Object.keys(acomp || {}).forEach(month => {
+      if (!Array.isArray(acomp[month])) return;
+      acomp[month] = acomp[month].map(lead => {
+        if (String(lead?.id) === String(id)) { touched = true; return patchLead(lead); }
+        return lead;
+      });
+    });
+    if (touched) localStorage.setItem(ACOMP_KEY, JSON.stringify(acomp));
+  } catch (err) { console.warn('[inicio][whatsapp] acompanhamento:', err); }
+}
+
+async function persistWhatsappLeadUpdateV43(lead) {
+  if (!lead?.id) return { skipped:true };
+  try {
+    if (typeof upsertLeadToSupabase === 'function') {
+      const result = await upsertLeadToSupabase(lead);
+      console.log('[inicio][whatsapp] lead atualizado no Supabase', { id: lead.id, phone: lead.phone || lead.whatsapp, result });
+      return result;
+    }
+    if (window.supabaseDataAdapter?.saveLead) {
+      const result = await window.supabaseDataAdapter.saveLead(lead);
+      console.log('[inicio][whatsapp] lead atualizado no Supabase via adapter', { id: lead.id, phone: lead.phone || lead.whatsapp, result });
+      return result;
+    }
+  } catch (err) {
+    console.warn('[inicio][whatsapp] falha ao salvar número no Supabase:', err);
+    return { error: err };
+  }
+  return { skipped:true };
+}
+
+async function saveWhatsapp(id, day) {
   const input = document.getElementById(`waInput_${id}`);
   if (!input) return;
   const raw = input.value.trim();
+  const phone = normalizeWhatsappForLeadSaveV43(raw);
   const data = ensureWeekData();
   const emp  = (data.days[day]||[]).find(e => e.id === id);
   if (!emp) return;
-  emp.whatsapp = raw;
-  saveWeekData(data); updateBadges(); renderInicio();
-  notify(raw ? '✓ Número atualizado' : '✓ Número removido');
+
+  applyWhatsappToLeadV43(emp, phone);
+  updateWhatsappInLocalCollectionsV43(id, phone);
+  saveWeekData(data);
+  updateBadges();
+  renderInicio();
+
+  const result = await persistWhatsappLeadUpdateV43(emp);
+  if (result?.error) {
+    notify('Número atualizado localmente, mas não salvou no Supabase', 'warn');
+    return;
+  }
+  notify(phone ? '✓ Número atualizado e salvo' : '✓ Número removido e salvo');
 }
 function deleteEmpresa(id, day) {
   const data = ensureWeekData();
