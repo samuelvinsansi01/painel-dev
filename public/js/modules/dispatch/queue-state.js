@@ -99,9 +99,59 @@ function getFilaChip(chipId) {
   return filaDisparo[chipId];
 }
 
-function saveFilaDisparo() {
-  try { localStorage.setItem('vs_fila_disparo_v1', JSON.stringify(filaDisparo)); } catch(e) { console.warn('saveFilaDisparo error', e); }
-  scheduleLegacyOperationalSyncV36();
+function saveFilaDisparo({ delay = 250, reason = 'dispatch-queue-save' } = {}) {
+  const updatedAt = new Date().toISOString();
+  try {
+    localStorage.setItem(FILA_DISPARO_KEY, JSON.stringify(filaDisparo));
+    localStorage.setItem(FILA_DISPARO_UPDATED_AT_KEY_V431, updatedAt);
+  } catch(e) {
+    console.warn('saveFilaDisparo error', e);
+  }
+  uiSyncLogV426('optimistic-update', {
+    entity:'dispatch-queue',
+    action:'save-local-cache',
+    reason,
+    updatedAt,
+    count:Object.values(filaDisparo || {}).flat().length
+  });
+  scheduleLegacyOperationalSyncV36({ delay, reason });
+}
+
+function recoverSingleChipQueueAssignmentsV431() {
+  const chips = getChips();
+  if (chips.length !== 1) return 0;
+
+  const fila = getFilaChip(chips[0].id);
+  const filaIds = new Set(fila.map(item => item.id));
+  const data = ensureWeekData();
+  const recovered = [];
+
+  Object.values(data.days || {}).flat().forEach(emp => {
+    if (!emp?.id || !emp.whatsapp || emp.status !== 'Em fila' || filaIds.has(emp.id)) return;
+    filaIds.add(emp.id);
+    recovered.push({
+      id: emp.id,
+      nome: emp.nome,
+      site: emp.site || '',
+      whatsapp: emp.whatsapp,
+      mensagem: '',
+      templateIdx: -1,
+      ramoId: null,
+      status: 'aguardando',
+      aberto: false
+    });
+  });
+
+  if (!recovered.length) return 0;
+  fila.push(...recovered);
+  saveFilaDisparo({ delay:0, reason:'dispatch-single-chip-orphan-recovery' });
+  uiSyncLogV426('optimistic-update', {
+    entity:'dispatch-queue',
+    action:'recover-single-chip-orphans',
+    chipId:chips[0].id,
+    count:recovered.length
+  });
+  return recovered.length;
 }
 
 const CHIP_LIMIT = WHATSAPP_CHIP_DAILY_LIMIT_V426; // maximo de leads por chip por dia
@@ -132,7 +182,7 @@ function toggleFilaSlotEmpresa(slot, empId) {
       });
       saveWeekData(data);
     }
-    saveFilaDisparo();
+    saveFilaDisparo({ delay:0, reason:'dispatch-chip-assignment-remove' });
     renderDisparoEmpresas();
     chips.forEach((_, s) => renderFilaSlot(s, disparoDay));
     updateBadges();
@@ -185,7 +235,7 @@ function toggleFilaSlotEmpresa(slot, empId) {
     });
     saveWeekData(data);
   }
-  saveFilaDisparo();
+  saveFilaDisparo({ delay:0, reason:'dispatch-chip-assignment-add' });
   renderDisparoEmpresas();
   chips.forEach((_, s) => renderFilaSlot(s, disparoDay));
   updateBadges();
@@ -223,6 +273,7 @@ function toggleFila(empId) {
       saveWeekData(data);
     }
   }
+  saveFilaDisparo({ delay:0, reason:'dispatch-chip-assignment-toggle-legacy' });
   renderDisparoEmpresas(); renderFila(); updateBadges();
 }
 
@@ -274,7 +325,7 @@ function toggleFilaItem(id) {
 function atualizarMsgFila(id, val) {
   const fila = getFilaChip(disparoChipId);
   const item = fila.find(f => f.id === id);
-  if (item) item.mensagem = val;
+  if (item) { item.mensagem = val; saveFilaDisparo({ reason:'dispatch-message-update' }); }
 }
 
 function shuffleFilaMsgSlot(slot, id) {
@@ -300,6 +351,7 @@ function shuffleFilaMsg(id) {
   item.mensagem = text; item.templateIdx = idx;
   const el = document.getElementById(`fila-msg-${id}`);
   if (el) el.value = item.mensagem;
+  saveFilaDisparo({ reason:'dispatch-message-shuffle' });
 }
 function onRamoFilaChange(id, ramoId) {
   const fila = getFilaChip(disparoChipId);
@@ -326,6 +378,7 @@ function onImgChange(id, input, slot) {
     } else {
       item.imagemBase64 = e.target.result; item.imagemNome = file.name;
     }
+    saveFilaDisparo({ reason:'dispatch-image-update' });
     renderFila();
   };
   reader.readAsDataURL(file);
@@ -339,6 +392,7 @@ function removerImagem(id, slot) {
   } else {
     delete item.imagemBase64; delete item.imagemNome;
   }
+  saveFilaDisparo({ reason:'dispatch-image-remove' });
   renderFila();
 }
 function removerFila(id) {
@@ -354,7 +408,7 @@ function removerFila(id) {
         const emp = (data.days[day]||[]).find(e => e.id === id);
         if (emp && emp.status === 'Em fila') emp.status = 'Não enviada';
       });
-      saveWeekData(data); saveFilaDisparo(); updateBadges(); renderDisparoEmpresas(); renderFila();
+      saveWeekData(data); saveFilaDisparo({ delay:0, reason:'dispatch-chip-assignment-remove-legacy' }); updateBadges(); renderDisparoEmpresas(); renderFila();
     }
   );
 }
@@ -369,6 +423,7 @@ function limparFila() {
     });
     saveWeekData(data);
     filaDisparo[chipId] = [];
+    saveFilaDisparo({ delay:0, reason:'dispatch-chip-queue-clear-legacy' });
   }
   updateBadges(); renderDisparoEmpresas(); renderFila();
 }

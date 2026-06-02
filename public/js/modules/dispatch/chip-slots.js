@@ -50,7 +50,7 @@ function removerFilaSlot(slot, id) {
         const emp = (data.days[day]||[]).find(e => e.id === id);
         if (emp && emp.status === 'Em fila') emp.status = 'Não enviada';
       });
-      saveWeekData(data); saveFilaDisparo(); updateBadges();
+      saveWeekData(data); saveFilaDisparo({ delay:0, reason:'dispatch-chip-assignment-remove' }); updateBadges();
       renderDisparoEmpresas(); renderFilaSlot(slot, disparoDay);
     }
   );
@@ -74,7 +74,7 @@ function limparFilaChip(slot) {
   st.retryItems = [];
   st.retryDisparado = false;
   st.ultimoLoteFimTs = null;
-  saveFilaDisparo();
+  saveFilaDisparo({ delay:0, reason:'dispatch-chip-queue-clear' });
   updateBadges(); renderDisparoEmpresas(); renderFilaSlot(slot, disparoDay);
 }
 
@@ -264,7 +264,7 @@ async function dispararLoteChip(slot) {
   const enviados = lote.filter(f => f.status === 'enviado').map(f => f.id);
   if (enviados.length) {
     filaDisparo[chip.id] = filaDisparo[chip.id].filter(f => !enviados.includes(f.id));
-    saveFilaDisparo();
+    saveFilaDisparo({ delay:0, reason:'dispatch-chip-sent-items-remove' });
   }
 
   st.ultimoLoteFimTs = Date.now();
@@ -451,5 +451,4 @@ function atualizarStatusFilaSlot(slot, id, status) {
   const labels = { aguardando:'aguardando', enviando:'enviando...', enviado:'✓ enviado', erro:'✗ erro' };
   st.className = `fila-item-status ${status}`; st.textContent = labels[status]||status;
 }
-
 

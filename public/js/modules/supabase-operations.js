@@ -100,15 +100,22 @@ function shouldPreserveLocalOperationalDataV430(row = {}) {
 function restoreOperationalSnapshotV36(snapshot = {}) {
   const data = snapshot.data || {};
   const localLegacyChipsUpdatedAt = Date.parse(localStorage.getItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426) || '');
+  const localDispatchQueueUpdatedAt = Date.parse(localStorage.getItem(FILA_DISPARO_UPDATED_AT_KEY_V431) || '');
   const remoteExportedAt = Date.parse(snapshot.exportedAt || '');
   const preserveLocalLegacyChips = !!(
     localStorage.getItem(CHIPS_KEY)
     && localLegacyChipsUpdatedAt
     && (!remoteExportedAt || localLegacyChipsUpdatedAt > remoteExportedAt)
   );
+  const preserveLocalDispatchQueue = !!(
+    localStorage.getItem(FILA_DISPARO_KEY)
+    && localDispatchQueueUpdatedAt
+    && (!remoteExportedAt || localDispatchQueueUpdatedAt > remoteExportedAt)
+  );
 
   Object.entries(OPERATIONAL_DATA_KEYS_V36).forEach(([name, key]) => {
     if (name === 'legacyChips' && preserveLocalLegacyChips) return;
+    if (name === 'whatsappDispatchQueues' && preserveLocalDispatchQueue) return;
     if (data[name] === undefined) return;
     if (data[name] === null) {
       localStorage.removeItem(key);
@@ -121,6 +128,12 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
     scheduleOperationalSyncV36({ delay:0 });
   } else if (data.legacyChips !== undefined && snapshot.exportedAt) {
     localStorage.setItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426, snapshot.exportedAt);
+  }
+  if (preserveLocalDispatchQueue) {
+    uiSyncLogV426('optimistic-update', { entity:'dispatch-queue', action:'preserve-newer-local-cache' });
+    scheduleOperationalSyncV36({ delay:0 });
+  } else if (data.whatsappDispatchQueues !== undefined && snapshot.exportedAt) {
+    localStorage.setItem(FILA_DISPARO_UPDATED_AT_KEY_V431, snapshot.exportedAt);
   }
 
   try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
@@ -203,6 +216,7 @@ async function loadOperationalDataFromSupabaseV36() {
 
     if (!data?.payload) {
       if (getOperationalDirtyAtV430()) {
+        try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
         uiSyncLogV426('optimistic-update', { entity:'operational-data', action:'preserve-local-cache-without-remote-snapshot' });
         scheduleOperationalSyncV36({ delay:0 });
         setPersistenceStatusV36('Dados locais pendentes preservados. Enviando ao Supabase...', 'warn');
@@ -213,6 +227,7 @@ async function loadOperationalDataFromSupabaseV36() {
     }
 
     if (shouldPreserveLocalOperationalDataV430(data)) {
+      try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
       uiSyncLogV426('optimistic-update', {
         entity:'operational-data',
         action:'preserve-newer-local-cache',

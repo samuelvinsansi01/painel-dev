@@ -80,6 +80,7 @@ const INSTA_KEY      = 'vs_insta_fila_v2';  // fila instagram aguardando atribui
 const INSTA_WEEK_KEY = 'vs_insta_week_v1';  // leads instagram atribuídos por dia
 const INSTA_SCHED_KEY = 'vs_insta_sched_v1'; // cronograma instagram
 const FILA_DISPARO_KEY = 'vs_fila_disparo_v1'; // fila de disparo WhatsApp
+const FILA_DISPARO_UPDATED_AT_KEY_V431 = 'vs_fila_disparo_v1_updated_at_v431';
 const RECUPERAR_VALIDACAO_ZAP_KEY = 'vs_recover_validacao_zap_v1';
 const LEAD_CRM_KEY   = 'vs_lead_crm_v1'; // notas, histórico e pipeline comercial
 const LEADS_BASE_KEY = 'vs_leads_base_v1'; // inventário permanente, independente da agenda semanal
@@ -261,6 +262,7 @@ function clearLocalSessionData() {
     'vs_insta_week_v1',
     'vs_insta_sched_v1',
     'vs_fila_disparo_v1',
+    'vs_fila_disparo_v1_updated_at_v431',
     'vs_recover_validacao_zap_v1',
     'vin_zap_backlog',
     'vs_lead_crm_v1',

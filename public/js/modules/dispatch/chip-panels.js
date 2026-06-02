@@ -124,6 +124,8 @@ function renderChipAccordions() {
 function renderFilaZap() {
   const devolvidos = devolverZapNaoValidadoParaValidacao();
   if (devolvidos) notify(`↩ ${devolvidos} lead(s) sem WhatsApp validado voltaram para Validação`, 'warn');
+  const recovered = recoverSingleChipQueueAssignmentsV431();
+  if (recovered) notify(`↻ ${recovered} lead(s) restaurado(s) na fila do chip`);
   sincronizarFilaComEnviados();
   const chips = getChips();
   const weekDays = currentWeekDays();
