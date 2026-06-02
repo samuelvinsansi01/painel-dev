@@ -16,7 +16,7 @@ function checkHorarioDisparo(now) {
       st &&
       !st.disparoEmAndamento &&
       !st.aguardandoLote &&
-      getFilaChip(chip.id).some(item => item.status === 'aguardando')
+      getFilaChipNoDia(chip.id, todayStr()).some(item => item.status === 'aguardando')
     );
 
   if (nowH === hh && nowM === mm && horarioUltimoDisparo !== key && slotsProntos.length) {
@@ -50,6 +50,7 @@ function loadEvoConfig(){
 
   try {
     const raw =
+      localStorage.getItem(EVO_KEY) ||
       localStorage.getItem('vs_evo_config') ||
       localStorage.getItem('evo_config') ||
       localStorage.getItem('vs_disparo_config') ||
@@ -75,7 +76,8 @@ function saveEvoConfig() {
     horarioInicio: document.getElementById('horarioInicio')?.value,
   };
   localStorage.setItem(EVO_KEY, JSON.stringify(cfg));
-  scheduleLegacyOperationalSyncV36();
+  uiSyncLogV426('optimistic-update', { entity:'evolution-config', action:'save-local-cache' });
+  scheduleLegacyOperationalSyncV36({ delay:0, reason:'evolution-config-save' });
   if (typeof atualizarStatsDisparo === 'function') atualizarStatsDisparo();
 }
 function toggleLoteConfig() {

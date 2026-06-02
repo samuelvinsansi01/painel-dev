@@ -23,6 +23,8 @@ const OPERATIONAL_DATA_KEYS_V36 = {
   branches: RAMOS_KEY,
   legacyTemplates: TEMPLATES_KEY,
   branchTemplates: TEMPLATES_RAMO_KEY,
+  instagramTemplates: 'vs_insta_templates_v1',
+  batchConfig: 'vs_lote_cfg_v1',
   whatsappQueue: 'vs_whatsapp_queue_v27',
   queueCampaigns: 'vs_queue_campaigns_v27',
   queueTemplates: 'vs_queue_templates_v27',

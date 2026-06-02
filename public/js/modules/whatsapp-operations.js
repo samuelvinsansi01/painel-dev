@@ -15,8 +15,8 @@ function getQueueCampaigns() {
 }
 
 function saveQueueCampaigns(list) {
-  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(QUEUE_CAMPAIGNS_V27_KEY, JSON.stringify(list || []));
+  try { scheduleLegacyOperationalSyncV36({ delay:400, reason:'queue-campaign-update' }); } catch(e){}
 }
 
 function getQueueTemplates() {
@@ -32,8 +32,9 @@ function getQueueTemplates() {
 }
 
 function saveQueueTemplates(list) {
-  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(QUEUE_TEMPLATES_V27_KEY, JSON.stringify(list || []));
+  uiSyncLogV426('optimistic-update', { entity:'template', action:'save-queue-cache', count:Array.isArray(list) ? list.length : 0 });
+  try { scheduleLegacyOperationalSyncV36({ delay:400, reason:'queue-template-update' }); } catch(e){}
 }
 
 function getWhatsappQueueV27() {
@@ -46,8 +47,9 @@ function getWhatsappQueueV27() {
 }
 
 function saveWhatsappQueueV27(list) {
-  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(WHATSAPP_QUEUE_V27_KEY, JSON.stringify(list || []));
+  uiSyncLogV426('optimistic-update', { entity:'whatsapp-queue', action:'save-local-cache', count:Array.isArray(list) ? list.length : 0 });
+  try { scheduleLegacyOperationalSyncV36({ delay:400, reason:'whatsapp-queue-update' }); } catch(e){}
   updateWhatsappQueueBadge();
   if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
 }

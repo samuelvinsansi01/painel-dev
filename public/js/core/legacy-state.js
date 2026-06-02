@@ -56,7 +56,11 @@ function getRamoTemplatesDefault(ramoId, tipo) {
 function getRamoTemplates() {
   try { return JSON.parse(localStorage.getItem(TEMPLATES_RAMO_KEY)||'null') || {}; } catch { return {}; }
 }
-function saveRamoTemplates(obj) { localStorage.setItem(TEMPLATES_RAMO_KEY, JSON.stringify(obj)); scheduleLegacyOperationalSyncV36(); }
+function saveRamoTemplates(obj) {
+  localStorage.setItem(TEMPLATES_RAMO_KEY, JSON.stringify(obj));
+  uiSyncLogV426('optimistic-update', { entity:'template', action:'save-branch-cache', count:Object.keys(obj || {}).length });
+  scheduleLegacyOperationalSyncV36({ delay:400, reason:'branch-template-update' });
+}
 
 function getTemplatesForRamoTipo(ramoId, tipo) {
   const all = getRamoTemplates();
@@ -210,7 +214,11 @@ function capitalizeName(raw) {
 function getTemplates() {
   try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || 'null') || TEMPLATES_DEFAULT; } catch { return TEMPLATES_DEFAULT; }
 }
-function saveTemplates(t) { localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t)); scheduleLegacyOperationalSyncV36(); }
+function saveTemplates(t) {
+  localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t));
+  uiSyncLogV426('optimistic-update', { entity:'template', action:'save-default-cache', count:Array.isArray(t) ? t.length : 0 });
+  scheduleLegacyOperationalSyncV36({ delay:400, reason:'default-template-update' });
+}
 
 function pickTemplate(nome, ramoId) {
   const tpl = ramoId ? getTemplatesForRamoTipo(ramoId, 'com-site') : getTemplates();

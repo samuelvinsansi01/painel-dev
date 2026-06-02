@@ -20,6 +20,53 @@ function getDailyLimit() { return Math.max(1, getChips().length) * WHATSAPP_CHIP
 /* ─── Helpers por slot ─── */
 function getChipBySlot(slot) { return getChips()[slot] || null; }
 
+function getChipDispatchRuntimeMapV432() {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(CHIP_DISPATCH_RUNTIME_KEY_V432) || '{}');
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+function saveChipDispatchRuntimeV432(chipId, runtime = null) {
+  if (!chipId) return;
+  const map = getChipDispatchRuntimeMapV432();
+  if (runtime) {
+    map[chipId] = { ...runtime, updatedAt:new Date().toISOString() };
+  } else {
+    delete map[chipId];
+  }
+  try {
+    localStorage.setItem(CHIP_DISPATCH_RUNTIME_KEY_V432, JSON.stringify(map));
+  } catch (e) {
+    console.warn('[dispatch][persist] runtime-save-error', e);
+  }
+  debugDispatchPersistV413('runtime-save', { chipId, runtime:map[chipId] || null });
+}
+
+function getChipDispatchReloadLockV432(chipId) {
+  const runtime = getChipDispatchRuntimeMapV432()[chipId];
+  if (!runtime) return null;
+  const waitUntil = Number(runtime.waitUntil || 0);
+  if (waitUntil > Date.now()) return runtime;
+  if (runtime.state === 'sending') return runtime;
+  saveChipDispatchRuntimeV432(chipId, null);
+  return null;
+}
+
+function blockChipDispatchReloadLockV432(slot, chip) {
+  const runtime = getChipDispatchReloadLockV432(chip.id);
+  if (!runtime) return false;
+  if (runtime.state === 'sending') {
+    notify(`// Chip ${slot + 1}: envio interrompido em estado incerto. Confira a fila antes de reenviar.`, 'err');
+    return true;
+  }
+  const remainingMinutes = Math.max(1, Math.ceil((Number(runtime.waitUntil) - Date.now()) / 60000));
+  notify(`// Chip ${slot + 1}: aguarde ${remainingMinutes}min antes de retomar o disparo.`, 'warn');
+  return true;
+}
+
 function toggleFilaItemSlot(slot, id) {
   const chip = getChipBySlot(slot); if (!chip) return;
   const fila = getFilaChip(chip.id);
@@ -45,6 +92,7 @@ function removerFilaSlot(slot, id) {
     () => {
       const f2 = getFilaChip(chip.id).filter(f => f.id !== id);
       filaDisparo[chip.id] = f2;
+      if (!f2.length) saveChipDispatchRuntimeV432(chip.id, null);
       const data = ensureWeekData();
       Object.keys(data.days).forEach(day => {
         const emp = (data.days[day]||[]).find(e => e.id === id);
@@ -74,8 +122,121 @@ function limparFilaChip(slot) {
   st.retryItems = [];
   st.retryDisparado = false;
   st.ultimoLoteFimTs = null;
+  saveChipDispatchRuntimeV432(chip.id, null);
   saveFilaDisparo({ delay:0, reason:'dispatch-chip-queue-clear' });
   updateBadges(); renderDisparoEmpresas(); renderFilaSlot(slot, disparoDay);
+}
+
+function normalizeDispatchPhoneV432(value = '') {
+  const digits = String(value || '').replace(/\D/g, '');
+  return digits.startsWith('55') ? digits : '55' + digits;
+}
+
+function getDuplicateDispatchItemsV432() {
+  const today = todayStr();
+  const byLead = new Map();
+  const byPhone = new Map();
+
+  getChips().forEach((chip, slot) => {
+    getFilaChipNoDia(chip.id, today)
+      .filter(item => item.status === 'aguardando')
+      .forEach(item => {
+        const leadKey = String(item.id || '').trim();
+        const phoneKey = normalizeDispatchPhoneV432(item.whatsapp);
+        if (leadKey) {
+          if (!byLead.has(leadKey)) byLead.set(leadKey, []);
+          byLead.get(leadKey).push(slot);
+        }
+        if (phoneKey) {
+          if (!byPhone.has(phoneKey)) byPhone.set(phoneKey, []);
+          byPhone.get(phoneKey).push({ id:item.id, slot });
+        }
+      });
+  });
+
+  return {
+    leadIds: [...byLead.entries()].filter(([, slots]) => slots.length > 1).map(([id]) => id),
+    phones: [...byPhone.entries()]
+      .filter(([, items]) => items.length > 1)
+      .map(([phone]) => phone)
+  };
+}
+
+async function validateDispatchPreflightV432(slot, items = []) {
+  const chip = getChipBySlot(slot);
+  if (!chip) return { ok:false, error:`Chip ${slot + 1} não configurado` };
+
+  const missing = [];
+  if (!String(chip.url || '').trim()) missing.push('URL');
+  if (!String(chip.instance || '').trim()) missing.push('instância');
+  if (!String(chip.key || '').trim()) missing.push('API key');
+  if (missing.length) {
+    const error = `Chip ${slot + 1} incompleto: ${missing.join(', ')}`;
+    debugDispatchPersistV413('preflight-error', { slot, error });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  }
+
+  const uncertain = getFilaChipNoDia(chip.id, todayStr()).filter(item => item.status === 'enviando');
+  if (uncertain.length) {
+    const error = `${uncertain.length} envio(s) em estado incerto. Confira antes de reenviar.`;
+    debugDispatchPersistV413('preflight-error', { slot, error, ids:uncertain.map(item => item.id) });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  }
+
+  const withoutMessage = items.filter(item => !item.textSent && !String(item.mensagem || '').trim());
+  if (withoutMessage.length) {
+    const error = `${withoutMessage.length} lead(s) sem mensagem. Selecione o ramo do lote antes de disparar.`;
+    debugDispatchPersistV413('preflight-error', { slot, error, ids:withoutMessage.map(item => item.id) });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  }
+
+  const invalidPhones = items.filter(item => {
+    const phone = normalizeDispatchPhoneV432(item.whatsapp);
+    return phone.length < 12 || phone.length > 13;
+  });
+  if (invalidPhones.length) {
+    const error = `${invalidPhones.length} lead(s) com telefone inválido.`;
+    debugDispatchPersistV413('preflight-error', { slot, error, ids:invalidPhones.map(item => item.id) });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  }
+
+  const duplicates = getDuplicateDispatchItemsV432();
+  if (duplicates.leadIds.length || duplicates.phones.length) {
+    const error = `Duplicidade na fila: ${duplicates.leadIds.length} lead(s) e ${duplicates.phones.length} telefone(s).`;
+    debugDispatchPersistV413('preflight-error', { slot, error, duplicates });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  }
+
+  const url = String(chip.url).replace(/\/+$/, '');
+  const endpoint = `${url}/instance/connectionState/${encodeURIComponent(chip.instance)}`;
+  const controller = typeof AbortController === 'function' ? new AbortController() : null;
+  const timeout = setTimeout(() => controller?.abort(), 8000);
+
+  try {
+    const response = await fetch(endpoint, { method:'GET', headers:{ apikey:chip.key }, signal:controller?.signal });
+    const data = await response.json().catch(() => ({}));
+    const state = String(data?.instance?.state || data?.state || '').toLowerCase();
+    if (!response.ok || !['open', 'connected'].includes(state)) {
+      const error = `Chip ${slot + 1} não conectado (${state || `HTTP ${response.status}`}).`;
+      debugDispatchPersistV413('preflight-error', { slot, error, endpoint, status:response.status, state });
+      notify(`// ${error}`, 'err');
+      return { ok:false, error };
+    }
+    debugDispatchPersistV413('preflight-success', { slot, chipId:chip.id, state, count:items.length });
+    return { ok:true, state };
+  } catch (err) {
+    const error = `Falha ao confirmar conexão do Chip ${slot + 1}: ${err?.message || err}`;
+    debugDispatchPersistV413('preflight-error', { slot, error, endpoint });
+    notify(`// ${error}`, 'err');
+    return { ok:false, error };
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 /* ─── Iniciar disparo por slot ─── */
@@ -90,14 +251,21 @@ async function iniciarDisparoChip(slot) {
   if (st.disparoEmAndamento || st.aguardandoLote) return;
   const chip = getChipBySlot(slot);
   if (!chip) { notify('// chip ' + (slot+1) + ' não configurado','err'); return; }
-  const fila = getFilaChip(chip.id).filter(f => f.status !== 'enviado');
+  if (blockChipDispatchReloadLockV432(slot, chip)) return;
+  const fila = getFilaChipNoDia(chip.id, todayStr()).filter(f => f.status !== 'enviado');
   if (!fila.length) { notify('// fila vazia','warn'); return; }
 
   // Congela o lote — snapshot dos itens aguardando
   const LOTE_SIZE = getLoteSize();
-  const filaCompleta = getFilaChip(chip.id);
+  const filaCompleta = getFilaChipNoDia(chip.id, todayStr());
   const pendentes = filaCompleta.filter(f => f.status === 'aguardando');
   if (!pendentes.length) { notify('// nenhum item aguardando — todos já enviados','warn'); return; }
+  const preflight = await validateDispatchPreflightV432(slot, pendentes);
+  if (!preflight.ok) return;
+  pendentes.forEach((item, index) => {
+    if (!item.mediaLoteNum) item.mediaLoteNum = Math.floor(index / LOTE_SIZE) + 1;
+  });
+  saveFilaDisparo({ delay:0, reason:'dispatch-chip-preflight-ready' });
 
   // ── Validação: todos os lotes com pendentes devem ter imagem ──
   // Itera apenas sobre itens aguardando, que é como os lotes são
@@ -148,6 +316,12 @@ async function dispararLoteChip(slot) {
   const chipCor   = slot === 0 ? 'var(--accent)' : '#5bb8f5';
 
   st.disparoEmAndamento = true;
+  saveChipDispatchRuntimeV432(chip.id, {
+    state:'sending',
+    slot,
+    loteAtual:st.loteAtual,
+    lotesTotal:st.lotesTotal
+  });
   const btnEl  = document.getElementById(`btnDisparar${slot}`);
   const spinEl = document.getElementById(`spinner${slot}`);
   const btnTxt = document.getElementById(`disparoBtn${slot}`);
@@ -187,46 +361,71 @@ async function dispararLoteChip(slot) {
     }
 
     item.status = 'enviando';
+    saveChipDispatchRuntimeV432(chip.id, {
+      state:'sending',
+      slot,
+      loteAtual:st.loteAtual,
+      lotesTotal:st.lotesTotal,
+      itemId:item.id
+    });
+    saveFilaDisparo({ delay:0, reason:'dispatch-chip-item-sending' });
     atualizarStatusFilaSlot(slot, item.id, 'enviando');
     log(`Enviando para <span style="color:var(--text)">${escHtml(item.nome)}</span>...`);
     try {
       const waNum  = item.whatsapp.replace(/\D/g,'');
       const numero = waNum.startsWith('55') ? waNum : '55' + waNum;
+      if (!item.mediaLoteNum) item.mediaLoteNum = st.loteAtual;
 
       // MSG 1 — Apresentação
-      const payload1 = { number: numero, options: { delay: 1000 }, textMessage: { text: item.mensagem } };
-      const res1 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload1) });
-      const data1 = await res1.json().catch(() => ({}));
-      if (!res1.ok) throw new Error((data1 && (data1.message || data1.error)) || `HTTP ${res1.status}`);
-      log(`  ① apresentação enviada`);
+      if (!item.textSent) {
+        const payload1 = { number: numero, options: { delay: 1000 }, textMessage: { text: item.mensagem } };
+        const res1 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload1) });
+        const data1 = await res1.json().catch(() => ({}));
+        if (!res1.ok) throw new Error((data1 && (data1.message || data1.error)) || `sendText HTTP ${res1.status}`);
+        item.textSent = true;
+        saveFilaDisparo({ delay:0, reason:'dispatch-chip-text-sent' });
+        log(`  ① apresentação enviada`);
 
-      // Persistir o envio inicial no histórico de conversas somente após sucesso na Evolution.
-      debugDispatchPersistV413('persist-function-check', { file: 'chip-slots.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
-      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
-        const persistence = await persistOutgoingWhatsappMessageV412({
-          id: typeof getEvolutionWhatsappExternalIdV412 === 'function'
-            ? getEvolutionWhatsappExternalIdV412(data1, item.id)
-            : '',
-          leadId: item.leadId || item.id || '',
-          instance: chip.instance,
-          phone: numero,
-          text: item.mensagem || '',
-          occurredAt: new Date().toISOString(),
-          response: data1
-        }, { queueOnFailure: true });
-        if (persistence?.ok) log(`  ↳ conversa salva no banco`);
-        else log(`  ↳ <span style="color:var(--warning)">conversa pendente de sincronização</span>`);
+        // Persistir o envio inicial no histórico de conversas somente após sucesso na Evolution.
+        debugDispatchPersistV413('persist-function-check', { file: 'chip-slots.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
+        if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+          const persistence = await persistOutgoingWhatsappMessageV412({
+            id: typeof getEvolutionWhatsappExternalIdV412 === 'function'
+              ? getEvolutionWhatsappExternalIdV412(data1, item.id)
+              : '',
+            leadId: item.leadId || item.id || '',
+            instance: chip.instance,
+            phone: numero,
+            text: item.mensagem || '',
+            occurredAt: new Date().toISOString(),
+            response: data1
+          }, { queueOnFailure: true });
+          if (persistence?.ok) log(`  ↳ conversa salva no banco`);
+          else log(`  ↳ <span style="color:var(--warning)">conversa pendente de sincronização</span>`);
+        }
+        await new Promise(r => setTimeout(r, MSG_DELAY));
+      } else {
+        log(`  ① apresentação já enviada — retomando imagem pendente`);
       }
-      await new Promise(r => setTimeout(r, MSG_DELAY));
 
       // MSG 2 — Imagem do lote
-      const loteNum = st.loteAtual;
+      const loteNum = item.mediaLoteNum || st.loteAtual;
       const imgRedesign = getLoteImagem(chip.id, loteNum);
-      if (imgRedesign) {
-        await new Promise(r => setTimeout(r, MSG_DELAY));
+      if (!imgRedesign && !item.mediaSent) throw new Error(`Imagem do lote ${loteNum} indisponível`);
+      if (imgRedesign && !item.mediaSent) {
         const b2 = imgRedesign.split(',')[1], m2 = imgRedesign.split(';')[0].split(':')[1] || 'image/jpeg';
-        const payload3 = { number: numero, options: { delay: 1000 }, mediaMessage: { mediatype: 'image', media: b2, mimetype: m2, caption: '' } };
-        await fetch(`${chip.url}/message/sendMedia/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload3) });
+        if (!b2) throw new Error('Imagem do lote inválida');
+        const payload3 = { number: numero, options: { delay: 1000 }, mediaMessage: { mediatype: 'image', media: b2, mimetype: m2, fileName: `lote-${loteNum}.jpg`, caption: '' } };
+        debugDispatchPersistV413('evolution-media-start', { file:'chip-slots.js', chipId:chip.id, loteNum, itemId:item.id, mimetype:m2 });
+        const res3 = await fetch(`${chip.url}/message/sendMedia/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload3) });
+        const data3 = await res3.json().catch(() => ({}));
+        if (!res3.ok) {
+          debugDispatchPersistV413('evolution-media-error', { file:'chip-slots.js', chipId:chip.id, loteNum, itemId:item.id, status:res3.status, response:data3 });
+          throw new Error((data3 && (data3.message || data3.error)) || `sendMedia HTTP ${res3.status}`);
+        }
+        item.mediaSent = true;
+        saveFilaDisparo({ delay:0, reason:'dispatch-chip-media-sent' });
+        debugDispatchPersistV413('evolution-media-success', { file:'chip-slots.js', chipId:chip.id, loteNum, itemId:item.id });
         log(`  ② imagem enviada`);
       }
 
@@ -236,11 +435,19 @@ async function dispararLoteChip(slot) {
       log(`<span style="color:${chipCor}">✓ ${escHtml(item.nome)}</span>`);
     } catch(e) {
       item.status = 'erro';
+      saveFilaDisparo({ delay:0, reason:'dispatch-chip-item-error' });
       atualizarStatusFilaSlot(slot, item.id, 'erro');
       log(`<span style="color:var(--error)">✗ Erro — ${e.message}</span>`);
     }
     if (i < lote.length - 1) {
       const delay = (delayMin + Math.random()*(delayMax-delayMin))*1000;
+      saveChipDispatchRuntimeV432(chip.id, {
+        state:'waiting-message',
+        slot,
+        loteAtual:st.loteAtual,
+        lotesTotal:st.lotesTotal,
+        waitUntil:Date.now() + delay
+      });
       log(`Aguardando ${Math.round(delay/1000)}s...`);
       await new Promise(r => setTimeout(r, delay));
     }
@@ -278,6 +485,13 @@ async function dispararLoteChip(slot) {
     const esperaMs = esperaMin * 60 * 1000;
     st.loteEsperaFim = Date.now() + esperaMs;
     st.aguardandoLote = true;
+    saveChipDispatchRuntimeV432(chip.id, {
+      state:'waiting-lot',
+      slot,
+      loteAtual:st.loteAtual,
+      lotesTotal:st.lotesTotal,
+      waitUntil:st.loteEsperaFim
+    });
     if (btnEl)  btnEl.disabled = true;
     if (btnTxt) btnTxt.textContent = `🟡 Aguardando lote ${st.loteAtual+1}/${st.lotesTotal}`;
     const panel = document.getElementById(`loteEsperaPanel${slot}`);
@@ -295,6 +509,7 @@ async function dispararLoteChip(slot) {
     // Todos os lotes concluídos
     st.aguardandoLote = false;
     st.pausado = false;
+    saveChipDispatchRuntimeV432(chip.id, null);
     if (btnEl)  btnEl.disabled = false;
     if (btnTxt) btnTxt.textContent = slot === 0 ? '🟢 Disparar' : '🔵 Disparar';
     _atualizarBotaoPausa(slot);
@@ -344,6 +559,7 @@ async function iniciarRetryChip(slot) {
   if (st.disparoEmAndamento || st.aguardandoLote) return;
   if (!st.retryItems || !st.retryItems.length) { notify('// nenhum item para retry','warn'); return; }
   const chip = getChipBySlot(slot); if (!chip) return;
+  if (blockChipDispatchReloadLockV432(slot, chip)) return;
 
   st.retryDisparado = true;
   // Remove painel de retry
@@ -391,6 +607,8 @@ function cancelarLotesChip(slot) {
   if (st.loteCountdownInt) { clearInterval(st.loteCountdownInt); st.loteCountdownInt = null; }
   st.filaLotes = []; st.loteAtual = 0; st.lotesTotal = 0;
   st.aguardandoLote = false; st.loteEsperaFim = null;
+  const chip = getChipBySlot(slot);
+  if (chip) saveChipDispatchRuntimeV432(chip.id, null);
   st.pausado = false;
   const panel = document.getElementById(`loteEsperaPanel${slot}`);
   if (panel) panel.style.display = 'none';
@@ -441,6 +659,8 @@ async function confirmarProximoLoteChip(slot) {
   if (st.loteCountdownInt) { clearInterval(st.loteCountdownInt); st.loteCountdownInt = null; }
   if (st.loteEsperaTimer)  { clearTimeout(st.loteEsperaTimer);   st.loteEsperaTimer = null; }
   st.aguardandoLote = false;
+  const chip = getChipBySlot(slot);
+  if (chip) saveChipDispatchRuntimeV432(chip.id, null);
   await dispararLoteChip(slot);
 }
 
@@ -451,4 +671,3 @@ function atualizarStatusFilaSlot(slot, id, status) {
   const labels = { aguardando:'aguardando', enviando:'enviando...', enviado:'✓ enviado', erro:'✗ erro' };
   st.className = `fila-item-status ${status}`; st.textContent = labels[status]||status;
 }
-

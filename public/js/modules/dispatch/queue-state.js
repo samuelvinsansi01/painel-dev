@@ -225,6 +225,13 @@ function toggleFilaSlotEmpresa(slot, empId) {
   }
 
   // Chip tem vaga — adicionar normalmente
+  const slotExistente = chips.findIndex((c, s) =>
+    s !== slot && getFilaChip(c.id).some(item => item.id === empId && item.status !== 'enviado')
+  );
+  if (slotExistente >= 0) {
+    notify(`// empresa já está na fila do Chip ${slotExistente + 1}`, 'warn');
+    return;
+  }
   const jaEnviado = ['Enviada','Respondida','Não respondida','Recusada','Fechada'].includes(emp.status||'');
   const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
   fila.push({ id: emp.id, nome: emp.nome, site: emp.site || '', whatsapp: emp.whatsapp, mensagem: '', templateIdx: -1, ramoId: null, status: filaStatus, aberto: false });

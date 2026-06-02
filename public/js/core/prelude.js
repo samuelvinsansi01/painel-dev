@@ -25,7 +25,7 @@ function getDisparoConfigSafeV419(){
     }
   } catch {}
   try {
-    const raw = localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
+    const raw = localStorage.getItem('vs_evo_config_v2') || localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
     const parsed = JSON.parse(raw);
     return { ...defaults, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
   } catch {
@@ -48,7 +48,7 @@ function getDisparoConfigSafeV418(){
     loteAtivo: 1
   };
   try {
-    const raw = localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
+    const raw = localStorage.getItem('vs_evo_config_v2') || localStorage.getItem('vs_disparo_config') || localStorage.getItem('disparoConfig') || '{}';
     const parsed = JSON.parse(raw);
     return { ...defaults, ...(parsed && typeof parsed === 'object' ? parsed : {}) };
   } catch {
@@ -81,6 +81,7 @@ const INSTA_WEEK_KEY = 'vs_insta_week_v1';  // leads instagram atribuídos por d
 const INSTA_SCHED_KEY = 'vs_insta_sched_v1'; // cronograma instagram
 const FILA_DISPARO_KEY = 'vs_fila_disparo_v1'; // fila de disparo WhatsApp
 const FILA_DISPARO_UPDATED_AT_KEY_V431 = 'vs_fila_disparo_v1_updated_at_v431';
+const CHIP_DISPATCH_RUNTIME_KEY_V432 = 'vs_chip_dispatch_runtime_v432';
 const RECUPERAR_VALIDACAO_ZAP_KEY = 'vs_recover_validacao_zap_v1';
 const LEAD_CRM_KEY   = 'vs_lead_crm_v1'; // notas, histórico e pipeline comercial
 const LEADS_BASE_KEY = 'vs_leads_base_v1'; // inventário permanente, independente da agenda semanal
@@ -263,6 +264,7 @@ function clearLocalSessionData() {
     'vs_insta_sched_v1',
     'vs_fila_disparo_v1',
     'vs_fila_disparo_v1_updated_at_v431',
+    'vs_chip_dispatch_runtime_v432',
     'vs_recover_validacao_zap_v1',
     'vin_zap_backlog',
     'vs_lead_crm_v1',
@@ -292,6 +294,7 @@ function clearLocalSessionData() {
     'vs_templates_v2',
     'vs_templates_ramo_v1',
     'vs_templates_insta_v1',
+    'vs_insta_templates_v1',
     'vs_lote_cfg_v1',
     'vs_disparo_config',
     'disparoConfig',

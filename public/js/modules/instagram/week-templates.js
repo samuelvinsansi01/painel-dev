@@ -87,7 +87,11 @@ Montei uma amostra do que poderia ser feito para vocês. Dá uma olhada e me fal
 function getInstaTemplates() {
   try { return JSON.parse(localStorage.getItem(INSTA_TEMPLATES_KEY)||'null') || INSTA_TEMPLATES_DEFAULT; } catch { return INSTA_TEMPLATES_DEFAULT; }
 }
-function saveInstaTemplates(t) { localStorage.setItem(INSTA_TEMPLATES_KEY, JSON.stringify(t)); }
+function saveInstaTemplates(t) {
+  localStorage.setItem(INSTA_TEMPLATES_KEY, JSON.stringify(t));
+  uiSyncLogV426('optimistic-update', { entity:'template', action:'save-instagram-cache', count:Array.isArray(t) ? t.length : 0 });
+  scheduleLegacyOperationalSyncV36({ delay:400, reason:'instagram-template-update' });
+}
 
 function sortearInstaTemplate(nome) {
   const tpls = getInstaTemplates();

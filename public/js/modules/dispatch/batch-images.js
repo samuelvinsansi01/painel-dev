@@ -9,7 +9,13 @@ function getLoteCfg() {
   }
 }
 function saveLoteCfg(cfg) {
-  try { localStorage.setItem(LOTE_CFG_KEY, JSON.stringify(cfg)); } catch(e) {}
+  try {
+    localStorage.setItem(LOTE_CFG_KEY, JSON.stringify(cfg));
+    uiSyncLogV426('optimistic-update', { entity:'dispatch-batch-config', action:'save-local-cache', count:Object.keys(cfg || {}).length });
+    scheduleLegacyOperationalSyncV36({ delay:400, reason:'dispatch-batch-config-update' });
+  } catch(e) {
+    uiSyncLogV426('supabase-save-error', { entity:'dispatch-batch-config', action:'save-local-cache', error:e?.message || e });
+  }
 }
 function getLoteCfgKey(chipId, loteNum) { return `chip-${chipId}-lote-${loteNum}`; }
 function getLoteRamo(chipId, loteNum) {
@@ -107,6 +113,7 @@ function carregarImagensLote(chipId, loteNum, slot, isSlot) {
 function setLoteImagem(chipId, loteNum, base64, nome) {
   const k = getLoteImgKey(chipId, loteNum);
   _imgCache[k] = base64 || null;
+  uiSyncLogV426('optimistic-update', { entity:'dispatch-batch-image', action:'save-local-idb', chipId, loteNum, nome:nome || '' });
   return idbSet(k, base64 || null);
 }
 
