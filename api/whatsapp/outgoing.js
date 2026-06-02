@@ -106,7 +106,7 @@ async function persistOutgoing(body = {}, req = null) {
 
   debugOutgoingApi('record:prepared', record);
 
-  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages`;
+  const baseRestUrl = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/whatsapp_messages`;
   const headers = {
     apikey: backendKey,
     'Content-Type': 'application/json',
@@ -114,7 +114,21 @@ async function persistOutgoing(body = {}, req = null) {
   };
   if (!backendKey.startsWith('sb_secret_')) headers.Authorization = `Bearer ${backendKey}`;
 
-  const res = await fetch(endpoint, {
+  // Idempotência: se o front reenviar a mesma persistência com o mesmo external_id,
+  // não cria segunda linha em whatsapp_messages. Isso não envia mensagem; só evita duplicar histórico.
+  if (record.external_id) {
+    const lookupUrl = `${baseRestUrl}?select=id,external_id&user_id=eq.${encodeURIComponent(userId)}&external_id=eq.${encodeURIComponent(record.external_id)}&limit=1`;
+    const lookup = await fetch(lookupUrl, { method:'GET', headers });
+    const lookupRaw = await lookup.text();
+    let existing = [];
+    try { existing = JSON.parse(lookupRaw); } catch (_) {}
+    if (lookup.ok && Array.isArray(existing) && existing[0]?.id) {
+      debugOutgoingApi('idempotent:existing', { external_id:record.external_id, id:existing[0].id });
+      return existing[0];
+    }
+  }
+
+  const res = await fetch(baseRestUrl, {
     method: 'POST',
     headers,
     body: JSON.stringify(record)

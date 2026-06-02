@@ -138,22 +138,45 @@ function importarLeads() {
   let addedInstagram = 0;
   let skipped = 0;
 
+  const importSeenKeys = new Set();
+  const existingValidationKeys = new Set((typeof dedupeLeadArrayV434 === 'function' ? novaValFila : novaValFila).map(lead => typeof getLeadIdentityKeyV434 === 'function' ? getLeadIdentityKeyV434(lead) : lead.id).filter(Boolean));
+  const existingInstagramKeys = new Set((typeof dedupeLeadArrayV434 === 'function' ? novaInstaFila : novaInstaFila).map(lead => typeof getLeadIdentityKeyV434 === 'function' ? getLeadIdentityKeyV434(lead) : lead.id).filter(Boolean));
+
   analyses.forEach(analysis => {
     if (analysis.route === 'whatsapp-validation') {
-      novaValFila.push(buildImportedLeadV430(analysis, analysis.route));
+      const lead = buildImportedLeadV430(analysis, analysis.route);
+      const key = typeof getLeadIdentityKeyV434 === 'function' ? getLeadIdentityKeyV434(lead) : lead.id;
+      if ((key && importSeenKeys.has(key)) || (key && existingValidationKeys.has(key))) {
+        skipped++;
+        qualificationLogV430('qualification-duplicate', { phase:'import', name:lead.nome, key, reason:'duplicado na importação atual ou validação' });
+        return;
+      }
+      if (key) { importSeenKeys.add(key); existingValidationKeys.add(key); }
+      novaValFila.push(lead);
       addedWhatsapp++;
       return;
     }
     if (analysis.route === 'instagram-backlog') {
-      novaInstaFila.push(buildImportedLeadV430(analysis, analysis.route));
+      const lead = buildImportedLeadV430(analysis, analysis.route);
+      const key = typeof getLeadIdentityKeyV434 === 'function' ? getLeadIdentityKeyV434(lead) : lead.id;
+      if ((key && importSeenKeys.has(key)) || (key && existingInstagramKeys.has(key))) {
+        skipped++;
+        qualificationLogV430('qualification-duplicate', { phase:'import', name:lead.nome, key, reason:'duplicado na importação atual ou backlog instagram' });
+        return;
+      }
+      if (key) { importSeenKeys.add(key); existingInstagramKeys.add(key); }
+      novaInstaFila.push(lead);
       addedInstagram++;
       return;
     }
     skipped++;
   });
 
-  if (addedWhatsapp) saveValData(novaValFila);
-  if (addedInstagram) saveInstaFila(novaInstaFila);
+  const cleanValFila = typeof dedupeLeadArrayV434 === 'function' ? dedupeLeadArrayV434(novaValFila, { label:'import-validation-final' }) : novaValFila;
+  const cleanInstaFila = typeof dedupeLeadArrayV434 === 'function' ? dedupeLeadArrayV434(novaInstaFila, { label:'import-instagram-final' }) : novaInstaFila;
+
+  if (addedWhatsapp) saveValData(cleanValFila);
+  if (addedInstagram) saveInstaFila(cleanInstaFila);
   if (addedWhatsapp || addedInstagram) {
     if (typeof markOperationalDataDirtyV430 === 'function') markOperationalDataDirtyV430('apify-import');
     if (typeof syncOperationalDataToSupabaseV36 === 'function') {
