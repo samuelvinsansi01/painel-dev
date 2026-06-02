@@ -10,18 +10,38 @@ function getCurrentUserIdV22(){
   try { return (typeof currentUser !== 'undefined' && currentUser?.id) ? String(currentUser.id) : ''; } catch { return ''; }
 }
 
-function scopedWhatsappChipsKeyV22(){
+function getCurrentUserEmailV24(){
+  try { return (typeof currentUser !== 'undefined' && currentUser?.email) ? String(currentUser.email).trim().toLowerCase() : ''; } catch { return ''; }
+}
+
+function getCurrentUserChipScopeV24(){
   const userId = getCurrentUserIdV22();
-  return userId ? `${WHATSAPP_CHIPS_V29_KEY}:${userId}` : `${WHATSAPP_CHIPS_V29_KEY}:anonymous`;
+  const email = getCurrentUserEmailV24();
+  return userId ? `${userId}:${email || 'no-email'}` : 'anonymous';
+}
+
+function scopedWhatsappChipsKeyV22(){
+  const scope = getCurrentUserChipScopeV24();
+  return `${WHATSAPP_CHIPS_V29_KEY}:${scope}`;
 }
 
 function scopedChipUsageKeyV22(){
-  const userId = getCurrentUserIdV22();
-  return userId ? `${CHIP_USAGE_DAY_KEY}:${userId}` : `${CHIP_USAGE_DAY_KEY}:anonymous`;
+  const scope = getCurrentUserChipScopeV24();
+  return `${CHIP_USAGE_DAY_KEY}:${scope}`;
 }
 
 function isSupabaseChipStoreReadyV22(){
-  return !!(typeof sbClient !== 'undefined' && sbClient && getCurrentUserIdV22());
+  return !!(typeof sbClient !== 'undefined' && sbClient && getCurrentUserIdV22() && getCurrentUserEmailV24());
+}
+
+function isChipAllowedForCurrentUserV24(row = {}){
+  const currentUserId = getCurrentUserIdV22();
+  const currentUserEmail = getCurrentUserEmailV24();
+  const chipUserId = String(row.user_id || '');
+  const chipUserEmail = String(row.user_email || '').trim().toLowerCase();
+  const allowed = !!(currentUserId && currentUserEmail && chipUserId === currentUserId && chipUserEmail === currentUserEmail);
+  console.log('[user-isolation][chip-filter]', { currentUserId, currentUserEmail, chipUserId, chipUserEmail, allowed });
+  return allowed;
 }
 
 function normalizeChipRowToLocalV22(row = {}){
@@ -42,25 +62,41 @@ function normalizeChipRowToLocalV22(row = {}){
 }
 
 async function loadWhatsappChipsFromSupabaseV22(){
-  if (!isSupabaseChipStoreReadyV22()) return [];
+  if (!isSupabaseChipStoreReadyV22()) {
+    console.log('[user-isolation][chip-load]', { allowed:false, reason:'missing authenticated user/email' });
+    return [];
+  }
   const userId = getCurrentUserIdV22();
+  const userEmail = getCurrentUserEmailV24();
   try {
+    console.log('[user-isolation][chip-load]', { currentUserId:userId, currentUserEmail:userEmail });
     const { data, error } = await sbClient
       .from('whatsapp_instances')
       .select('*')
       .eq('user_id', userId)
+      .eq('user_email', userEmail)
       .order('created_at', { ascending:false });
 
     if (error) throw error;
 
-    const rows = (Array.isArray(data) ? data : []).filter(row => row.active !== false);
+    const rows = (Array.isArray(data) ? data : [])
+      .filter(isChipAllowedForCurrentUserV24)
+      .filter(row => row.active !== false);
     const chips = rows.map(normalizeChipRowToLocalV22).filter(chip => chip.instance);
 
     localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(chips));
-    // Remove cache legado global para impedir vazamento entre contas no mesmo navegador.
+    // Remove caches legados/globais para impedir vazamento entre contas no mesmo navegador.
     localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
+    try {
+      Object.keys(localStorage).forEach(key => {
+        if (key.startsWith(`${WHATSAPP_CHIPS_V29_KEY}:`) && key !== scopedWhatsappChipsKeyV22()) {
+          localStorage.removeItem(key);
+        }
+      });
+    } catch(e){}
 
-    console.log('[chips][db-load]', { userId, count:chips.length });
+    console.log('[chips][db-load]', { userId, userEmail, count:chips.length });
+    console.log('[user-isolation][chip-cache]', { key:scopedWhatsappChipsKeyV22(), count:chips.length });
     updateChipsBadge();
     return chips;
   } catch (err) {
@@ -72,15 +108,18 @@ async function loadWhatsappChipsFromSupabaseV22(){
 async function persistWhatsappChipsToSupabaseV22(list = []){
   if (!isSupabaseChipStoreReadyV22()) return;
   const userId = getCurrentUserIdV22();
+  const userEmail = getCurrentUserEmailV24();
   const chips = Array.isArray(list) ? list : [];
   try {
     const { data:existingRows, error:selectError } = await sbClient
       .from('whatsapp_instances')
-      .select('id,chip_id')
-      .eq('user_id', userId);
+      .select('id,chip_id,user_id,user_email')
+      .eq('user_id', userId)
+      .eq('user_email', userEmail);
     if (selectError) throw selectError;
 
-    const existingByChipId = new Map((existingRows || []).map(row => [String(row.chip_id || ''), row]));
+    const allowedRows = (existingRows || []).filter(isChipAllowedForCurrentUserV24);
+    const existingByChipId = new Map(allowedRows.map(row => [String(row.chip_id || ''), row]));
     const activeIds = new Set(chips.map(chip => String(chip.id || chip.instance || '')).filter(Boolean));
 
     for (const chip of chips) {
@@ -88,15 +127,22 @@ async function persistWhatsappChipsToSupabaseV22(list = []){
       if (!chipId) continue;
       const payload = {
         user_id: userId,
+        user_email: userEmail,
         chip_id: chipId,
         name: chip.name || chip.instance || 'WhatsApp',
         instance: chip.instance || chip.name || chipId,
-        active: chip.status !== 'disabled'
+        active: chip.status !== 'disabled',
+        updated_at: new Date().toISOString()
       };
 
       const existing = existingByChipId.get(chipId);
       if (existing?.id) {
-        const { error } = await sbClient.from('whatsapp_instances').update(payload).eq('id', existing.id).eq('user_id', userId);
+        const { error } = await sbClient
+          .from('whatsapp_instances')
+          .update(payload)
+          .eq('id', existing.id)
+          .eq('user_id', userId)
+          .eq('user_email', userEmail);
         if (error) throw error;
       } else {
         const { error } = await sbClient.from('whatsapp_instances').insert(payload);
@@ -104,15 +150,20 @@ async function persistWhatsappChipsToSupabaseV22(list = []){
       }
     }
 
-    for (const row of existingRows || []) {
+    for (const row of allowedRows) {
       const chipId = String(row.chip_id || '');
       if (chipId && !activeIds.has(chipId)) {
-        const { error } = await sbClient.from('whatsapp_instances').update({ active:false }).eq('id', row.id).eq('user_id', userId);
+        const { error } = await sbClient
+          .from('whatsapp_instances')
+          .update({ active:false, updated_at:new Date().toISOString() })
+          .eq('id', row.id)
+          .eq('user_id', userId)
+          .eq('user_email', userEmail);
         if (error) console.warn('[chips][db-deactivate-error]', error.message);
       }
     }
 
-    console.log('[chips][db-save]', { userId, count:chips.length });
+    console.log('[chips][db-save]', { userId, userEmail, count:chips.length });
   } catch (err) {
     console.warn('[chips][db-save-error]', err?.message || err);
   }
@@ -125,9 +176,12 @@ function todayUsageKeyV29(){ return new Date().toISOString().slice(0,10); }
 
 function getWhatsappChipsV29(){
   try {
-    if (!getCurrentUserIdV22()) return [];
-    const data = JSON.parse(localStorage.getItem(scopedWhatsappChipsKeyV22()) || '[]');
-    return Array.isArray(data) ? data : [];
+    if (!getCurrentUserIdV22() || !getCurrentUserEmailV24()) return [];
+    const key = scopedWhatsappChipsKeyV22();
+    const data = JSON.parse(localStorage.getItem(key) || '[]');
+    const chips = Array.isArray(data) ? data : [];
+    console.log('[user-isolation][chip-render]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), source:'cache', key, count:chips.length });
+    return chips;
   } catch { return []; }
 }
 
@@ -136,6 +190,7 @@ function saveWhatsappChipsV29(list){
   setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
   if (getCurrentUserIdV22()) {
     localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(safeList));
+    console.log('[user-isolation][chip-cache]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), key:scopedWhatsappChipsKeyV22(), count:safeList.length });
     localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
     setTimeout(() => { try { persistWhatsappChipsToSupabaseV22(safeList); } catch(e){} }, 0);
   }
