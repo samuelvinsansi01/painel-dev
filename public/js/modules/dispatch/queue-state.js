@@ -13,6 +13,8 @@ function devolverZapNaoValidadoParaValidacao() {
 
   const devolver = (lead = {}) => {
     if (!lead.id || devolvidosIds.has(lead.id)) return;
+    if (typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(lead)) return;
+    if (typeof isTemporaryDispatchLeadV433 === 'function' && isTemporaryDispatchLeadV433(lead)) return;
     devolvidosIds.add(lead.id);
     if (validacaoIds.has(lead.id)) return;
     validacaoIds.add(lead.id);
@@ -28,6 +30,7 @@ function devolverZapNaoValidadoParaValidacao() {
 
   Object.keys(data.days || {}).forEach(day => {
     data.days[day] = (data.days[day] || []).filter(lead => {
+      if (typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(lead)) return true;
       const aguardando = !lead.status || lead.status === 'Não enviada' || lead.status === 'Em fila';
       if (!aguardando || isLeadWhatsappValidatedForQueue(lead)) return true;
       devolver(lead);
@@ -37,6 +40,7 @@ function devolverZapNaoValidadoParaValidacao() {
 
   const backlog = getZapBacklog();
   const backlogValido = backlog.filter(lead => {
+    if (typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(lead)) return false;
     if (isLeadWhatsappValidatedForQueue(lead)) return true;
     devolver(lead);
     return false;
@@ -44,7 +48,7 @@ function devolverZapNaoValidadoParaValidacao() {
 
   const filaOperacional = getWhatsappQueueV27();
   const filaOperacionalValida = filaOperacional.filter(item => {
-    if (item.status === 'Enviado') return true;
+    if (item.status === 'Enviado' || (typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(item))) return true;
     const lead = findLeadEverywhere(item.leadId) || {
       id: item.leadId,
       nome: item.nome,
@@ -64,7 +68,11 @@ function devolverZapNaoValidadoParaValidacao() {
         numStatus: item.numStatus || weekLead.numStatus,
         whatsappValidationStatus: item.whatsappValidationStatus || weekLead.whatsappValidationStatus
       };
-      if (item.status === 'enviado' || isLeadWhatsappValidatedForQueue(validationCandidate)) {
+      if (
+        item.status === 'enviado' ||
+        (typeof isLeadSentOrClosedV433 === 'function' && (isLeadSentOrClosedV433(item) || isLeadSentOrClosedV433(validationCandidate))) ||
+        isLeadWhatsappValidatedForQueue(validationCandidate)
+      ) {
         if (!item.numStatus && validationCandidate.numStatus) {
           item.numStatus = validationCandidate.numStatus;
           filaEnriquecida = true;
@@ -106,7 +114,9 @@ function sincronizarFilaComEnviados(){
     Object.values(days || {}).forEach(dayList => {
       if (!Array.isArray(dayList)) return;
       dayList.forEach(lead => {
-        if (lead && (lead.status === 'enviado' || lead.whatsappStatus === 'sent')) enviados.push(lead);
+        if (lead && (typeof isLeadSentOrClosedV433 === 'function'
+          ? isLeadSentOrClosedV433(lead)
+          : (lead.status === 'enviado' || lead.whatsappStatus === 'sent'))) enviados.push(lead);
       });
     });
 
@@ -158,6 +168,95 @@ function createDispatchQueueItemV433(emp = {}, overrides = {}) {
     aberto: false,
     ...overrides
   };
+}
+
+function normalizeTemporaryDispatchPhoneV433(value = '') {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) digits = '55' + digits;
+  return digits;
+}
+
+function getTemporaryDispatchMessageV433(name = '') {
+  try {
+    const firstRamo = (typeof getRamos === 'function' ? getRamos() : [])[0] || {};
+    if (typeof pickTemplate === 'function') {
+      const picked = pickTemplate(name || 'Lead teste', firstRamo.id || null);
+      if (String(picked?.text || '').trim()) return { text:picked.text, idx:picked.idx ?? -1, ramoId:firstRamo.id || null };
+    }
+  } catch(e) {}
+  return {
+    text:`Olá, tudo bem?\n\nEsta é uma mensagem de teste de envio pela plataforma.`,
+    idx:-1,
+    ramoId:null
+  };
+}
+
+function addTemporaryDispatchLead(slot) {
+  const chips = getChips();
+  const chip = chips[slot] || null;
+  if (!chip) { notify('// configure o chip antes do teste', 'warn'); return; }
+
+  const nameInput = document.getElementById(`tempDispatchName${slot}`);
+  const phoneInput = document.getElementById(`tempDispatchPhone${slot}`);
+  const msgInput = document.getElementById(`tempDispatchMessage${slot}`);
+  const nome = String(nameInput?.value || '').trim() || 'Lead teste';
+  const phone = normalizeTemporaryDispatchPhoneV433(phoneInput?.value || '');
+  if (!phone || phone.length < 12) {
+    notify('// informe um WhatsApp valido para teste', 'warn');
+    return;
+  }
+
+  const today = todayStr();
+  const id = `temp_dispatch_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+  const picked = getTemporaryDispatchMessageV433(nome);
+  const customMessage = String(msgInput?.value || '').trim();
+  const lead = {
+    id,
+    nome,
+    whatsapp: phone,
+    phone,
+    telefone: phone,
+    categoria: 'Teste de disparo',
+    status: 'Em fila',
+    numStatus: 'valido',
+    whatsappValidationStatus: 'valid',
+    criadoEm: today,
+    diaDestino: today,
+    canal: 'zap',
+    stage: 'dispatch_test',
+    isTemporaryDispatchLead: true,
+    temporaryLead: true,
+    testDispatchLead: true,
+    source: 'Teste temporario'
+  };
+
+  const data = ensureWeekData();
+  data.days[today] = data.days[today] || [];
+  data.days[today].push(lead);
+  disparoDay = today;
+
+  const fila = getFilaChip(chip.id);
+  fila.push(createDispatchQueueItemV433(lead, {
+    mensagem: customMessage || picked.text,
+    templateIdx: picked.idx,
+    ramoId: picked.ramoId,
+    status: 'aguardando',
+    isTemporaryDispatchLead: true,
+    temporaryLead: true,
+    testDispatchLead: true,
+    source: 'Teste temporario'
+  }));
+
+  saveWeekData(data);
+  saveFilaDisparo({ delay:0, reason:'dispatch-temporary-test-lead-add' });
+  if (phoneInput) phoneInput.value = '';
+  if (msgInput) msgInput.value = '';
+  renderDisparoEmpresas();
+  chips.forEach((_, s) => renderFilaSlot(s, disparoDay));
+  updateBadges();
+  try { console.log('[whatsapp-queue]', { action:'temporary-test-lead-added', slot, chipId:chip.id, leadId:id, phone }); } catch(e) {}
+  notify('Lead temporario de teste adicionado ao chip.');
 }
 
 function hydrateRecoveredDispatchMessagesV433(chipId) {
@@ -291,7 +390,9 @@ function toggleFilaSlotEmpresa(slot, empId) {
     notify(`// empresa já está na fila do Chip ${slotExistente + 1}`, 'warn');
     return;
   }
-  const jaEnviado = ['Enviada','Respondida','Não respondida','Recusada','Fechada'].includes(emp.status||'');
+  const jaEnviado = typeof isLeadSentOrClosedV433 === 'function'
+    ? isLeadSentOrClosedV433(emp)
+    : ['Enviada','Respondida','Não respondida','Recusada','Fechada'].includes(emp.status||'');
   const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
   fila.push(createDispatchQueueItemV433(emp, { status:filaStatus }));
   if (!jaEnviado) {
@@ -328,7 +429,9 @@ function toggleFila(empId) {
       notify('// valide o WhatsApp antes de adicionar ao chip', 'warn');
       return;
     }
-    const jaEnviado = emp.status === 'Enviada' || emp.status === 'Respondida' || emp.status === 'Não respondida' || emp.status === 'Recusada' || emp.status === 'Fechada';
+    const jaEnviado = typeof isLeadSentOrClosedV433 === 'function'
+      ? isLeadSentOrClosedV433(emp)
+      : (emp.status === 'Enviada' || emp.status === 'Respondida' || emp.status === 'Não respondida' || emp.status === 'Recusada' || emp.status === 'Fechada');
     const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
     fila.push(createDispatchQueueItemV433(emp, { status:filaStatus }));
     if (!jaEnviado) {
@@ -493,4 +596,3 @@ function limparFila() {
   }
   updateBadges(); renderDisparoEmpresas(); renderFila();
 }
-

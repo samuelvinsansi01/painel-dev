@@ -58,6 +58,15 @@ function renderChipAccordions() {
             <label>Chip</label>
             <div id="chip${slot+1}Info" style="font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);padding:8px 12px;background:var(--surface2);border-radius:8px;border:1px solid var(--border2)">${escHtml(chip.nome)} · ${escHtml(chip.instance)}</div>
           </div>
+          <div style="margin-bottom:12px;padding:10px;border:1px dashed var(--border2);border-radius:10px;background:rgba(255,255,255,0.02)">
+            <div style="font-family:'DM Mono',monospace;font-size:8px;letter-spacing:0.12em;color:${c.cor};text-transform:uppercase;margin-bottom:8px">Teste rápido de envio</div>
+            <div style="display:grid;grid-template-columns:minmax(120px,1fr) minmax(140px,1fr) auto;gap:8px;align-items:center">
+              <input id="tempDispatchName${slot}" placeholder="Nome do teste" value="Lead teste" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;outline:none">
+              <input id="tempDispatchPhone${slot}" placeholder="WhatsApp com DDD" style="background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text);font-family:'DM Mono',monospace;font-size:10px;padding:8px 10px;outline:none">
+              <button class="btn btn-ghost" style="font-size:10px;white-space:nowrap;border-color:${c.cor};color:${c.cor}" onclick="addTemporaryDispatchLead(${slot})">+ teste</button>
+            </div>
+            <textarea id="tempDispatchMessage${slot}" placeholder="Mensagem opcional para o teste; vazio usa o template do lote" style="margin-top:8px;width:100%;min-height:42px;background:var(--surface2);border:1px solid var(--border2);border-radius:8px;color:var(--text2);font-family:'DM Mono',monospace;font-size:9px;padding:8px 10px;resize:vertical;outline:none"></textarea>
+          </div>
           <div style="display:flex;gap:8px;margin-bottom:0">
             <button class="btn btn-danger" style="font-size:11px" onclick="limparFilaChip(${slot})">Limpar fila</button>
             <button class="btn btn-ghost" id="btnPausa${slot}" onclick="togglePausaChip(${slot})" style="display:none;font-size:11px;border-color:var(--warning);color:var(--warning)">⏸ Pausar</button>

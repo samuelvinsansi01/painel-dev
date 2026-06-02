@@ -54,10 +54,21 @@ function getLeadCrmPayloadForSupabaseSyncV428(lead = {}) {
     if (!id) return null;
     const store = typeof getLeadCrmStore === 'function' ? getLeadCrmStore() : {};
     const crm = store?.[id] || lead.crmData || lead.crm_data || lead.leadCrm || null;
-    if (!crm || typeof crm !== 'object') return null;
-    const clone = JSON.parse(JSON.stringify(crm));
+    const phone = typeof getLeadSyncPhoneV432 === 'function' ? getLeadSyncPhoneV432(lead) : String(lead.whatsapp || lead.phone || lead.telefone || '').replace(/\D/g, '');
+    const inferredWaStatus = lead.whatsappValidationStatus || (lead.numStatus === 'valido' ? 'valid' : lead.numStatus === 'invalido' ? 'invalid' : '');
+    if ((!crm || typeof crm !== 'object') && !inferredWaStatus) return null;
+    const clone = crm && typeof crm === 'object' ? JSON.parse(JSON.stringify(crm)) : {};
     delete clone.uiSyncStatus;
     delete clone.uiSyncError;
+    if (inferredWaStatus && !clone.whatsappValidation) {
+      clone.whatsappValidation = {
+        status: inferredWaStatus,
+        label: inferredWaStatus === 'valid' ? 'WhatsApp válido' : inferredWaStatus === 'invalid' ? 'WhatsApp não confirmado' : 'Não validado',
+        number: phone,
+        checkedAt: new Date().toISOString(),
+        checkedAtLabel: typeof crmNowLabel === 'function' ? crmNowLabel() : ''
+      };
+    }
     return {
       ...clone,
       persistedAt: new Date().toISOString(),
@@ -95,6 +106,14 @@ async function getRemoteLeadPhoneMapV432() {
 
 async function upsertLeadToSupabase(lead = {}, options = {}) {
   if (!isSupabaseReady() || !lead.id) return { skipped: true, reason:'auth-or-lead-missing' };
+  const inValidationQueue = (() => {
+    try { return typeof getValData === 'function' && getValData().some(item => item.id === lead.id); } catch(e) { return false; }
+  })();
+  const persistenceSource = inValidationQueue ? 'Validação' : (lead.baseSource || lead.origem || '');
+  if (typeof shouldSkipLeadCloudPersistenceV433 === 'function' && shouldSkipLeadCloudPersistenceV433(lead, persistenceSource)) {
+    try { console.warn('[lead-import]', { action:'skip-supabase-upsert', id:lead.id, name:lead.nome || lead.companyName || '', stage:lead.stage || '', source:lead.baseSource || lead.origem || '' }); } catch(e) {}
+    return { skipped:true, reason:'non-persistent-lead' };
+  }
   try { requireCurrentAuthIdentityV25('upsertLeadToSupabase'); } catch(error) { return { skipped:true, error }; }
   const phoneKey = getLeadSyncPhoneV432(lead);
   const remotePhoneMap = options.remotePhoneMap || await getRemoteLeadPhoneMapV432();
@@ -173,11 +192,16 @@ async function syncAllLocalLeadsToSupabase() {
 
   const extras = [];
   try { extras.push(...getAtribuicaoData()); } catch {}
-  try { extras.push(...getValData()); } catch {}
+  try {
+    const val = getValData();
+    extras.push(...(typeof filterPersistentLeadsV433 === 'function' ? filterPersistentLeadsV433(val, 'Validação') : val));
+  } catch {}
   try { extras.push(...getInstaFila()); } catch {}
   try { extras.push(...getZapBacklog()); } catch {}
 
-  const all = [...permanentLeads, ...weekLeads, ...extras];
+  const all = [...permanentLeads, ...weekLeads, ...extras].filter(lead =>
+    !(typeof shouldSkipLeadCloudPersistenceV433 === 'function' && shouldSkipLeadCloudPersistenceV433(lead, lead.baseSource || lead.origem || ''))
+  );
   const unique = new Map();
   all.forEach(lead => {
     if (!lead?.id) return;

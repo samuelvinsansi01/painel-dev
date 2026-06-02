@@ -14,7 +14,28 @@ class SupabaseAdapter {
   }
 
   normalizeLead(lead = {}, userId, userEmail = '') {
-    const crmData = lead.crmData || lead.crm_data || lead.leadCrm || null;
+    const inferredWaStatus = lead.whatsappValidationStatus || (lead.numStatus === 'valido' ? 'valid' : lead.numStatus === 'invalido' ? 'invalid' : '');
+    let crmData = lead.crmData || lead.crm_data || lead.leadCrm || (inferredWaStatus ? {
+      whatsappValidation: {
+        status: inferredWaStatus,
+        label: inferredWaStatus === 'valid' ? 'WhatsApp válido' : inferredWaStatus === 'invalid' ? 'WhatsApp não confirmado' : 'Não validado',
+        number: lead.phone || lead.whatsapp || lead.telefone || '',
+        checkedAt: new Date().toISOString(),
+        checkedAtLabel: typeof crmNowLabel === 'function' ? crmNowLabel() : ''
+      }
+    } : null);
+    if (crmData && inferredWaStatus && !crmData.whatsappValidation) {
+      crmData = {
+        ...crmData,
+        whatsappValidation: {
+          status: inferredWaStatus,
+          label: inferredWaStatus === 'valid' ? 'WhatsApp válido' : inferredWaStatus === 'invalid' ? 'WhatsApp não confirmado' : 'Não validado',
+          number: lead.phone || lead.whatsapp || lead.telefone || '',
+          checkedAt: new Date().toISOString(),
+          checkedAtLabel: typeof crmNowLabel === 'function' ? crmNowLabel() : ''
+        }
+      };
+    }
     const payload = {
       id: String(lead.id || '').trim(),
       user_id: userId,
@@ -58,6 +79,20 @@ class SupabaseAdapter {
   async saveLead(lead = {}) {
     const user = await this.getUser();
     if (!user?.id || !user?.email || !lead?.id) return { data: null, error: null };
+    const inValidationQueue = (() => {
+      try { return typeof getValData === 'function' && getValData().some(item => item.id === lead.id); } catch(e) { return false; }
+    })();
+    const persistenceSource = inValidationQueue ? 'Validação' : (lead.baseSource || lead.origem || '');
+    if (typeof shouldSkipLeadCloudPersistenceV433 === 'function' && shouldSkipLeadCloudPersistenceV433(lead, persistenceSource)) {
+      console.warn('[lead-import]', {
+        action:'skip-adapter-saveLead',
+        id:lead.id,
+        name:lead.nome || lead.companyName || lead.title || '',
+        stage:lead.stage || '',
+        source:lead.baseSource || lead.origem || ''
+      });
+      return { data:null, error:null, skipped:true, reason:'non-persistent-lead' };
+    }
 
     const payload = this.normalizeLead(lead, user.id, user.email);
     const existingPhoneLead = await this.findExistingLeadByPhoneV432(user.id, payload);
@@ -119,6 +154,7 @@ class SupabaseAdapter {
 
     const leadResult = await this.saveLead(lead);
     if (leadResult?.error) return leadResult;
+    if (leadResult?.skipped) return leadResult;
 
     const { data, error } = await this.client
       .from('lead_notes')
@@ -141,6 +177,7 @@ class SupabaseAdapter {
 
     const leadResult = await this.saveLead(lead);
     if (leadResult?.error) return leadResult;
+    if (leadResult?.skipped) return leadResult;
 
     const { data, error } = await this.client
       .from('lead_history')
@@ -176,6 +213,7 @@ class SupabaseAdapter {
 
     const leadResult = await this.saveLead(lead);
     if (leadResult?.error) return leadResult;
+    if (leadResult?.skipped) return leadResult;
 
     const { error:deleteError } = await this.client
       .from('lead_followups')

@@ -314,6 +314,58 @@ function releaseWhatsappSendLockV31(key = '') {
   }, 10000);
 }
 
+const LEAD_SENT_OR_CLOSED_STATUSES_V433 = ['enviada','enviado','respondida','nao respondida','recusada','fechada'];
+
+function isTemporaryDispatchLeadV433(lead = {}) {
+  return !!(
+    lead?.isTemporaryDispatchLead ||
+    lead?.temporaryLead ||
+    lead?.testDispatchLead ||
+    lead?.stage === 'dispatch_test' ||
+    lead?.source === 'Teste temporario'
+  );
+}
+
+function isLeadSentOrClosedV433(lead = {}) {
+  const status = typeof normalizeStr === 'function'
+    ? normalizeStr(lead.status || lead.whatsappStatus || '')
+    : String(lead.status || lead.whatsappStatus || '').toLowerCase();
+  return LEAD_SENT_OR_CLOSED_STATUSES_V433.includes(status)
+    || lead.status === 'enviado'
+    || lead.status === 'Enviado'
+    || lead.whatsappStatus === 'sent'
+    || !!lead.enviadoEm
+    || !!lead.sentAt;
+}
+
+function isLeadWhatsappApprovedForPersistenceV433(lead = {}) {
+  return lead.numStatus === 'valido'
+    || lead.whatsappValidationStatus === 'valid'
+    || lead.crmData?.whatsappValidation?.status === 'valid'
+    || lead.crm_data?.whatsappValidation?.status === 'valid'
+    || lead.leadCrm?.whatsappValidation?.status === 'valid';
+}
+
+function isLeadPersistentReadyV433(lead = {}, source = '') {
+  if (!lead?.id || isTemporaryDispatchLeadV433(lead)) return false;
+  const sourceKey = String(source || lead.baseSource || lead.origem || '').toLowerCase();
+  if (sourceKey.includes('valid')) {
+    return isLeadWhatsappApprovedForPersistenceV433(lead) || isLeadSentOrClosedV433(lead);
+  }
+  if (lead.stage === 'validation' && !isLeadWhatsappApprovedForPersistenceV433(lead) && !isLeadSentOrClosedV433(lead)) {
+    return false;
+  }
+  return true;
+}
+
+function filterPersistentLeadsV433(leads = [], source = '') {
+  return (Array.isArray(leads) ? leads : []).filter(lead => isLeadPersistentReadyV433(lead, source));
+}
+
+function shouldSkipLeadCloudPersistenceV433(lead = {}, source = '') {
+  return !isLeadPersistentReadyV433(lead, source);
+}
+
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 

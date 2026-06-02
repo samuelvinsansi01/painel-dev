@@ -91,7 +91,9 @@ function renderDisparoEmpresas() {
     }).join('');
 
     const semChip = chips.length === 0;
-    const isEnviada = STATUS_FORWARD_ONLY.includes(e.status||'') || (e.status||'') === 'Enviada';
+    const isEnviada = typeof isLeadSentOrClosedV433 === 'function'
+      ? isLeadSentOrClosedV433(e)
+      : (STATUS_FORWARD_ONLY.includes(e.status||'') || (e.status||'') === 'Enviada');
 
     return `<div style="display:flex;align-items:center;gap:10px;padding:8px 12px;border-bottom:1px solid var(--border);font-size:11px">
       <div style="flex:1;min-width:0">
@@ -109,10 +111,10 @@ function renderDisparoEmpresas() {
             ? `<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">configure chips primeiro</span>`
             : (e.whatsapp ? botoes : `<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--error)">sem WhatsApp</span>`)
         }
-        <button onclick="moverParaBacklogZapDoDia('${e.id}','${disparoDay}')" title="Mover para Backlog Zap"
+        ${!isEnviada ? `<button onclick="moverParaBacklogZapDoDia('${e.id}','${disparoDay}')" title="Mover para Backlog Zap"
           style="background:none;border:1px solid var(--border2);color:var(--muted);border-radius:6px;font-family:'DM Mono',monospace;font-size:8px;padding:3px 8px;cursor:pointer;transition:all 0.15s;margin-left:2px"
           onmouseover="this.style.borderColor='var(--accent)';this.style.color='var(--accent)'"
-          onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">↩</button>
+          onmouseout="this.style.borderColor='var(--border2)';this.style.color='var(--muted)'">↩</button>` : ''}
         <button onclick="abrirModalExcluirLead('${e.id}','${disparoDay}')"
           title="Excluir lead da plataforma"
           style="background:none;border:1px solid transparent;color:var(--muted);border-radius:6px;font-family:'DM Mono',monospace;font-size:10px;padding:3px 7px;cursor:pointer;transition:all 0.18s;margin-left:2px"

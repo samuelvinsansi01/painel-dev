@@ -413,7 +413,11 @@ async function loadSupabaseLeadsToLocalState({ preserveWorkflow = false } = {}) 
     googleUrl: item.maps_url || '',
     mapsUrl: item.maps_url || '',
     status: item.status || 'Não enviada',
-    pipelineStatus: item.pipeline_status || 'contato_enviado',
+    pipelineStatus: item.pipeline_status || item.crm_data?.pipelineStatus || 'contato_enviado',
+    numStatus: item.crm_data?.whatsappValidation?.status === 'valid' ? 'valido' : (item.crm_data?.numStatus || ''),
+    whatsappValidationStatus: item.crm_data?.whatsappValidation?.status || item.crm_data?.whatsappValidationStatus || '',
+    whatsappValidation: item.crm_data?.whatsappValidation || null,
+    crmData: item.crm_data || null,
     permanentCreatedAt: item.created_at || '',
     baseSource: 'Supabase',
     criadoEm: item.created_at
@@ -568,6 +572,14 @@ function getLeadForCloud(id, baseLead = {}) {
 
 async function syncLeadToCloud(id, baseLead = {}) {
   if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  const inValidationQueue = (() => {
+    try { return typeof getValData === 'function' && getValData().some(item => item.id === id); } catch(e) { return false; }
+  })();
+  const persistenceSource = inValidationQueue ? 'Validação' : (baseLead.baseSource || baseLead.origem || '');
+  if (typeof shouldSkipLeadCloudPersistenceV433 === 'function' && shouldSkipLeadCloudPersistenceV433({ ...baseLead, id }, persistenceSource)) {
+    uiSyncLogV426('optimistic-update', { entity:'lead', action:'skip-cloud-persistence', id, reason:'non-persistent-lead' });
+    return { skipped:true, reason:'non-persistent-lead' };
+  }
   uiSyncLogV426('supabase-save-start', { entity:'lead', id });
   try {
     const result = await supabaseDataAdapter.saveLead(getLeadForCloud(id, baseLead));
@@ -596,6 +608,11 @@ async function syncLeadNoteToCloud(id, noteText, baseLead = {}, syncId = '') {
   try {
     const result = await supabaseDataAdapter.saveNote(getLeadForCloud(id, baseLead), noteText);
     if (getSupabaseSaveErrorV426(result)) throw result.error;
+    if (result?.skipped) {
+      updateLeadNoteSyncStatusV426(id, syncId, 'pending', 'Aguardando lead aprovado para persistir no Supabase');
+      uiSyncLogV426('optimistic-update', { entity:'note', action:'local-only-until-lead-approved', leadId:id, syncId });
+      return result;
+    }
     updateLeadNoteSyncStatusV426(id, syncId, 'saved');
     uiSyncLogV426('supabase-save-success', { entity:'note', leadId:id, syncId });
     return { ok:true, result };
@@ -614,6 +631,10 @@ async function syncLeadHistoryToCloud(id, eventText, baseLead = {}) {
   try {
     const result = await supabaseDataAdapter.saveHistory(getLeadForCloud(id, baseLead), eventText);
     if (getSupabaseSaveErrorV426(result)) throw result.error;
+    if (result?.skipped) {
+      uiSyncLogV426('optimistic-update', { entity:'history', action:'local-only-until-lead-approved', leadId:id });
+      return result;
+    }
     uiSyncLogV426('supabase-save-success', { entity:'history', leadId:id });
     return { ok:true, result };
   } catch (error) {
@@ -629,6 +650,11 @@ async function syncLeadFollowUpToCloud(id, dateIso, baseLead = {}) {
   try {
     const result = await supabaseDataAdapter.saveFollowUp(getLeadForCloud(id, baseLead), dateIso);
     if (getSupabaseSaveErrorV426(result)) throw result.error;
+    if (result?.skipped) {
+      setLeadPersistenceStatusV426(id, 'pending', 'Aguardando lead aprovado para persistir no Supabase');
+      uiSyncLogV426('optimistic-update', { entity:'followup', action:'local-only-until-lead-approved', leadId:id });
+      return result;
+    }
     setLeadPersistenceStatusV426(id, 'saved');
     uiSyncLogV426('supabase-save-success', { entity:'followup', leadId:id });
     return { ok:true, result };
@@ -715,6 +741,14 @@ function normalizeLeadForDrawer(lead = {}) {
     site: lead.site || lead.website || '',
     googleUrl: lead.googleUrl || lead.mapsUrl || lead.url || '',
     status: lead.status || 'Não enviada',
+    numStatus: lead.numStatus || '',
+    whatsappValidationStatus: lead.whatsappValidationStatus || '',
+    whatsappValidation: lead.whatsappValidation || lead.crmData?.whatsappValidation || lead.crm_data?.whatsappValidation || null,
+    pipelineStatus: lead.pipelineStatus || lead.pipeline_status || '',
+    stage: lead.stage || '',
+    source: lead.source || '',
+    baseSource: lead.baseSource || '',
+    origem: lead.origem || '',
     criadoEm: lead.criadoEm || lead.importadoEm || '',
   };
 }
@@ -937,5 +971,3 @@ function createDevTestLead() {
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeLeadDrawer();
 });
-
-

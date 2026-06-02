@@ -292,8 +292,12 @@ function removerDaAtribuicao(id) {
 const ZAP_BACKLOG_KEY = 'vin_zap_backlog';
 function getZapBacklog()   { return getStoredArray(ZAP_BACKLOG_KEY); }
 function saveZapBacklog(d) {
-  localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(d));
-  if (typeof mergeLeadsIntoPermanentBase === 'function') mergeLeadsIntoPermanentBase(d, { source:'Backlog WhatsApp' });
+  const clean = (Array.isArray(d) ? d : []).filter(lead =>
+    !(typeof isTemporaryDispatchLeadV433 === 'function' && isTemporaryDispatchLeadV433(lead)) &&
+    !(typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(lead))
+  );
+  localStorage.setItem(ZAP_BACKLOG_KEY, JSON.stringify(clean));
+  if (typeof mergeLeadsIntoPermanentBase === 'function') mergeLeadsIntoPermanentBase(clean, { source:'Backlog WhatsApp' });
   scheduleLegacyOperationalSyncV36();
 }
 
@@ -326,6 +330,10 @@ function moverParaBacklogZapDoDia(id, day) {
   const data = ensureWeekData();
   const lead = (data.days[day]||[]).find(e => e.id === id);
   if (!lead) { notify('// lead não encontrado','warn'); return; }
+  if (typeof isLeadSentOrClosedV433 === 'function' && isLeadSentOrClosedV433(lead)) {
+    notify('// lead ja enviado nao volta para backlog', 'warn');
+    return;
+  }
   if (!isLeadWhatsappValidatedForQueue(lead)) {
     notify('// valide o WhatsApp antes de enviar para a fila Zap', 'warn');
     return;
@@ -614,4 +622,3 @@ function removerDoBacklogZap(id) {
   renderFilaZap(); updateBadges();
   notify('// removido do backlog');
 }
-

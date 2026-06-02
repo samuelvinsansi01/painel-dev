@@ -56,6 +56,44 @@ function getOperationalSnapshotV36() {
     }
   });
 
+  if (typeof filterPersistentLeadsV433 === 'function' && Array.isArray(data.permanentLeads)) {
+    data.permanentLeads = filterPersistentLeadsV433(data.permanentLeads, 'Base permanente');
+  }
+  if (typeof isTemporaryDispatchLeadV433 === 'function') {
+    const tempIds = new Set();
+    const rememberTemp = items => {
+      (Array.isArray(items) ? items : []).forEach(item => {
+        if (item?.id && isTemporaryDispatchLeadV433(item)) tempIds.add(item.id);
+      });
+    };
+    rememberTemp(data.validationQueue);
+    rememberTemp(data.assignmentQueue);
+    rememberTemp(data.instagramQueue);
+    rememberTemp(data.whatsappBacklog);
+    rememberTemp(data.whatsappQueue);
+    Object.values(data.weeklyLeads?.days || {}).forEach(rememberTemp);
+    if (data.whatsappDispatchQueues && typeof data.whatsappDispatchQueues === 'object' && !Array.isArray(data.whatsappDispatchQueues)) {
+      Object.values(data.whatsappDispatchQueues).forEach(rememberTemp);
+    }
+    const removeTemp = items => (Array.isArray(items) ? items.filter(item => !isTemporaryDispatchLeadV433(item)) : items);
+    ['validationQueue','assignmentQueue','instagramQueue','whatsappBacklog','whatsappQueue'].forEach(name => {
+      data[name] = removeTemp(data[name]);
+    });
+    if (data.weeklyLeads?.days) {
+      Object.keys(data.weeklyLeads.days).forEach(day => {
+        data.weeklyLeads.days[day] = removeTemp(data.weeklyLeads.days[day]);
+      });
+    }
+    if (data.whatsappDispatchQueues && typeof data.whatsappDispatchQueues === 'object' && !Array.isArray(data.whatsappDispatchQueues)) {
+      Object.keys(data.whatsappDispatchQueues).forEach(chipId => {
+        data.whatsappDispatchQueues[chipId] = removeTemp(data.whatsappDispatchQueues[chipId]);
+      });
+    }
+    if (data.leadCrm && typeof data.leadCrm === 'object' && !Array.isArray(data.leadCrm)) {
+      tempIds.forEach(id => { delete data.leadCrm[id]; });
+    }
+  }
+
   const snapshot = {
     version: 'v36',
     exportedAt: new Date().toISOString(),
@@ -392,4 +430,3 @@ function scheduleLegacyOperationalSyncV36(options = {}) {
     : options.delay;
   if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36({ ...options, delay });
 }
-

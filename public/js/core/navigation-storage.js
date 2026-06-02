@@ -191,11 +191,34 @@ function choosePermanentLeadStatus(previous = '', incoming = '') {
 
 function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = true } = {}) {
   if (!Array.isArray(leads) || !leads.length) return getLeadBaseData();
+  const source = metadata.source || '';
+  const leadsToMerge = typeof filterPersistentLeadsV433 === 'function'
+    ? filterPersistentLeadsV433(leads, source)
+    : leads;
+  if (leadsToMerge.length !== leads.length) {
+    try {
+      console.warn('[lead-import]', {
+        action:'skip-non-persistent-candidates',
+        source,
+        received:leads.length,
+        persisted:leadsToMerge.length,
+        skipped:leads.length - leadsToMerge.length
+      });
+    } catch(e) {}
+  }
+  if (!leadsToMerge.length) return getLeadBaseData();
 
   const now = new Date().toISOString();
+  const storedBase = getLeadBaseData();
+  const filteredStoredBase = typeof filterPersistentLeadsV433 === 'function'
+    ? storedBase.filter(lead => isLeadPersistentReadyV433(lead, lead.baseSource || 'Base permanente'))
+    : storedBase;
+  if (filteredStoredBase.length !== storedBase.length) {
+    try { console.warn('[lead-import]', { action:'clean-permanent-base-non-persistent', removed:storedBase.length - filteredStoredBase.length }); } catch(e) {}
+  }
   const initial = typeof dedupeLeadArrayV31 === 'function'
-    ? dedupeLeadArrayV31(getLeadBaseData(), 'permanentBase.beforeMerge')
-    : getLeadBaseData();
+    ? dedupeLeadArrayV31(filteredStoredBase, 'permanentBase.beforeMerge')
+    : filteredStoredBase;
   const map = new Map();
   initial.filter(lead => lead?.id).forEach(lead => {
     const key = typeof getLeadDedupeKeyV31 === 'function' ? (getLeadDedupeKeyV31(lead) || `id:${lead.id}`) : `id:${lead.id}`;
@@ -203,7 +226,7 @@ function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = tru
   });
   const changed = [];
 
-  leads.forEach(lead => {
+  leadsToMerge.forEach(lead => {
     if (!lead?.id) return;
     const key = typeof getLeadDedupeKeyV31 === 'function' ? (getLeadDedupeKeyV31(lead) || `id:${lead.id}`) : `id:${lead.id}`;
     const previous = map.get(key) || {};

@@ -461,6 +461,7 @@ async function dispararLoteChip(slot) {
       saveFilaDisparo({ delay:0, reason:'dispatch-chip-item-error' });
       atualizarStatusFilaSlot(slot, item.id, 'erro');
       log(`<span style="color:var(--error)">✗ Erro — ${e.message}</span>`);
+      notify(`Erro no envio para ${item.nome}: ${e.message}`, 'err');
     }
     if (i < lote.length - 1) {
       const delay = (delayMin + Math.random()*(delayMax-delayMin))*1000;

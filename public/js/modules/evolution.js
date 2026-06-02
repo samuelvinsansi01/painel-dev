@@ -186,15 +186,47 @@ function applyWhatsappValidationToLeadV427(leadId, phone, status) {
     whatsappValidationLogV427('lead-patch-error', { leadId, error: err?.message || err });
   }
   try {
-    if (typeof syncLeadToCloud === 'function') syncLeadToCloud(leadId, { ...(activeLeadDrawerData || {}), ...patch, id:leadId });
+    const raw = typeof findLeadEverywhere === 'function' ? (findLeadEverywhere(leadId) || {}) : {};
+    const nextLead = { ...raw, ...(activeLeadDrawerData || {}), ...patch, id:leadId };
+    const inValidation = typeof getValData === 'function' && getValData().some(item => item.id === leadId);
+    if (typeof syncLeadToCloud === 'function' && !(inValidation && status !== 'valid')) {
+      syncLeadToCloud(leadId, nextLead);
+    }
   } catch (err) {
     whatsappValidationLogV427('lead-cloud-error', { leadId, error: err?.message || err });
   }
 }
 
-function getLeadWhatsappStatus(leadId) {
-  const crm = ensureLeadCrm(leadId, {});
-  return crm.whatsappValidation || {
+function getLeadWhatsappStatus(leadId, lead = {}) {
+  const crm = ensureLeadCrm(leadId, lead || {});
+  const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
+  const stored = crm.whatsappValidation || lead.whatsappValidation || {};
+  const storedPhone = normalizePhoneForEvolution(stored.number || '');
+
+  if (lead.numStatus === 'valido' || lead.whatsappValidationStatus === 'valid') {
+    return {
+      ...stored,
+      status: 'valid',
+      label: stored.label || 'WhatsApp válido',
+      number: stored.number || phone,
+      checkedAtLabel: stored.checkedAtLabel || 'validado'
+    };
+  }
+
+  if (lead.numStatus === 'invalido' || lead.whatsappValidationStatus === 'invalid') {
+    return {
+      ...stored,
+      status: 'invalid',
+      label: stored.label || 'WhatsApp não confirmado',
+      number: stored.number || phone,
+      checkedAtLabel: stored.checkedAtLabel || 'validado'
+    };
+  }
+
+  if (stored.status === 'valid' && (!storedPhone || !phone || storedPhone === phone)) return stored;
+  if (stored.status === 'invalid' && (!storedPhone || !phone || storedPhone === phone)) return stored;
+
+  return {
     status: 'pending',
     label: 'Não validado',
     checkedAt: '',
@@ -213,9 +245,14 @@ function setLeadWhatsappStatus(leadId, data = {}) {
   };
   saveLeadCrm(leadId, crm);
   if (leadId === activeLeadDrawerId) {
-    if (data.status === 'valid' && activeLeadDrawerData) {
-      activeLeadDrawerData.numStatus = 'valido';
-      activeLeadDrawerData.whatsappValidationStatus = 'valid';
+    if (activeLeadDrawerData) {
+      activeLeadDrawerData.numStatus = data.status === 'valid'
+        ? 'valido'
+        : data.status === 'invalid'
+          ? 'invalido'
+          : 'pendente';
+      activeLeadDrawerData.whatsappValidationStatus = data.status || 'pending';
+      activeLeadDrawerData.whatsappValidation = crm.whatsappValidation;
     }
     try { renderLeadWhatsappValidation(); } catch(e) {}
     try { renderLeadMessageBox(); } catch(e) {}
@@ -228,7 +265,7 @@ function isLeadWhatsappValidatedForQueue(lead = {}) {
   if (lead.numStatus === 'valido' || lead.whatsappValidationStatus === 'valid') return true;
   if (!lead.id) return false;
 
-  const status = getLeadWhatsappStatus(lead.id);
+  const status = getLeadWhatsappStatus(lead.id, lead);
   const checkedPhone = normalizePhoneForEvolution(status.number || '');
   return status.status === 'valid' && (!checkedPhone || checkedPhone === phone);
 }
@@ -278,7 +315,7 @@ function renderLeadWhatsappValidation() {
 
   const lead = activeLeadDrawerData || {};
   const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
-  const status = getLeadWhatsappStatus(activeLeadDrawerId);
+  const status = getLeadWhatsappStatus(activeLeadDrawerId, lead);
 
   const statusClass = status.status === 'valid' ? 'valid' : status.status === 'invalid' ? 'invalid' : 'pending';
   const label = status.label || (status.status === 'valid' ? 'WhatsApp válido' : status.status === 'invalid' ? 'Número inválido' : 'Não validado');
@@ -395,7 +432,7 @@ async function validateActiveLeadWhatsapp() {
 }
 
 function getWhatsappMiniBadge(leadId) {
-  const status = getLeadWhatsappStatus(leadId);
+  const status = getLeadWhatsappStatus(leadId, typeof findLeadEverywhere === 'function' ? (findLeadEverywhere(leadId) || {}) : {});
   const cls = status.status === 'valid' ? 'valid' : status.status === 'invalid' ? 'invalid' : 'pending';
   const label = status.status === 'valid' ? 'WA válido' : status.status === 'invalid' ? 'WA inválido' : 'WA pendente';
   return `<span class="wa-mini-badge ${cls}">${label}</span>`;
@@ -475,7 +512,7 @@ function renderLeadMessageBox() {
 
   const lead = activeLeadDrawerData || {};
   const phone = normalizePhoneForEvolution(lead.whatsapp || lead.phone || lead.telefone || '');
-  const waStatus = getLeadWhatsappStatus(activeLeadDrawerId);
+  const waStatus = getLeadWhatsappStatus(activeLeadDrawerId, lead);
 
   box.innerHTML = `
     <div class="lead-message-block">
