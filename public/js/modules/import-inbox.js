@@ -129,7 +129,7 @@ function renderInboxV41() {
   list.innerHTML = items.map(item => `<div class="inbox-v41-item"><div><div class="inbox-v41-title">${escHtml(item.lead?.nome || item.lead?.name || 'Lead')}</div><div class="inbox-v41-message">${escHtml(item.text || '[mensagem sem texto]')}</div><div class="inbox-v41-meta">${escHtml(item.channel || 'whatsapp')} · ${item.at ? escHtml(new Date(item.at).toLocaleString('pt-BR')) : ''}</div></div><div class="inbox-v41-actions"><button class="btn btn-primary" onclick="openConversationFromInboxV41('${escHtml(item.leadId)}')">Responder</button><button class="btn btn-ghost" onclick="openLeadDrawer('${escHtml(item.leadId)}')">Ficha</button></div></div>`).join('');
   updateInboxBadgeV41();
 }
-function openConversationFromInboxV41(leadId) { activeConversationLeadV38 = leadId; if (typeof switchPanel === 'function') switchPanel('conversations'); setTimeout(()=>{ try{renderConversationsV38();}catch(e){} },100); }
+function openConversationFromInboxV41(leadId) { activeConversationLeadV38 = leadId; if (typeof switchPanel === 'function') switchPanel('conversations'); else { try{renderConversationsV38();}catch(e){} } }
 function updateInboxBadgeV41() { const badge=document.getElementById('badge-inbox'); if(badge) badge.textContent = getInboxItemsV41().filter(i=>i.unread).length; }
 
 function formatEvolutionErrorV41(err) {
@@ -311,5 +311,4 @@ function rebuildSidebarGroupedV41() {
 document.addEventListener('DOMContentLoaded', () => setTimeout(rebuildSidebarGroupedV41, 250));
 setTimeout(rebuildSidebarGroupedV41, 700);
 setTimeout(rebuildSidebarGroupedV41, 1500);
-
 

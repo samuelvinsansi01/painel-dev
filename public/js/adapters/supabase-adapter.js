@@ -49,7 +49,8 @@ class SupabaseAdapter {
     const text = String(noteText || '').trim();
     if (!user?.id || !user?.email || !lead?.id || !text) return { data: null, error: null };
 
-    await this.saveLead(lead);
+    const leadResult = await this.saveLead(lead);
+    if (leadResult?.error) return leadResult;
 
     const { data, error } = await this.client
       .from('lead_notes')
@@ -70,7 +71,8 @@ class SupabaseAdapter {
     const event = String(eventText || '').trim();
     if (!user?.id || !user?.email || !lead?.id || !event) return { data: null, error: null };
 
-    await this.saveLead(lead);
+    const leadResult = await this.saveLead(lead);
+    if (leadResult?.error) return leadResult;
 
     const { data, error } = await this.client
       .from('lead_history')
@@ -104,13 +106,15 @@ class SupabaseAdapter {
     const followupDate = String(dateIso || '').trim();
     if (!user?.id || !user?.email || !lead?.id || !followupDate) return { data: null, error: null };
 
-    await this.saveLead(lead);
+    const leadResult = await this.saveLead(lead);
+    if (leadResult?.error) return leadResult;
 
-    await this.client
+    const { error:deleteError } = await this.client
       .from('lead_followups')
       .delete()
       .eq('user_id', user.id)
       .eq('lead_id', String(lead.id));
+    if (deleteError) return { data:null, error:deleteError };
 
     const { data, error } = await this.client
       .from('lead_followups')

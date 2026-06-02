@@ -105,10 +105,15 @@ async function loadSupabaseLeadCrmToLocalState() {
     }
 
     store[note.lead_id].notes = Array.isArray(store[note.lead_id].notes) ? store[note.lead_id].notes : [];
-    store[note.lead_id].notes.push({
-      at: note.created_at ? new Date(note.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel(),
-      text: note.note || ''
-    });
+    const at = note.created_at ? new Date(note.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel();
+    const exists = store[note.lead_id].notes.some(item => item.dbId === note.id || (!item.dbId && item.at === at && item.text === (note.note || '')));
+    if (!exists) {
+      store[note.lead_id].notes.push({
+        dbId: note.id || '',
+        at,
+        text: note.note || ''
+      });
+    }
   });
 
   (historyRes.data || []).forEach(item => {
@@ -123,10 +128,15 @@ async function loadSupabaseLeadCrmToLocalState() {
     }
 
     store[item.lead_id].history = Array.isArray(store[item.lead_id].history) ? store[item.lead_id].history : [];
-    store[item.lead_id].history.push({
-      at: item.created_at ? new Date(item.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel(),
-      text: item.event || ''
-    });
+    const at = item.created_at ? new Date(item.created_at).toLocaleString('pt-BR', { day:'2-digit', month:'2-digit', hour:'2-digit', minute:'2-digit' }) : crmNowLabel();
+    const exists = store[item.lead_id].history.some(event => event.dbId === item.id || (!event.dbId && event.at === at && event.text === (item.event || '')));
+    if (!exists) {
+      store[item.lead_id].history.push({
+        dbId: item.id || '',
+        at,
+        text: item.event || ''
+      });
+    }
   });
 
   (followupsRes.data || []).forEach(fu => {
@@ -145,6 +155,7 @@ async function loadSupabaseLeadCrmToLocalState() {
   });
 
   saveLeadCrmStore(store);
+  renderFollowUpsHome();
   console.log(`[supabase] CRM carregado: ${(notesRes.data || []).length} notas, ${(historyRes.data || []).length} eventos, ${(followupsRes.data || []).length} follow-ups`);
 }
 
@@ -274,6 +285,30 @@ function saveLeadCrm(id, crm) {
   saveLeadCrmStore(store);
 }
 
+function setLeadPersistenceStatusV426(id, status = '', error = '') {
+  if (!id) return;
+  const crm = ensureLeadCrm(id, findLeadEverywhere(id) || {});
+  crm.uiSyncStatus = status;
+  crm.uiSyncError = error ? String(error) : '';
+  saveLeadCrm(id, crm);
+  if (activeLeadDrawerId === id && activeLeadDrawerData) renderLeadDrawer();
+}
+
+function updateLeadNoteSyncStatusV426(id, syncId, status = '', error = '') {
+  if (!id || !syncId) return;
+  const crm = ensureLeadCrm(id, findLeadEverywhere(id) || {});
+  const note = (crm.notes || []).find(item => item.syncId === syncId);
+  if (!note) return;
+  note.syncStatus = status;
+  note.syncError = error ? String(error) : '';
+  saveLeadCrm(id, crm);
+  if (activeLeadDrawerId === id && activeLeadDrawerData) renderLeadDrawer();
+}
+
+function getSupabaseSaveErrorV426(result = {}) {
+  return result?.error || null;
+}
+
 function getLeadForCloud(id, baseLead = {}) {
   const raw = findLeadEverywhere(id) || baseLead || {};
   const lead = normalizeLeadForDrawer({ ...raw, ...baseLead, id });
@@ -286,47 +321,95 @@ function getLeadForCloud(id, baseLead = {}) {
 }
 
 async function syncLeadToCloud(id, baseLead = {}) {
-  if (!supabaseDataAdapter || !currentUser || !id) return;
+  if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  uiSyncLogV426('supabase-save-start', { entity:'lead', id });
   try {
-    await supabaseDataAdapter.saveLead(getLeadForCloud(id, baseLead));
+    const result = await supabaseDataAdapter.saveLead(getLeadForCloud(id, baseLead));
+    if (getSupabaseSaveErrorV426(result)) throw result.error;
+    setLeadPersistenceStatusV426(id, 'saved');
+    uiSyncLogV426('supabase-save-success', { entity:'lead', id });
+    return { ok:true, result };
   } catch (error) {
+    setLeadPersistenceStatusV426(id, 'pending', error?.message || error);
+    uiSyncLogV426('supabase-save-error', { entity:'lead', id, error:error?.message || error });
     console.warn('[cloud] saveLead:', error);
+    notify('Lead atualizado na tela. Salvamento no Supabase pendente.', 'warn');
+    return { error, pending:true };
   }
 }
 
-async function syncLeadNoteToCloud(id, noteText, baseLead = {}) {
-  if (!supabaseDataAdapter || !currentUser || !id) return;
+function persistOptimisticLeadV426(lead = {}, action = 'save') {
+  if (!lead?.id) return Promise.resolve({ skipped:true });
+  uiSyncLogV426('optimistic-update', { entity:'lead', action, id:lead.id });
+  return syncLeadToCloud(lead.id, lead);
+}
+
+async function syncLeadNoteToCloud(id, noteText, baseLead = {}, syncId = '') {
+  if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  uiSyncLogV426('supabase-save-start', { entity:'note', leadId:id, syncId });
   try {
-    await supabaseDataAdapter.saveNote(getLeadForCloud(id, baseLead), noteText);
+    const result = await supabaseDataAdapter.saveNote(getLeadForCloud(id, baseLead), noteText);
+    if (getSupabaseSaveErrorV426(result)) throw result.error;
+    updateLeadNoteSyncStatusV426(id, syncId, 'saved');
+    uiSyncLogV426('supabase-save-success', { entity:'note', leadId:id, syncId });
+    return { ok:true, result };
   } catch (error) {
+    updateLeadNoteSyncStatusV426(id, syncId, 'pending', error?.message || error);
+    uiSyncLogV426('supabase-save-error', { entity:'note', leadId:id, syncId, error:error?.message || error });
     console.warn('[cloud] saveNote:', error);
+    notify('Nota exibida na tela. Salvamento no Supabase pendente.', 'warn');
+    return { error, pending:true };
   }
 }
 
 async function syncLeadHistoryToCloud(id, eventText, baseLead = {}) {
-  if (!supabaseDataAdapter || !currentUser || !id) return;
+  if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  uiSyncLogV426('supabase-save-start', { entity:'history', leadId:id });
   try {
-    await supabaseDataAdapter.saveHistory(getLeadForCloud(id, baseLead), eventText);
+    const result = await supabaseDataAdapter.saveHistory(getLeadForCloud(id, baseLead), eventText);
+    if (getSupabaseSaveErrorV426(result)) throw result.error;
+    uiSyncLogV426('supabase-save-success', { entity:'history', leadId:id });
+    return { ok:true, result };
   } catch (error) {
+    uiSyncLogV426('supabase-save-error', { entity:'history', leadId:id, error:error?.message || error });
     console.warn('[cloud] saveHistory:', error);
+    return { error, pending:true };
   }
 }
 
 async function syncLeadFollowUpToCloud(id, dateIso, baseLead = {}) {
-  if (!supabaseDataAdapter || !currentUser || !id) return;
+  if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  uiSyncLogV426('supabase-save-start', { entity:'followup', leadId:id });
   try {
-    await supabaseDataAdapter.saveFollowUp(getLeadForCloud(id, baseLead), dateIso);
+    const result = await supabaseDataAdapter.saveFollowUp(getLeadForCloud(id, baseLead), dateIso);
+    if (getSupabaseSaveErrorV426(result)) throw result.error;
+    setLeadPersistenceStatusV426(id, 'saved');
+    uiSyncLogV426('supabase-save-success', { entity:'followup', leadId:id });
+    return { ok:true, result };
   } catch (error) {
+    setLeadPersistenceStatusV426(id, 'pending', error?.message || error);
+    uiSyncLogV426('supabase-save-error', { entity:'followup', leadId:id, error:error?.message || error });
     console.warn('[cloud] saveFollowUp:', error);
+    notify('Follow-up atualizado na tela. Salvamento no Supabase pendente.', 'warn');
+    return { error, pending:true };
   }
 }
 
 async function clearLeadFollowUpFromCloud(id, baseLead = {}) {
-  if (!supabaseDataAdapter || !currentUser || !id) return;
+  if (!supabaseDataAdapter || !currentUser || !id) return { skipped:true };
+  uiSyncLogV426('supabase-save-start', { entity:'followup', action:'clear', leadId:id });
   try {
-    await supabaseDataAdapter.clearFollowUp(getLeadForCloud(id, baseLead));
+    const result = await supabaseDataAdapter.clearFollowUp(getLeadForCloud(id, baseLead));
+    if (getSupabaseSaveErrorV426(result)) throw result.error;
+    setLeadPersistenceStatusV426(id, 'saved');
+    uiSyncLogV426('supabase-save-success', { entity:'followup', action:'clear', leadId:id });
+    return { ok:true, result };
   } catch (error) {
+    setLeadPersistenceStatusV426(id, 'pending', error?.message || error);
+    uiSyncLogV426('supabase-save-error', { entity:'followup', action:'clear', leadId:id, error:error?.message || error });
     console.warn('[cloud] clearFollowUp:', error);
+    notify('Follow-up removido na tela. Salvamento no Supabase pendente.', 'warn');
+    return { error, pending:true };
   }
 }
 
@@ -337,6 +420,7 @@ function addLeadHistory(id, text, baseLead = {}) {
     text
   });
   saveLeadCrm(id, crm);
+  uiSyncLogV426('optimistic-update', { entity:'history', action:'create', leadId:id });
   syncLeadHistoryToCloud(id, text, baseLead);
 }
 
@@ -411,7 +495,8 @@ function renderLeadDrawer() {
 
   const local = [lead.cidade, lead.estado].filter(Boolean).join(' - ');
   nameEl.textContent = lead.nome;
-  metaEl.textContent = [lead.categoria, local, `Status: ${lead.status}`].filter(Boolean).join(' · ') || 'sem detalhes adicionais';
+  const syncLabel = crm.uiSyncStatus === 'pending' ? 'Supabase: pendente' : '';
+  metaEl.textContent = [lead.categoria, local, `Status: ${lead.status}`, syncLabel].filter(Boolean).join(' · ') || 'sem detalhes adicionais';
 
   const wa = String(lead.whatsapp || '').replace(/\D/g, '');
   channelsEl.innerHTML = [
@@ -438,7 +523,7 @@ function renderLeadDrawer() {
     ? crm.notes.slice().reverse().map(note => `
       <div class="lead-note">
         <div class="lead-note-date">${escHtml(note.at)}</div>
-        <div class="lead-note-text">${escHtml(note.text)}</div>
+        <div class="lead-note-text">${escHtml(note.text)}${note.syncStatus === 'saving' ? '<small> · salvando...</small>' : note.syncStatus === 'pending' ? '<small> · sync pendente</small>' : ''}</div>
       </div>
     `).join('')
     : '<div class="lead-note"><div class="lead-note-text" style="color:var(--muted)">// nenhuma nota ainda</div></div>';
@@ -489,10 +574,12 @@ function addLeadNote() {
   const text = (input?.value || '').trim();
   if (!text) { notify('Escreva uma nota antes de adicionar.', 'warn'); return; }
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
-  crm.notes.push({ at: crmNowLabel(), text });
+  const syncId = 'note_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  crm.notes.push({ at: crmNowLabel(), text, syncId, syncStatus:'saving' });
   saveLeadCrm(activeLeadDrawerId, crm);
 
-  syncLeadNoteToCloud(activeLeadDrawerId, text, activeLeadDrawerData || {});
+  uiSyncLogV426('optimistic-update', { entity:'note', action:'create', leadId:activeLeadDrawerId, syncId });
+  syncLeadNoteToCloud(activeLeadDrawerId, text, activeLeadDrawerData || {}, syncId);
   addLeadHistory(activeLeadDrawerId, 'Nota adicionada', activeLeadDrawerData || {});
   if (input) input.value = '';
   renderLeadDrawer();
@@ -508,6 +595,7 @@ function updateLeadPipeline(status) {
   crm.pipelineStatus = status;
   saveLeadCrm(activeLeadDrawerId, crm);
 
+  uiSyncLogV426('optimistic-update', { entity:'lead', action:'pipeline-update', id:activeLeadDrawerId, status });
   syncLeadToCloud(activeLeadDrawerId, activeLeadDrawerData || {});
   addLeadHistory(activeLeadDrawerId, `Pipeline alterado: ${old} → ${step.label}`, activeLeadDrawerData || {});
   renderLeadDrawer();
@@ -532,6 +620,7 @@ function saveLeadFollowUp() {
     ? `Follow-up reagendado: ${formatIsoDateBR(oldDate)} → ${formatIsoDateBR(dateIso)}`
     : `Follow-up agendado para ${formatIsoDateBR(dateIso)}`;
 
+  uiSyncLogV426('optimistic-update', { entity:'followup', action:'save', leadId:activeLeadDrawerId, dateIso });
   syncLeadFollowUpToCloud(activeLeadDrawerId, dateIso, activeLeadDrawerData || {});
   addLeadHistory(activeLeadDrawerId, message, activeLeadDrawerData || {});
   renderLeadDrawer();
@@ -551,6 +640,7 @@ function clearLeadFollowUp() {
   const oldDate = crm.followUpDate;
   crm.followUpDate = '';
   saveLeadCrm(activeLeadDrawerId, crm);
+  uiSyncLogV426('optimistic-update', { entity:'followup', action:'clear', leadId:activeLeadDrawerId });
   clearLeadFollowUpFromCloud(activeLeadDrawerId, activeLeadDrawerData || {});
   addLeadHistory(activeLeadDrawerId, `Follow-up removido: ${formatIsoDateBR(oldDate)}`, activeLeadDrawerData || {});
   renderLeadDrawer();
@@ -579,14 +669,14 @@ function createDevTestLead() {
   saveValData([...getValData(), lead]);
   ensureLeadCrm(id, lead);
   addLeadHistory(id, 'Lead teste criado no ambiente DEV', lead);
-  syncLeadToCloud(id, lead);
+  persistOptimisticLeadV426(lead, 'create-dev-test');
 
   renderInicio();
   renderFollowUpsHome();
   updateBadges();
   notify('Lead teste criado em Validação.');
 
-  syncAllLocalLeadsToSupabase();}
+}
 
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') closeLeadDrawer();

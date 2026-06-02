@@ -276,11 +276,11 @@ async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   if (!leadId) return;
 
   const crm = ensureLeadCrm(leadId, lead || {});
-  const now = new Date().toISOString();
+  const now = payload.occurredAt || new Date().toISOString();
   const label = crmNowLabel();
-  const messageId = typeof buildOutgoingWhatsappExternalIdV412 === 'function'
+  const messageId = payload.messageId || (typeof buildOutgoingWhatsappExternalIdV412 === 'function'
     ? buildOutgoingWhatsappExternalIdV412('manual', payload.response || {})
-    : 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+    : 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8));
 
   crm.whatsappStatus = {
     status: 'sent',
@@ -301,7 +301,7 @@ async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
   };
 
   crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
-  crm.messages.push({
+  const localMessage = {
     id: messageId,
     direction: 'out',
     text: payload.text || '',
@@ -310,16 +310,32 @@ async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
     atLabel: label,
     chipName: payload.chipName || payload.instance || '',
     instance: payload.instance || '',
-    response: payload.response || null
-  });
+    response: payload.response || null,
+    status:'saving'
+  };
+  const existingMessage = crm.messages.find(item => item.id === messageId);
+  if (existingMessage) Object.assign(existingMessage, localMessage);
+  else crm.messages.push(localMessage);
 
   crm.pipelineStatus = crm.pipelineStatus || 'contato_enviado';
 
   saveLeadCrm(leadId, crm);
-  let persistence = { ok:false, pending:false };
+  if (typeof upsertLocalOutgoingWhatsappMessageV426 === 'function') {
+    upsertLocalOutgoingWhatsappMessageV426({
+      id:messageId,
+      leadId,
+      instance:payload.instance || '',
+      phone:payload.phone || '',
+      text:payload.text || '',
+      occurredAt:now,
+      response:payload.response || null,
+      status:'saving'
+    }, { log:payload.optimisticRendered !== true, skipCrm:true });
+  }
+  let persistence = { ok:false, pending:true };
   debugDispatchPersistV413('persist-function-check', { file: 'whatsapp-manual-send.js', available: typeof persistOutgoingWhatsappMessageV412 === 'function' });
-      if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
-    persistence = await persistOutgoingWhatsappMessageV412({
+  if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+    persistOutgoingWhatsappMessageV412({
       id: messageId,
       leadId,
       instance: payload.instance || '',
@@ -327,6 +343,17 @@ async function markLeadWhatsappSentV4014(leadId, lead, payload = {}) {
       text: payload.text || '',
       occurredAt: now,
       response: payload.response || null
+    }).then(result => {
+      if (typeof updateLocalOutgoingWhatsappMessageStatusV426 === 'function') {
+        updateLocalOutgoingWhatsappMessageStatusV426(messageId, result.ok ? 'sent' : 'pending', { leadId, response:payload.response || null });
+      }
+      if (!result.ok) notify('Mensagem enviada. Sincronização com banco pendente.', 'warn');
+    }).catch(error => {
+      if (typeof updateLocalOutgoingWhatsappMessageStatusV426 === 'function') {
+        updateLocalOutgoingWhatsappMessageStatusV426(messageId, 'pending', { leadId, response:payload.response || null });
+      }
+      uiSyncLogV426('supabase-save-error', { entity:'message', id:messageId, error:error?.message || error });
+      notify('Mensagem enviada. Sincronização com banco pendente.', 'warn');
     });
   }
 
@@ -347,9 +374,7 @@ function openLeadConversationV4014() {
   if (!activeLeadDrawerId) return;
   activeConversationLeadV38 = activeLeadDrawerId;
   if (typeof switchPanel === 'function') switchPanel('conversations');
-  setTimeout(() => {
-    try { renderConversationsV38(); } catch(e) {}
-  }, 80);
+  else { try { renderConversationsV38(); } catch(e) {} }
 }
 
 async function sendActiveLeadWhatsappMessage() {
@@ -379,6 +404,21 @@ async function sendActiveLeadWhatsappMessage() {
   }
 
   if (result) result.textContent = 'Enviando mensagem...';
+  const optimisticMessageId = typeof buildOutgoingWhatsappExternalIdV412 === 'function'
+    ? buildOutgoingWhatsappExternalIdV412('manual')
+    : 'manual_' + Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const optimisticOccurredAt = new Date().toISOString();
+  if (typeof upsertLocalOutgoingWhatsappMessageV426 === 'function') {
+    upsertLocalOutgoingWhatsappMessageV426({
+      id:optimisticMessageId,
+      leadId:activeLeadDrawerId,
+      instance:cfg.instance,
+      phone,
+      text,
+      occurredAt:optimisticOccurredAt,
+      status:'sending'
+    });
+  }
 
   try {
     const data = await sendEvolutionTextV4013({
@@ -394,12 +434,18 @@ async function sendActiveLeadWhatsappMessage() {
       phone,
       instance: cfg.instance,
       chipName: cfg.chip?.name || cfg.chip?.nome || cfg.instance,
-      response: data
+      response: data,
+      messageId:optimisticMessageId,
+      occurredAt:optimisticOccurredAt,
+      optimisticRendered:true
     });
 
-    if (result) result.textContent = persistence?.ok ? `Mensagem enviada e salva em ${crmNowLabel()}.` : `Mensagem enviada em ${crmNowLabel()}. Sincronização com banco pendente.`;
-    notify(persistence?.ok ? 'Mensagem enviada e salva.' : 'Mensagem enviada via Evolution. Sincronização com banco pendente.', persistence?.ok ? undefined : 'warn');
+    if (result) result.textContent = persistence?.pending ? `Mensagem enviada em ${crmNowLabel()}. Sincronização com banco em segundo plano.` : `Mensagem enviada e salva em ${crmNowLabel()}.`;
+    notify(persistence?.pending ? 'Mensagem enviada via Evolution. Salvando no banco...' : 'Mensagem enviada e salva.', persistence?.pending ? 'warn' : undefined);
   } catch (err) {
+    if (typeof removeLocalOutgoingWhatsappMessageV426 === 'function') {
+      removeLocalOutgoingWhatsappMessageV426(optimisticMessageId, activeLeadDrawerId);
+    }
     try {
       addLeadHistory(activeLeadDrawerId, `WhatsApp: falha ao enviar mensagem (${err?.message || 'erro'})`, activeLeadDrawerData);
       renderLeadTimeline(activeLeadDrawerId);
@@ -408,5 +454,3 @@ async function sendActiveLeadWhatsappMessage() {
     notify(formatEvolutionErrorV41(err), 'err');
   }
 }
-
-

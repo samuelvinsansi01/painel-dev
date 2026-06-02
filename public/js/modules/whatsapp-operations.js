@@ -15,7 +15,7 @@ function getQueueCampaigns() {
 }
 
 function saveQueueCampaigns(list) {
-  setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
+  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(QUEUE_CAMPAIGNS_V27_KEY, JSON.stringify(list || []));
 }
 
@@ -32,7 +32,7 @@ function getQueueTemplates() {
 }
 
 function saveQueueTemplates(list) {
-  setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
+  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(QUEUE_TEMPLATES_V27_KEY, JSON.stringify(list || []));
 }
 
@@ -46,7 +46,7 @@ function getWhatsappQueueV27() {
 }
 
 function saveWhatsappQueueV27(list) {
-  setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
+  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(WHATSAPP_QUEUE_V27_KEY, JSON.stringify(list || []));
   updateWhatsappQueueBadge();
   if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();

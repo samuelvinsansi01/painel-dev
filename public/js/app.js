@@ -162,9 +162,7 @@ async function loadLeadsFromSupabase() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  setTimeout(() => {
-    loadLeadsFromSupabase();
-  }, 1500);
+  loadLeadsFromSupabase();
 });
 
 
@@ -264,5 +262,4 @@ function getDispatchConfigTextV33() {
 // audit panel fallback
 
 document.addEventListener('DOMContentLoaded', () => { try { updateAuditBadgeV35(); } catch(e){} });
-
 

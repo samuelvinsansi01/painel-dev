@@ -164,8 +164,10 @@ async function persistWhatsappChipsToSupabaseV22(list = []){
     }
 
     console.log('[chips][db-save]', { userId, userEmail, count:chips.length });
+    return { ok:true, count:chips.length };
   } catch (err) {
     console.warn('[chips][db-save-error]', err?.message || err);
+    throw err;
   }
 }
 
@@ -185,14 +187,49 @@ function getWhatsappChipsV29(){
   } catch { return []; }
 }
 
+function storeWhatsappChipsCacheV426(list = []){
+  localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(Array.isArray(list) ? list : []));
+  localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
+}
+
+function updateWhatsappChipsSyncStateV426(revision, status = '', error = ''){
+  const current = getWhatsappChipsV29();
+  let touched = false;
+  const next = current.map(chip => {
+    if (chip._syncRevision !== revision) return chip;
+    touched = true;
+    const updated = { ...chip };
+    if (status) updated._syncStatus = status;
+    else delete updated._syncStatus;
+    if (error) updated._syncError = String(error);
+    else delete updated._syncError;
+    if (!status) delete updated._syncRevision;
+    return updated;
+  });
+  if (touched) storeWhatsappChipsCacheV426(next);
+}
+
 function saveWhatsappChipsV29(list){
   const safeList = Array.isArray(list) ? list : [];
-  setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
+  const revision = Date.now() + '_' + Math.random().toString(36).slice(2, 8);
+  const optimisticList = safeList.map(chip => ({ ...chip, _syncStatus:'saving', _syncRevision:revision }));
+  try { scheduleOperationalSyncV36(); } catch(e){}
   if (getCurrentUserIdV22() && getCurrentUserEmailV24()) {
-    localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(safeList));
-    console.log('[user-isolation][chip-cache]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), key:scopedWhatsappChipsKeyV22(), count:safeList.length });
-    localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
-    setTimeout(() => { try { persistWhatsappChipsToSupabaseV22(safeList); } catch(e){} }, 0);
+    storeWhatsappChipsCacheV426(optimisticList);
+    console.log('[user-isolation][chip-cache]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), key:scopedWhatsappChipsKeyV22(), count:optimisticList.length });
+    uiSyncLogV426('optimistic-update', { entity:'chip', action:'save', count:optimisticList.length, revision });
+    Promise.resolve().then(async () => {
+      uiSyncLogV426('supabase-save-start', { entity:'chip', count:optimisticList.length, revision });
+      await persistWhatsappChipsToSupabaseV22(optimisticList);
+      updateWhatsappChipsSyncStateV426(revision);
+      uiSyncLogV426('supabase-save-success', { entity:'chip', count:optimisticList.length, revision });
+      try { renderChipsPanel(); } catch(e){}
+    }).catch(error => {
+      updateWhatsappChipsSyncStateV426(revision, 'pending', error?.message || error);
+      uiSyncLogV426('supabase-save-error', { entity:'chip', count:optimisticList.length, revision, error:error?.message || error });
+      try { renderChipsPanel(); } catch(e){}
+      notify('Chip atualizado na tela. Salvamento no Supabase pendente.', 'warn');
+    });
   }
   updateChipsBadge();
 }
@@ -363,6 +400,11 @@ function renderChipsList(){
       : paused
         ? '<span class="chip-pill warn">pausado</span>'
         : '<span class="chip-pill ok">ativo</span>';
+    const syncPill = chip._syncStatus === 'saving'
+      ? '<span class="chip-pill warn">salvando...</span>'
+      : chip._syncStatus === 'pending'
+        ? '<span class="chip-pill warn">sync pendente</span>'
+        : '';
 
     return `
       <div class="chip-card ${stateClass}">
@@ -375,7 +417,7 @@ function renderChipsList(){
               Intervalo: ${escHtml(String(chip.intervalSeconds || 120))}s
             </div>
           </div>
-          ${pill}
+          <div>${pill}${syncPill}</div>
         </div>
         <div class="chip-card-meta">${used} / ${limit} envios hoje</div>
         <div class="chip-progress"><div class="chip-progress-fill" style="width:${pct}%"></div></div>
@@ -399,5 +441,4 @@ function updateChipsBadge(){
   const badge = document.getElementById('badge-chips');
   if (badge) badge.textContent = getWhatsappChipsV29().length;
 }
-
 

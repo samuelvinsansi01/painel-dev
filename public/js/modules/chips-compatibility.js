@@ -285,7 +285,7 @@ function syncLegacyChipToV29V409(legacyChip) {
   saveWhatsappChipsV29(chipsV29);
 }
 
-async function salvarChip() {
+function salvarChip() {
   const form = getLegacyChipFormV409();
 
   if (!form.nome || !form.url || !form.instance || !form.key) {
@@ -294,40 +294,55 @@ async function salvarChip() {
     return;
   }
 
-  try {
-    notify('// testando conexão do chip...', 'warn');
+  const chips = typeof getChips === 'function' ? getChips() : [];
+  const existing = chips.find(c => c.instance === form.instance || c.nome === form.nome);
+  const chipPayload = {
+    id: existing?.id || (typeof genId === 'function' ? genId() : 'chip_' + Date.now()),
+    nome: form.nome,
+    url: form.url,
+    instance: form.instance,
+    key: form.key,
+    status: 'verificando conexão'
+  };
+
+  if (existing) Object.assign(existing, chipPayload);
+  else chips.push(chipPayload);
+
+  if (typeof saveChips === 'function') saveChips(chips);
+  syncLegacyChipToV29V409(chipPayload);
+  uiSyncLogV426('optimistic-update', { entity:'chip', action:'create-or-update', id:chipPayload.id, instance:chipPayload.instance });
+
+  if (typeof fecharChipModal === 'function') fecharChipModal();
+  if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
+  if (typeof renderChipsPanel === 'function') renderChipsPanel();
+  if (typeof updateBadges === 'function') updateBadges();
+  notify('// chip exibido. Testando conexão em segundo plano...', 'warn');
+
+  Promise.resolve().then(async () => {
     const test = await testarChipLegacyV409(form);
-
-    const chips = typeof getChips === 'function' ? getChips() : [];
-    const existing = chips.find(c => c.instance === form.instance || c.nome === form.nome);
-
-    const chipPayload = {
-      id: existing?.id || (typeof genId === 'function' ? genId() : 'chip_' + Date.now()),
-      nome: form.nome,
-      url: form.url,
-      instance: form.instance,
-      key: form.key,
-      status: test.state === 'open' ? 'conectado' : test.state
-    };
-
-    if (existing) Object.assign(existing, chipPayload);
-    else {
-      chips.push(chipPayload);
-    }
-
-    if (typeof saveChips === 'function') saveChips(chips);
+    chipPayload.status = test.state === 'open' ? 'conectado' : test.state;
+    const latest = typeof getChips === 'function' ? getChips() : [];
+    const saved = latest.find(c => c.id === chipPayload.id || c.instance === chipPayload.instance);
+    if (saved) Object.assign(saved, chipPayload);
+    else latest.push(chipPayload);
+    if (typeof saveChips === 'function') saveChips(latest);
     syncLegacyChipToV29V409(chipPayload);
-
-    if (typeof fecharChipModal === 'function') fecharChipModal();
     if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
     if (typeof renderChipsPanel === 'function') renderChipsPanel();
-    if (typeof updateBadges === 'function') updateBadges();
-
-    notify(`✓ Chip salvo e conectado: ${test.state}`);
-  } catch (err) {
-    console.error('[chip v40.9] erro ao salvar:', err);
-    notify('// erro ao conectar chip: ' + (err?.message || 'falha'), 'err');
-  }
+    notify(`✓ Chip conectado: ${test.state}`);
+  }).catch(err => {
+    chipPayload.status = 'erro: ' + (err?.message || 'falha');
+    const latest = typeof getChips === 'function' ? getChips() : [];
+    const saved = latest.find(c => c.id === chipPayload.id || c.instance === chipPayload.instance);
+    if (saved) Object.assign(saved, chipPayload);
+    else latest.push(chipPayload);
+    if (typeof saveChips === 'function') saveChips(latest);
+    syncLegacyChipToV29V409(chipPayload);
+    if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
+    if (typeof renderChipsPanel === 'function') renderChipsPanel();
+    console.error('[chip v40.9] erro ao testar conexão:', err);
+    notify('// chip salvo, mas a conexão falhou: ' + (err?.message || 'falha'), 'err');
+  });
 }
 
 function addWhatsappChip() {

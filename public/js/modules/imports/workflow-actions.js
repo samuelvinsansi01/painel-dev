@@ -193,7 +193,13 @@ async function persistWhatsappLeadUpdateV43(lead) {
       return result;
     }
     if (window.supabaseDataAdapter?.saveLead) {
+      uiSyncLogV426('supabase-save-start', { entity:'lead', id:lead.id, action:'whatsapp-update' });
       const result = await window.supabaseDataAdapter.saveLead(lead);
+      if (result?.error) {
+        uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, action:'whatsapp-update', error:result.error?.message || result.error });
+      } else {
+        uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id, action:'whatsapp-update' });
+      }
       console.log('[inicio][whatsapp] lead atualizado no Supabase via adapter', { id: lead.id, phone: lead.phone || lead.whatsapp, result });
       return result;
     }
@@ -204,7 +210,7 @@ async function persistWhatsappLeadUpdateV43(lead) {
   return { skipped:true };
 }
 
-async function saveWhatsapp(id, day) {
+function saveWhatsapp(id, day) {
   const input = document.getElementById(`waInput_${id}`);
   if (!input) return;
   const raw = input.value.trim();
@@ -219,12 +225,21 @@ async function saveWhatsapp(id, day) {
   updateBadges();
   renderInicio();
 
-  const result = await persistWhatsappLeadUpdateV43(emp);
-  if (result?.error) {
-    notify('Número atualizado localmente, mas não salvou no Supabase', 'warn');
-    return;
-  }
-  notify(phone ? '✓ Número atualizado e salvo' : '✓ Número removido e salvo');
+  uiSyncLogV426('optimistic-update', { entity:'lead', action:'whatsapp-update', id, phone });
+  if (typeof setLeadPersistenceStatusV426 === 'function') setLeadPersistenceStatusV426(id, 'saving');
+  persistWhatsappLeadUpdateV43(emp).then(result => {
+    if (result?.error) {
+      if (typeof setLeadPersistenceStatusV426 === 'function') setLeadPersistenceStatusV426(id, 'pending', result.error?.message || result.error);
+      notify('Número atualizado na tela. Salvamento no Supabase pendente.', 'warn');
+      return;
+    }
+    if (typeof setLeadPersistenceStatusV426 === 'function') setLeadPersistenceStatusV426(id, 'saved');
+  }).catch(error => {
+    if (typeof setLeadPersistenceStatusV426 === 'function') setLeadPersistenceStatusV426(id, 'pending', error?.message || error);
+    uiSyncLogV426('supabase-save-error', { entity:'lead', action:'whatsapp-update', id, error:error?.message || error });
+    notify('Número atualizado na tela. Salvamento no Supabase pendente.', 'warn');
+  });
+  notify(phone ? '✓ Número atualizado' : '✓ Número removido');
 }
 function deleteEmpresa(id, day) {
   const data = ensureWeekData();
@@ -313,4 +328,3 @@ function confirmClearDay() {
   if (semStatus.length) msgs.push(`${semStatus.length} → Atribuição`);
   notify(`${dayLabel(day)} limpo` + (msgs.length ? ' · ' + msgs.join(' · ') : ''));
 }
-

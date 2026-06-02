@@ -123,12 +123,19 @@ function updateBadges() {
 
 
 let _supabaseLeadSyncTimer = null;
-function scheduleSupabaseLeadSync() {
+const _pendingSupabaseLeadSyncV426 = new Map();
+function scheduleSupabaseLeadSync(leads = []) {
   if (!isSupabaseReady()) return;
+  (Array.isArray(leads) ? leads : [leads]).forEach(lead => {
+    if (lead?.id) _pendingSupabaseLeadSyncV426.set(lead.id, lead);
+  });
+  if (!_pendingSupabaseLeadSyncV426.size) return;
   clearTimeout(_supabaseLeadSyncTimer);
   _supabaseLeadSyncTimer = setTimeout(() => {
-    syncAllLocalLeadsToSupabase();
-  }, 800);
+    const pending = Array.from(_pendingSupabaseLeadSyncV426.values());
+    _pendingSupabaseLeadSyncV426.clear();
+    pending.forEach(lead => upsertLeadToSupabase(lead));
+  }, 250);
 }
 
 /* ════════════════════════════
@@ -181,11 +188,12 @@ function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = tru
 
   const now = new Date().toISOString();
   const map = new Map(getLeadBaseData().filter(lead => lead?.id).map(lead => [lead.id, lead]));
+  const changed = [];
 
   leads.forEach(lead => {
     if (!lead?.id) return;
     const previous = map.get(lead.id) || {};
-    map.set(lead.id, {
+    const next = {
       ...previous,
       ...lead,
       id: lead.id,
@@ -193,14 +201,17 @@ function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = tru
       baseSource: metadata.source || lead.baseSource || previous.baseSource || 'Fluxo local',
       permanentCreatedAt: previous.permanentCreatedAt || lead.permanentCreatedAt || lead.created_at || now,
       permanentUpdatedAt: now
-    });
+    };
+    const fields = ['nome','companyName','title','whatsapp','phone','telefone','instagram','instagramUrl','site','website','googleUrl','mapsUrl','url','status','pipelineStatus'];
+    if (!previous.id || fields.some(field => String(previous[field] || '') !== String(next[field] || ''))) changed.push(next);
+    map.set(lead.id, next);
   });
 
   const merged = [...map.values()];
   localStorage.setItem(LEADS_BASE_KEY, JSON.stringify(merged));
 
   if (schedule) {
-    if (typeof scheduleSupabaseLeadSync === 'function') scheduleSupabaseLeadSync();
+    if (typeof scheduleSupabaseLeadSync === 'function') scheduleSupabaseLeadSync(changed);
     if (typeof scheduleLegacyOperationalSyncV36 === 'function') scheduleLegacyOperationalSyncV36();
   }
 
@@ -239,7 +250,6 @@ function getWeekData()  {
 function saveWeekData(d){
   localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d));
   mergeLeadsIntoPermanentBase(Object.values(d?.days || {}).flat(), { source:'Agenda semanal' });
-  scheduleSupabaseLeadSync();
   scheduleLegacyOperationalSyncV36();
 }
 function ensureWeekData() {

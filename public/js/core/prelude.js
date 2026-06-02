@@ -119,6 +119,10 @@ function userIsolationLogV25(step, data = {}) {
   try { console.log(`[user-isolation]${step}`, data); } catch(e) {}
 }
 
+function uiSyncLogV426(step, data = {}) {
+  try { console.log(`[ui-sync][${step}]`, data); } catch(e) {}
+}
+
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 
@@ -405,6 +409,5 @@ async function logoutSupabase() {
     notify('Sessão local encerrada. Recarregue se necessário.', 'warn');
   }
 }
-
 
 

@@ -115,6 +115,92 @@ function getSupabaseWhatsappMessagesV412() {
   return supabaseWhatsappMessagesCacheV412.length ? supabaseWhatsappMessagesCacheV412 : loadSupabaseWhatsappMessagesCacheV412();
 }
 
+function isUnsavedOutgoingWhatsappMessageV426(message = {}) {
+  return message.direction === 'out' && ['sending','saving','pending'].includes(message.status);
+}
+
+function upsertLocalOutgoingWhatsappMessageV426(message = {}, options = {}) {
+  const id = String(message.id || '').trim();
+  if (!id) return null;
+  const localMessage = {
+    id,
+    leadId: String(message.leadId || '').trim(),
+    instance: String(message.instance || '').trim(),
+    phone: normalizeWhatsappDigitsV412(message.phone || ''),
+    direction:'out',
+    text:String(message.text || ''),
+    status:message.status || 'saving',
+    receivedAt:message.occurredAt || message.receivedAt || new Date().toISOString(),
+    read:true,
+    response:message.response || null
+  };
+  const cache = getSupabaseWhatsappMessagesV412().slice();
+  const cacheIndex = cache.findIndex(item => item.id === id);
+  if (cacheIndex >= 0) cache[cacheIndex] = { ...cache[cacheIndex], ...localMessage };
+  else cache.push(localMessage);
+  saveSupabaseWhatsappMessagesCacheV412(cache.sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || ''))));
+
+  if (localMessage.leadId && options.skipCrm !== true) {
+    const lead = findLeadEverywhere(localMessage.leadId) || {};
+    const crm = ensureLeadCrm(localMessage.leadId, lead);
+    crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
+    const crmIndex = crm.messages.findIndex(item => item.id === id);
+    const crmMessage = {
+      id,
+      direction:'out',
+      text:localMessage.text,
+      phone:localMessage.phone,
+      instance:localMessage.instance,
+      at:localMessage.receivedAt,
+      atLabel:crmNowLabel(),
+      status:localMessage.status,
+      response:localMessage.response
+    };
+    if (crmIndex >= 0) Object.assign(crm.messages[crmIndex], crmMessage);
+    else crm.messages.push(crmMessage);
+    saveLeadCrm(localMessage.leadId, crm);
+  }
+
+  if (options.log !== false) {
+    uiSyncLogV426('optimistic-update', { entity:'message', action:'upsert', id, leadId:localMessage.leadId, status:localMessage.status });
+  }
+  try { renderConversationsV38(); } catch(e) {}
+  return localMessage;
+}
+
+function updateLocalOutgoingWhatsappMessageStatusV426(id = '', status = '', patch = {}) {
+  const cache = getSupabaseWhatsappMessagesV412().slice();
+  const cached = cache.find(item => item.id === id);
+  if (cached) Object.assign(cached, patch, { status });
+  saveSupabaseWhatsappMessagesCacheV412(cache);
+
+  const leadId = String(patch.leadId || cached?.leadId || '').trim();
+  if (leadId) {
+    const crm = ensureLeadCrm(leadId, findLeadEverywhere(leadId) || {});
+    const local = (crm.messages || []).find(item => item.id === id);
+    if (local) Object.assign(local, patch, { status });
+    saveLeadCrm(leadId, crm);
+  }
+  try { renderConversationsV38(); } catch(e) {}
+}
+
+function removeLocalOutgoingWhatsappMessageV426(id = '', leadId = '') {
+  saveSupabaseWhatsappMessagesCacheV412(getSupabaseWhatsappMessagesV412().filter(item => item.id !== id));
+  if (leadId) {
+    const crm = ensureLeadCrm(leadId, findLeadEverywhere(leadId) || {});
+    crm.messages = (crm.messages || []).filter(item => item.id !== id);
+    saveLeadCrm(leadId, crm);
+  }
+  try { renderConversationsV38(); } catch(e) {}
+}
+
+function mergeUnsavedOutgoingWhatsappMessagesV426(serverMessages = []) {
+  const serverIds = new Set(serverMessages.map(item => item.id));
+  const pending = getSupabaseWhatsappMessagesV412()
+    .filter(item => isUnsavedOutgoingWhatsappMessageV426(item) && !serverIds.has(item.id));
+  return [...serverMessages, ...pending];
+}
+
 
 /* Mapeamento manual seguro LID -> Lead/telefone real */
 let whatsappContactMapCacheV418 = [];
@@ -493,7 +579,31 @@ async function associateContactMapLeadV418(leadId = '') {
   if (!phoneReal) { notify('Lead selecionado está sem telefone.', 'warn'); return; }
   if (!currentUser?.id || !currentUser?.email) { notify('Usuário não autenticado.', 'warn'); return; }
 
+  const previousMaps = whatsappContactMapCacheV418.slice();
+  const previousConversationKey = activeConversationLeadV38;
+  const optimisticMap = {
+    id:'optimistic_map_' + Date.now(),
+    user_id:currentUser.id,
+    instance:state.instance || 'prospecto',
+    lid:state.lid,
+    lead_id:lead.id,
+    phone_real:phoneReal,
+    push_name:state.pushName || lead.nome || '',
+    _syncStatus:'saving'
+  };
+  whatsappContactMapCacheV418 = previousMaps.filter(item => {
+    return !(normalizeWhatsappDigitsV412(item.lid || '') === normalizeWhatsappDigitsV412(optimisticMap.lid) && String(item.instance || '') === String(optimisticMap.instance || ''));
+  });
+  whatsappContactMapCacheV418.unshift(optimisticMap);
+  activeConversationLeadV38 = lead.id;
+  uiSyncLogV426('optimistic-update', { entity:'association', action:'save', lid:state.lid, leadId:lead.id, instance:optimisticMap.instance });
+  try { renderInboxV41(); } catch(e) {}
+  try { renderConversationsV38(); } catch(e) {}
+  closeContactMapDrawerV418();
+  notify(`Conversa vinculada ao lead ${lead.nome || 'selecionado'}. Salvando...`);
+
   debugContactMapV418('[associate]', { lid:state.lid, leadId:lead.id, phoneReal, instance:state.instance });
+  uiSyncLogV426('supabase-save-start', { entity:'association', lid:state.lid, leadId:lead.id, instance:optimisticMap.instance });
   try {
     const res = await fetch('/api/whatsapp/contact-map', {
       method:'POST',
@@ -512,15 +622,21 @@ async function associateContactMapLeadV418(leadId = '') {
     if (!res.ok || data.success === false) throw new Error(data.error || `HTTP ${res.status}`);
 
     debugContactMapV418('[associate-success]', data);
-    await fetchContactMapsV418();
+    whatsappContactMapCacheV418 = whatsappContactMapCacheV418.map(item => item.id === optimisticMap.id ? (data.map || { ...optimisticMap, _syncStatus:'' }) : item);
     activeConversationLeadV38 = lead.id;
-    await fetchEvolutionResponsesV34({ silent:true });
+    uiSyncLogV426('supabase-save-success', { entity:'association', lid:state.lid, leadId:lead.id, instance:optimisticMap.instance });
+    fetchContactMapsV418().catch(() => {});
+    fetchEvolutionResponsesV34({ silent:true }).catch(() => {});
     try { renderInboxV41(); } catch(e) {}
     try { renderConversationsV38(); } catch(e) {}
-    closeContactMapDrawerV418();
     notify(`Conversa vinculada ao lead ${lead.nome || 'selecionado'}.`);
   } catch (error) {
+    whatsappContactMapCacheV418 = previousMaps;
+    activeConversationLeadV38 = previousConversationKey;
+    uiSyncLogV426('supabase-save-error', { entity:'association', lid:state.lid, leadId:lead.id, instance:optimisticMap.instance, error:error?.message || error });
     debugContactMapV418('[associate-error]', { error:error?.message || error });
+    try { renderInboxV41(); } catch(e) {}
+    try { renderConversationsV38(); } catch(e) {}
     notify('Erro ao vincular conversa: ' + (error?.message || error), 'err');
   }
 }
@@ -753,7 +869,8 @@ async function fetchEvolutionResponsesV34(options = {}) {
       });
     });
     saveSupabaseWhatsappMessagesCacheV412(
-      allMessages.sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))
+      mergeUnsavedOutgoingWhatsappMessagesV426(allMessages)
+        .sort((a,b) => String(b.receivedAt || '').localeCompare(String(a.receivedAt || '')))
     );
 
     saveLocalResponsesV34(
@@ -1027,6 +1144,13 @@ function getConversationMessagesV38(conversationKey) {
   return Array.from(unique.values()).sort((a,b) => String(a.at || '').localeCompare(String(b.at || '')));
 }
 
+function getWhatsappMessageSyncLabelV426(status = '') {
+  if (status === 'sending') return ' · enviando...';
+  if (status === 'saving') return ' · salvando...';
+  if (status === 'pending') return ' · sync pendente';
+  return '';
+}
+
 function renderConversationChatV38() {
   const box = document.getElementById('conversationChatV38');
   if (!box) return;
@@ -1075,7 +1199,7 @@ function renderConversationChatV38() {
       ${messages.length ? messages.map(msg => `
         <div class="message-bubble-v38 ${msg.direction === 'out' ? 'out' : 'in'}">
           ${escHtml(msg.text || '[mensagem sem texto]')}
-          <div class="message-time-v38">${escHtml(msg.atLabel || (msg.at ? new Date(msg.at).toLocaleString('pt-BR') : ''))}${msg.instance ? ' · ' + escHtml(msg.instance) : (msg.chipName ? ' · ' + escHtml(msg.chipName) : '')}</div>
+          <div class="message-time-v38">${escHtml(msg.atLabel || (msg.at ? new Date(msg.at).toLocaleString('pt-BR') : ''))}${msg.instance ? ' · ' + escHtml(msg.instance) : (msg.chipName ? ' · ' + escHtml(msg.chipName) : '')}${escHtml(getWhatsappMessageSyncLabelV426(msg.status))}</div>
         </div>
       `).join('') : '<div class="conversation-empty-v38">// sem mensagens registradas</div>'}
     </div>
@@ -1190,16 +1314,19 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
   };
 
   debugWhatsappPersistV413('payload', payload);
+  uiSyncLogV426('supabase-save-start', { entity:'message', id:payload.id, leadId:payload.leadId, instance:payload.instance });
 
   if (!currentUser?.id || !currentUser?.email || payload.userId !== currentUser.id) {
     debugWhatsappPersistV413('blocked:auth-mismatch', { currentUserId:currentUser?.id || '', currentUserEmail:currentUser?.email || '', payloadUserId:payload.userId });
     if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+    uiSyncLogV426('supabase-save-error', { entity:'message', id:payload.id, error:'auth-mismatch' });
     return { ok:false, pending:queueOnFailure, error:'Usuário autenticado inválido para salvar mensagem' };
   }
 
   if (!payload.id || !payload.instance || !payload.phone || !payload.text || !payload.userId) {
     debugWhatsappPersistV413('blocked:missing-data', { payload, missing: { id:!payload.id, instance:!payload.instance, phone:!payload.phone, text:!payload.text, userId:!payload.userId } });
     if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+    uiSyncLogV426('supabase-save-error', { entity:'message', id:payload.id, error:'missing-data' });
     return { ok:false, pending:queueOnFailure, error:'Dados insuficientes para salvar mensagem enviada' };
   }
 
@@ -1207,7 +1334,7 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
     debugWhatsappPersistV413('client:insert:start', { external_id: payload.id, user_id: payload.userId, lead_id: payload.leadId || null, instance: payload.instance, phone: payload.phone, body: payload.text, occurred_at: payload.occurredAt });
     const { error } = await sbClient
       .from('whatsapp_messages')
-      .insert({
+      .upsert({
         external_id: payload.id,
         user_id: payload.userId,
         lead_id: payload.leadId || null,
@@ -1220,10 +1347,11 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
         occurred_at: payload.occurredAt,
         updated_at: new Date().toISOString(),
         raw_payload: payload.response || null
-      });
+      }, { onConflict:'instance,external_id' });
 
     if (!error) {
       debugWhatsappPersistV413('client:insert:success', { external_id: payload.id });
+      uiSyncLogV426('supabase-save-success', { entity:'message', id:payload.id, via:'supabase' });
       return { ok:true, pending:false, via:'supabase' };
     }
     debugWhatsappPersistV413('client:insert:error', { error: error.message, details: error });
@@ -1233,12 +1361,14 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
   const apiResult = await persistOutgoingWhatsappMessageViaApiV412(payload);
   if (apiResult.ok) {
     debugWhatsappPersistV413('success:api', apiResult);
+    uiSyncLogV426('supabase-save-success', { entity:'message', id:payload.id, via:'api' });
     return apiResult;
   }
 
   console.warn('[whatsapp_messages] saída via api:', apiResult.error);
   if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
   debugWhatsappPersistV413('failed:queued', { queueOnFailure, apiResult });
+  uiSyncLogV426('supabase-save-error', { entity:'message', id:payload.id, error:apiResult.error, queued:queueOnFailure });
   return { ok:false, pending:queueOnFailure, error:apiResult.error };
 }
 
@@ -1281,6 +1411,18 @@ async function sendConversationReplyV38() {
     return;
   }
 
+  const messageId = buildOutgoingWhatsappExternalIdV412('reply');
+  const occurredAt = new Date().toISOString();
+  upsertLocalOutgoingWhatsappMessageV426({
+    id:messageId,
+    leadId:realLeadId,
+    instance:cfg.instance,
+    phone,
+    text,
+    occurredAt,
+    status:'sending'
+  });
+
   try {
     const data = await sendEvolutionTextV4013({
       url: cfg.url,
@@ -1289,36 +1431,26 @@ async function sendConversationReplyV38() {
       number: phone,
       text
     });
-    const messageId = buildOutgoingWhatsappExternalIdV412('reply', data);
-    const occurredAt = new Date().toISOString();
-    if (realLeadId) {
-      const crm = ensureLeadCrm(realLeadId, lead);
-      crm.messages = Array.isArray(crm.messages) ? crm.messages : [];
-      crm.messages.push({
-        id: messageId,
-        direction: 'out',
-        text,
-        phone,
-        instance: cfg.instance,
-        at: occurredAt,
-        atLabel: crmNowLabel(),
-        chipName: cfg.chip?.nome || cfg.chip?.name || cfg.instance,
-        response: data
-      });
-      saveLeadCrm(realLeadId, crm);
-      addLeadHistory(realLeadId, 'Resposta enviada pela Central de Conversas', lead);
-    }
-    const persistence = await persistOutgoingWhatsappMessageV412({
+    updateLocalOutgoingWhatsappMessageStatusV426(messageId, 'saving', { leadId:realLeadId, response:data });
+    if (realLeadId) addLeadHistory(realLeadId, 'Resposta enviada pela Central de Conversas', lead);
+    persistOutgoingWhatsappMessageV412({
       id: messageId,
       leadId: realLeadId,
       instance: cfg.instance,
       phone,
       text,
-      occurredAt
+      occurredAt,
+      response:data
+    }).then(persistence => {
+      updateLocalOutgoingWhatsappMessageStatusV426(messageId, persistence.ok ? 'sent' : 'pending', { leadId:realLeadId, response:data });
+      notify(persistence.ok ? 'Resposta enviada e salva.' : 'Resposta enviada. Sincronização com banco pendente.', persistence.ok ? undefined : 'warn');
+    }).catch(error => {
+      updateLocalOutgoingWhatsappMessageStatusV426(messageId, 'pending', { leadId:realLeadId, response:data });
+      uiSyncLogV426('supabase-save-error', { entity:'message', id:messageId, error:error?.message || error });
+      notify('Resposta enviada. Sincronização com banco pendente.', 'warn');
     });
-    renderConversationsV38();
-    notify(persistence.ok ? 'Resposta enviada e salva.' : 'Resposta enviada. Sincronização com banco pendente.', persistence.ok ? undefined : 'warn');
   } catch (err) {
+    removeLocalOutgoingWhatsappMessageV426(messageId, realLeadId);
     notify('Erro ao responder: ' + formatEvolutionErrorV41(err), 'err');
   }
 }
@@ -1424,4 +1556,4 @@ if (document.readyState === 'loading') {
 
 
 
-function openConversationFromInboxV41(conversationKey) { activeConversationLeadV38 = conversationKey; if (typeof switchPanel === 'function') switchPanel('conversations'); setTimeout(()=>{ try{renderConversationsV38();}catch(e){} },100); }
+function openConversationFromInboxV41(conversationKey) { activeConversationLeadV38 = conversationKey; if (typeof switchPanel === 'function') switchPanel('conversations'); else { try{renderConversationsV38();}catch(e){} } }

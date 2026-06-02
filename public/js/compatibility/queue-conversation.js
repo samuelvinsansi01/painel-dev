@@ -136,9 +136,7 @@ function openLeadConversationV4014() {
   if (!activeLeadDrawerId) return;
   activeConversationLeadV38 = activeLeadDrawerId;
   if (typeof switchPanel === 'function') switchPanel('conversations');
-  setTimeout(() => {
-    try { renderConversationsV38(); } catch(e) {}
-  }, 120);
+  else { try { renderConversationsV38(); } catch(e) {} }
 }
 
 function removeLeadFromWhatsappQueue(leadId) {

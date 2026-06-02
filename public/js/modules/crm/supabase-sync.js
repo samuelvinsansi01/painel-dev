@@ -51,6 +51,7 @@ function renderSyncStatus() {
 async function upsertLeadToSupabase(lead = {}) {
   if (!isSupabaseReady() || !lead.id) return { skipped: true, reason:'auth-or-lead-missing' };
   try { requireCurrentAuthIdentityV25('upsertLeadToSupabase'); } catch(error) { return { skipped:true, error }; }
+  uiSyncLogV426('supabase-save-start', { entity:'lead', id:lead.id });
 
   const payload = {
     id: lead.id,
@@ -67,11 +68,13 @@ async function upsertLeadToSupabase(lead = {}) {
 
   const { error } = await sbClient.from('leads').upsert(payload);
   if (error) {
+    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message });
     console.warn('[supabase] upsert lead:', error.message);
     setSyncState({ lastError: error.message });
     return { error };
   }
 
+  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id });
   return { ok: true };
 }
 
@@ -115,11 +118,9 @@ async function loadSupabaseAsPrimarySource(options = {}) {
 
   await loadSupabaseLeadsToLocalState(options);
 
-  if (typeof loadSupabaseLeadCrmToLocalState === 'function') {
-    await loadSupabaseLeadCrmToLocalState();
-  }
-
-  await syncAllLocalLeadsToSupabase();
+  syncAllLocalLeadsToSupabase().catch(error => {
+    console.warn('[supabase] reconciliação de leads em segundo plano:', error?.message || error);
+  });
   if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36();
 
   setSyncState({
@@ -128,6 +129,4 @@ async function loadSupabaseAsPrimarySource(options = {}) {
 
   renderSyncStatus();
 }
-
-
 

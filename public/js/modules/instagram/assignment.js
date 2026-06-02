@@ -12,15 +12,17 @@ function abrirModalInstaLead() {
 function salvarInstaLead() {
   const nome = (document.getElementById('ilNome').value||'').trim();
   if (!nome) { notify('// informe o nome da empresa','err'); return; }
-  const whatsapp   = (document.getElementById('ilWhatsapp').value||'').trim();
+  const whatsapp   = (document.getElementById('ilWhatsapp')?.value||'').trim();
   const googleUrl  = (document.getElementById('ilGoogleUrl').value||'').trim();
   const instagram  = (document.getElementById('ilInstagram').value||'').trim();
   const categoria  = (document.getElementById('ilCategoria').value||'').trim();
   const fila = getInstaFila();
-  fila.push({ id: genId(), nome, whatsapp, googleUrl, instagram, categoria, criadoEm: todayStr() });
+  const lead = { id: genId(), nome, whatsapp, googleUrl, instagram, categoria, criadoEm: todayStr() };
+  fila.push(lead);
   saveInstaFila(fila);
   document.getElementById('instaLeadModal').classList.remove('open');
   renderInstagram(); renderAtribInstaFila(); updateBadges();
+  persistOptimisticLeadV426(lead, 'create-instagram');
   notify('✓ Lead adicionado à fila Instagram');
 }
 
@@ -29,7 +31,8 @@ function salvarInstaLeadInline() {
   const instagram = (document.getElementById('instaLeadLink')?.value||'').trim();
   if (!nome) { notify('// informe o nome da empresa','err'); return; }
   const fila = getInstaFila();
-  fila.push({ id: genId(), nome: capitalizeName(nome), whatsapp: '', googleUrl: '', instagram, categoria: '', criadoEm: todayStr() });
+  const lead = { id: genId(), nome: capitalizeName(nome), whatsapp: '', googleUrl: '', instagram, categoria: '', criadoEm: todayStr() };
+  fila.push(lead);
   saveInstaFila(fila);
   // Limpar campos
   const nEl = document.getElementById('instaLeadNome'); if (nEl) nEl.value = '';
@@ -37,6 +40,7 @@ function salvarInstaLeadInline() {
   document.getElementById('instaLeadNome')?.focus();
   toggleAtribForm('insta'); // fecha o form
   renderInstagram(); renderAtribInstaFila(); updateBadges();
+  persistOptimisticLeadV426(lead, 'create-instagram-inline');
   notify(`✓ ${capitalizeName(nome)} → Fila Instagram`);
 }
 
@@ -51,7 +55,7 @@ function salvarZapLeadManual() {
   if (!nome) { notify('// nome da empresa é obrigatório','err'); return; }
 
   const atrib = getAtribuicaoData();
-  atrib.push({
+  const lead = {
     id: genId(),
     nome: capitalizeName(nome),
     site: '',
@@ -62,7 +66,8 @@ function salvarZapLeadManual() {
     status: 'Não enviada',
     criadoEm: todayStr(),
     diaDestino: null,
-  });
+  };
+  atrib.push(lead);
   saveAtribuicaoData(atrib);
   // Limpar campos
   ['zapLeadNome','zapLeadWpp'].forEach(id => {
@@ -71,6 +76,7 @@ function salvarZapLeadManual() {
   document.getElementById('zapLeadNome')?.focus();
   toggleAtribForm('zap'); // fecha o form
   renderAtribuicao(); updateBadges(); updateAtribTabCounts();
+  persistOptimisticLeadV426(lead, 'create-whatsapp-manual');
   notify(`✓ ${capitalizeName(nome)} → Base de Atribuição (ZAP)`);
 }
 

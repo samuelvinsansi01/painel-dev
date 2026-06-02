@@ -17,7 +17,7 @@ function getLocalResponsesV34() {
 }
 
 function saveLocalResponsesV34(list) {
-  setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
+  try { scheduleOperationalSyncV36(); } catch(e){}
   localStorage.setItem(getWhatsappResponsesScopedKeyV423(), JSON.stringify((list || []).slice(0, 500)));
   try { localStorage.removeItem(EVOLUTION_RESPONSES_V34_KEY); } catch(e) {}
   updateResponsesBadgeV34();
@@ -175,5 +175,4 @@ function updateResponsesBadgeV34() {
 function renderResponsesPanelV34() {
   renderResponsesV34();
 }
-
 

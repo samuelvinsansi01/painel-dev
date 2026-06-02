@@ -177,6 +177,7 @@ function saveValPhone(id) {
   v.whatsapp = input.value.trim();
   v.numStatus = 'pendente';
   saveValData(val); renderValidacao(); notify('✓ Número atualizado');
+  persistOptimisticLeadV426(v, 'validation-phone-update');
 }
 
 async function validarNumeroUnico(id) {
