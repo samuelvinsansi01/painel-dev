@@ -61,6 +61,34 @@ function normalizeChipRowToLocalV22(row = {}){
   };
 }
 
+function mergeSupabaseWhatsappChipsWithLocalCacheV426(dbChips = []){
+  const cachedChips = getWhatsappChipsV29();
+  const cachedById = new Map(cachedChips.map(chip => [String(chip.id || chip.instance || ''), chip]));
+  const mergedIds = new Set();
+  const merged = dbChips.map(chip => {
+    const chipId = String(chip.id || chip.instance || '');
+    const cached = cachedById.get(chipId) || {};
+    const next = { ...cached, ...chip };
+    delete next._syncStatus;
+    delete next._syncRevision;
+    delete next._syncError;
+    mergedIds.add(chipId);
+    return next;
+  });
+
+  cachedChips.forEach(chip => {
+    const chipId = String(chip.id || chip.instance || '');
+    if (!chipId || mergedIds.has(chipId)) return;
+    merged.push({
+      ...chip,
+      _syncStatus:'pending',
+      _syncError:chip._syncError || 'Aguardando persistencia no Supabase'
+    });
+  });
+
+  return merged;
+}
+
 async function loadWhatsappChipsFromSupabaseV22(){
   if (!isSupabaseChipStoreReadyV22()) {
     console.log('[user-isolation][chip-load]', { allowed:false, reason:'missing authenticated user/email' });
@@ -82,9 +110,10 @@ async function loadWhatsappChipsFromSupabaseV22(){
     const rows = (Array.isArray(data) ? data : [])
       .filter(isChipAllowedForCurrentUserV24)
       .filter(row => row.active !== false);
-    const chips = rows.map(normalizeChipRowToLocalV22).filter(chip => chip.instance);
+    const dbChips = rows.map(normalizeChipRowToLocalV22).filter(chip => chip.instance);
+    const chips = mergeSupabaseWhatsappChipsWithLocalCacheV426(dbChips);
 
-    localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(chips));
+    storeWhatsappChipsCacheV426(chips);
     // Remove caches legados/globais para impedir vazamento entre contas no mesmo navegador.
     localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
     try {
@@ -98,6 +127,10 @@ async function loadWhatsappChipsFromSupabaseV22(){
     console.log('[chips][db-load]', { userId, userEmail, count:chips.length });
     console.log('[user-isolation][chip-cache]', { key:scopedWhatsappChipsKeyV22(), count:chips.length });
     updateChipsBadge();
+    if(chips.some(chip => chip._syncStatus === 'pending')){
+      uiSyncLogV426('optimistic-update', { entity:'chip', action:'restore-pending', count:chips.length });
+      saveWhatsappChipsV29(chips);
+    }
     return chips;
   } catch (err) {
     console.warn('[chips][db-load-error]', err?.message || err);
@@ -106,7 +139,7 @@ async function loadWhatsappChipsFromSupabaseV22(){
 }
 
 async function persistWhatsappChipsToSupabaseV22(list = []){
-  if (!isSupabaseChipStoreReadyV22()) return;
+  if (!isSupabaseChipStoreReadyV22()) throw new Error('Sessao autenticada indisponivel para salvar chip.');
   const userId = getCurrentUserIdV22();
   const userEmail = getCurrentUserEmailV24();
   const chips = Array.isArray(list) ? list : [];
@@ -192,6 +225,13 @@ function storeWhatsappChipsCacheV426(list = []){
   localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
 }
 
+let whatsappChipsPersistQueueV426 = Promise.resolve();
+
+function enqueueWhatsappChipsPersistV426(task){
+  whatsappChipsPersistQueueV426 = whatsappChipsPersistQueueV426.catch(() => {}).then(task);
+  return whatsappChipsPersistQueueV426;
+}
+
 function updateWhatsappChipsSyncStateV426(revision, status = '', error = ''){
   const current = getWhatsappChipsV29();
   let touched = false;
@@ -218,7 +258,7 @@ function saveWhatsappChipsV29(list){
     storeWhatsappChipsCacheV426(optimisticList);
     console.log('[user-isolation][chip-cache]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), key:scopedWhatsappChipsKeyV22(), count:optimisticList.length });
     uiSyncLogV426('optimistic-update', { entity:'chip', action:'save', count:optimisticList.length, revision });
-    Promise.resolve().then(async () => {
+    enqueueWhatsappChipsPersistV426(async () => {
       uiSyncLogV426('supabase-save-start', { entity:'chip', count:optimisticList.length, revision });
       await persistWhatsappChipsToSupabaseV22(optimisticList);
       updateWhatsappChipsSyncStateV426(revision);
@@ -230,6 +270,9 @@ function saveWhatsappChipsV29(list){
       try { renderChipsPanel(); } catch(e){}
       notify('Chip atualizado na tela. Salvamento no Supabase pendente.', 'warn');
     });
+  } else {
+    uiSyncLogV426('supabase-save-error', { entity:'chip', error:'sessao autenticada indisponivel' });
+    notify('Aguarde a confirmacao da conta antes de salvar o chip.', 'warn');
   }
   updateChipsBadge();
 }
@@ -441,4 +484,3 @@ function updateChipsBadge(){
   const badge = document.getElementById('badge-chips');
   if (badge) badge.textContent = getWhatsappChipsV29().length;
 }
-

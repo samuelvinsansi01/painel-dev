@@ -5,9 +5,7 @@
   const s = document.getElementById('sidebar');
   if (localStorage.getItem(SIDEBAR_KEY)==='1') s.classList.remove('collapsed');
 
-  // Segurança multiusuário: antes de carregar qualquer painel, remove caches locais sensíveis.
-  // A fonte correta será recarregada do Supabase filtrada pelo user_id da sessão atual.
-  try { if (typeof clearLocalSessionData === 'function') clearLocalSessionData(); } catch(e) {}
+  // initAuth limpa caches sensiveis somente quando nao ha sessao ou quando a conta muda.
 
   // Inicializa login Google e recarrega os dados do usuário autenticado.
   initAuth();
@@ -262,4 +260,3 @@ function getDispatchConfigTextV33() {
 // audit panel fallback
 
 document.addEventListener('DOMContentLoaded', () => { try { updateAuditBadgeV35(); } catch(e){} });
-
