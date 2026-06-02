@@ -130,6 +130,145 @@ function uiSyncLogV426(step, data = {}) {
   try { console.log(`[ui-sync][${step}]`, data); } catch(e) {}
 }
 
+
+/* V31 — utilitários globais de dedupe e trava de envio.
+   Mantém a UI e o snapshot operacional seguros mesmo quando caches antigos estão sujos. */
+function normalizePhoneStrictV31(value = '') {
+  let digits = String(value || '').replace(/\D/g, '');
+  if (!digits) return '';
+  // Para números brasileiros sem DDI, adiciona 55 quando tiver DDD + número.
+  if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) digits = '55' + digits;
+  return digits;
+}
+
+function normalizeTextKeyV31(value = '') {
+  return String(value || '')
+    .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim()
+    .replace(/\s+/g, ' ');
+}
+
+function getLeadPhoneKeyV31(item = {}) {
+  return normalizePhoneStrictV31(
+    item.phone || item.telefone || item.whatsapp || item.number || item.numero || item.mobile || ''
+  );
+}
+
+function getLeadDedupeKeyV31(item = {}) {
+  const phone = getLeadPhoneKeyV31(item);
+  if (phone) return `phone:${phone}`;
+  const name = normalizeTextKeyV31(item.company_name || item.nome || item.title || item.name || '');
+  const url = normalizeTextKeyV31(item.googleUrl || item.google_url || item.url || item.placeId || item.place_id || '');
+  if (name && url) return `name-url:${name}:${url}`;
+  if (name) return `name:${name}`;
+  return '';
+}
+
+function mergeLeadDedupeV31(base = {}, extra = {}) {
+  const out = { ...(base || {}) };
+  Object.entries(extra || {}).forEach(([key, value]) => {
+    if (value === undefined || value === null || value === '') return;
+    if (out[key] === undefined || out[key] === null || out[key] === '') out[key] = value;
+  });
+  const basePhone = getLeadPhoneKeyV31(out) || getLeadPhoneKeyV31(extra);
+  if (basePhone) {
+    if (!out.phone) out.phone = basePhone;
+    if (!out.telefone) out.telefone = basePhone;
+    if (!out.whatsapp) out.whatsapp = basePhone;
+  }
+  return out;
+}
+
+function dedupeLeadArrayV31(list = [], source = 'unknown') {
+  const arr = Array.isArray(list) ? list : [];
+  const seen = new Map();
+  const output = [];
+  const removed = [];
+  arr.forEach((item, index) => {
+    if (!item || typeof item !== 'object') {
+      output.push(item);
+      return;
+    }
+    const key = getLeadDedupeKeyV31(item);
+    if (!key) {
+      output.push(item);
+      return;
+    }
+    if (!seen.has(key)) {
+      seen.set(key, output.length);
+      output.push(item);
+      return;
+    }
+    const targetIndex = seen.get(key);
+    output[targetIndex] = mergeLeadDedupeV31(output[targetIndex], item);
+    removed.push({ index, key, id:item.id || '', name:item.nome || item.company_name || item.title || '', phone:getLeadPhoneKeyV31(item) });
+  });
+  if (removed.length) {
+    try { console.warn('[lead-dedupe][array]', { source, before:arr.length, after:output.length, removed:removed.length, removedItems:removed.slice(0, 25) }); } catch(e) {}
+  }
+  return output;
+}
+
+function dedupeWeeklyLeadsV31(weekly = {}, source = 'weeklyLeads') {
+  if (!weekly || typeof weekly !== 'object') return weekly;
+  const copy = { ...weekly, days:{ ...(weekly.days || {}) } };
+  Object.keys(copy.days || {}).forEach(day => {
+    copy.days[day] = dedupeLeadArrayV31(copy.days[day] || [], `${source}.${day}`);
+  });
+  return copy;
+}
+
+function dedupeFilaDisparoV31(fila = {}, source = 'filaDisparo') {
+  if (!fila || typeof fila !== 'object' || Array.isArray(fila)) return fila;
+  const copy = { ...fila };
+  Object.keys(copy).forEach(chipId => {
+    copy[chipId] = dedupeLeadArrayV31(copy[chipId] || [], `${source}.${chipId}`);
+  });
+  return copy;
+}
+
+function dedupeOperationalSnapshotV31(snapshot = {}, source = 'operational-snapshot') {
+  if (!snapshot || typeof snapshot !== 'object') return snapshot;
+  const next = { ...snapshot, data:{ ...(snapshot.data || {}) } };
+  const data = next.data;
+  if (data.weeklyLeads) data.weeklyLeads = dedupeWeeklyLeadsV31(data.weeklyLeads, `${source}.weeklyLeads`);
+  if (data.whatsappDispatchQueues) data.whatsappDispatchQueues = dedupeFilaDisparoV31(data.whatsappDispatchQueues, `${source}.whatsappDispatchQueues`);
+  ['permanentLeads','validationQueue','assignmentQueue','instagramQueue','whatsappBacklog','whatsappQueue','evolutionResponses','whatsappOutbox'].forEach(key => {
+    if (Array.isArray(data[key])) data[key] = dedupeLeadArrayV31(data[key], `${source}.${key}`);
+  });
+  return next;
+}
+
+function getWhatsappSendGuardKeyV31({ leadId = '', phone = '', text = '', instance = '' } = {}) {
+  const phoneKey = normalizePhoneStrictV31(phone);
+  const textKey = normalizeTextKeyV31(text).slice(0, 180);
+  return `${leadId || 'no-lead'}|${phoneKey}|${instance || ''}|${textKey}`;
+}
+
+function acquireWhatsappSendLockV31(payload = {}, ttlMs = 10000) {
+  const key = getWhatsappSendGuardKeyV31(payload);
+  if (!key || key.includes('||')) return { ok:true, key };
+  window.__whatsappSendLocksV31 = window.__whatsappSendLocksV31 || new Map();
+  const now = Date.now();
+  const prev = window.__whatsappSendLocksV31.get(key);
+  if (prev && now - prev < ttlMs) {
+    try { console.warn('[message-send-blocked]', { reason:'duplicate-lock', key, ageMs:now - prev, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
+    return { ok:false, key, ageMs:now - prev };
+  }
+  window.__whatsappSendLocksV31.set(key, now);
+  try { console.log('[message-send][lock-start]', { key, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
+  return { ok:true, key };
+}
+
+function releaseWhatsappSendLockV31(key = '') {
+  if (!key || !window.__whatsappSendLocksV31) return;
+  setTimeout(() => {
+    try { window.__whatsappSendLocksV31.delete(key); } catch(e) {}
+  }, 10000);
+}
+
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
 

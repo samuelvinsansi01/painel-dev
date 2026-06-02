@@ -169,95 +169,6 @@ const PERMANENT_LEAD_STATUS_RANK = {
   'Fechada': 6
 };
 
-
-
-/* ════════════════════════════
-   DEDUPLICAÇÃO DE LEADS V434
-   Evita duplicar leads quando o mesmo JSON é importado mais de uma vez
-   ou quando syncs locais reconstroem a base permanente com IDs diferentes.
-════════════════════════════ */
-function normalizeLeadPhoneV434(value = '') {
-  try {
-    const digits = String(value || '').replace(/\D/g, '');
-    if (!digits) return '';
-    if (digits.startsWith('00')) return digits.slice(2);
-    if (digits.startsWith('55')) return digits;
-    if (digits.length === 10 || digits.length === 11) return '55' + digits;
-    return digits;
-  } catch { return ''; }
-}
-
-function normalizeLeadUrlV434(value = '') {
-  const raw = String(value || '').trim();
-  if (!raw) return '';
-  try {
-    const url = new URL(/^https?:\/\//i.test(raw) ? raw : `https://${raw}`);
-    return `${url.hostname.replace(/^www\./, '').toLowerCase()}${url.pathname.replace(/\/+$/, '')}`.toLowerCase();
-  } catch {
-    return raw.replace(/\/+$/, '').toLowerCase();
-  }
-}
-
-function normalizeLeadTextV434(value = '') {
-  return String(value || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .replace(/[^a-zA-Z0-9]+/g, ' ')
-    .trim()
-    .toLowerCase();
-}
-
-function getLeadIdentityKeyV434(lead = {}) {
-  const maps = normalizeLeadUrlV434(lead.googleUrl || lead.mapsUrl || lead.maps_url || lead.url || '');
-  if (maps) return `maps:${maps}`;
-
-  const phone = normalizeLeadPhoneV434(lead.whatsapp || lead.phone || lead.telefone || '');
-  const name = normalizeLeadTextV434(lead.nome || lead.companyName || lead.company_name || lead.title || '');
-  if (phone && name) return `phone-name:${phone}:${name}`;
-  if (phone) return `phone:${phone}`;
-
-  const site = normalizeLeadUrlV434(lead.site || lead.website || '');
-  if (site) return `site:${site}`;
-
-  if (name) return `name:${name}`;
-  return lead?.id ? `id:${lead.id}` : '';
-}
-
-function mergeDuplicateLeadPayloadV434(previous = {}, incoming = {}) {
-  const next = { ...previous, ...incoming };
-  next.id = previous.id || incoming.id;
-  ['nome','companyName','title','whatsapp','phone','telefone','instagram','instagramUrl','site','website','googleUrl','mapsUrl','url'].forEach(key => {
-    if (!String(next[key] || '').trim() && String(previous[key] || '').trim()) next[key] = previous[key];
-  });
-  next.status = choosePermanentLeadStatus(previous.status, incoming.status || next.status);
-  next.pipelineStatus = incoming.pipelineStatus || previous.pipelineStatus || incoming.pipeline_status || previous.pipeline_status;
-  next.crmData = incoming.crmData || previous.crmData || incoming.crm_data || previous.crm_data;
-  next.crm_data = incoming.crm_data || previous.crm_data || incoming.crmData || previous.crmData;
-  return next;
-}
-
-function dedupeLeadArrayV434(items = [], { label = 'lead-array' } = {}) {
-  const byKey = new Map();
-  const result = [];
-  let removed = 0;
-  (Array.isArray(items) ? items : []).forEach(item => {
-    if (!item) return;
-    const key = getLeadIdentityKeyV434(item) || `id:${item.id || result.length}`;
-    const existingIndex = byKey.get(key);
-    if (existingIndex === undefined) {
-      byKey.set(key, result.length);
-      result.push(item);
-      return;
-    }
-    result[existingIndex] = mergeDuplicateLeadPayloadV434(result[existingIndex], item);
-    removed++;
-  });
-  if (removed) {
-    try { console.warn('[dedupe][leads]', { label, before:items.length, after:result.length, removed }); } catch (_) {}
-  }
-  return result;
-}
-
 function getLeadBaseData() {
   return getStoredArray(LEADS_BASE_KEY);
 }
@@ -277,22 +188,24 @@ function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = tru
   if (!Array.isArray(leads) || !leads.length) return getLeadBaseData();
 
   const now = new Date().toISOString();
-  const base = dedupeLeadArrayV434(getLeadBaseData(), { label:'permanent-base-before-merge' });
-  const map = new Map(base.filter(lead => lead?.id).map(lead => [lead.id, lead]));
-  const identityToId = new Map(base.map(lead => [getLeadIdentityKeyV434(lead), lead.id]).filter(([key, id]) => key && id));
+  const initial = typeof dedupeLeadArrayV31 === 'function'
+    ? dedupeLeadArrayV31(getLeadBaseData(), 'permanentBase.beforeMerge')
+    : getLeadBaseData();
+  const map = new Map();
+  initial.filter(lead => lead?.id).forEach(lead => {
+    const key = typeof getLeadDedupeKeyV31 === 'function' ? (getLeadDedupeKeyV31(lead) || `id:${lead.id}`) : `id:${lead.id}`;
+    map.set(key, lead);
+  });
   const changed = [];
 
-  leads.forEach(rawLead => {
-    if (!rawLead?.id) return;
-    const identityKey = getLeadIdentityKeyV434(rawLead);
-    const existingIdByIdentity = identityKey ? identityToId.get(identityKey) : '';
-    const canonicalId = existingIdByIdentity || rawLead.id;
-    const lead = canonicalId !== rawLead.id ? { ...rawLead, duplicateOfId: canonicalId } : rawLead;
-    const previous = map.get(canonicalId) || {};
+  leads.forEach(lead => {
+    if (!lead?.id) return;
+    const key = typeof getLeadDedupeKeyV31 === 'function' ? (getLeadDedupeKeyV31(lead) || `id:${lead.id}`) : `id:${lead.id}`;
+    const previous = map.get(key) || {};
     const next = {
       ...previous,
       ...lead,
-      id: canonicalId,
+      id: previous.id || lead.id,
       status: choosePermanentLeadStatus(previous.status, lead.status),
       baseSource: metadata.source || lead.baseSource || previous.baseSource || 'Fluxo local',
       permanentCreatedAt: previous.permanentCreatedAt || lead.permanentCreatedAt || lead.created_at || now,
@@ -300,11 +213,12 @@ function mergeLeadsIntoPermanentBase(leads = [], metadata = {}, { schedule = tru
     };
     const fields = ['nome','companyName','title','whatsapp','phone','telefone','instagram','instagramUrl','site','website','googleUrl','mapsUrl','url','status','pipelineStatus'];
     if (!previous.id || fields.some(field => String(previous[field] || '') !== String(next[field] || ''))) changed.push(next);
-    map.set(canonicalId, next);
-    if (identityKey) identityToId.set(identityKey, canonicalId);
+    map.set(key, next);
   });
 
-  const merged = dedupeLeadArrayV434([...map.values()], { label:'permanent-base-after-merge' });
+  const merged = typeof dedupeLeadArrayV31 === 'function'
+    ? dedupeLeadArrayV31([...map.values()], 'permanentBase.afterMerge')
+    : [...map.values()];
   localStorage.setItem(LEADS_BASE_KEY, JSON.stringify(merged));
 
   if (schedule) {
@@ -345,12 +259,12 @@ function getWeekData()  {
   }
 }
 function saveWeekData(d){
-  if (d?.days && typeof d.days === 'object') {
-    Object.keys(d.days).forEach(day => { d.days[day] = dedupeLeadArrayV434(d.days[day] || [], { label:`agenda-${day}` }); });
+  if (typeof dedupeWeeklyLeadsV31 === 'function') {
+    d = dedupeWeeklyLeadsV31(d, 'saveWeekData.beforeSave');
   }
   localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d));
   mergeLeadsIntoPermanentBase(Object.values(d?.days || {}).flat(), { source:'Agenda semanal' });
-  scheduleLegacyOperationalSyncV36();
+  scheduleLegacyOperationalSyncV36({ reason:'weekly-leads-save' });
 }
 function ensureWeekData() {
   let d = getWeekData(); const ws = currentWeekStartStr();
@@ -415,6 +329,16 @@ function ensureWeekData() {
     d.days = {};
     saveWeekData(d);
   }
+  if (typeof dedupeWeeklyLeadsV31 === 'function') {
+    const before = Object.values(d.days || {}).flat().length;
+    const clean = dedupeWeeklyLeadsV31(d, 'ensureWeekData.beforeReturn');
+    const after = Object.values(clean.days || {}).flat().length;
+    if (after !== before) {
+      d = clean;
+      try { localStorage.setItem(EMPRESAS_KEY, JSON.stringify(d)); } catch(e) {}
+      try { console.warn('[agenda][dedupe-render]', { totalBefore:before, totalAfter:after, removed:before-after }); } catch(e) {}
+    }
+  }
   return d;
 }
 function getHistoryData() {
@@ -465,10 +389,10 @@ function getAllSites(d)  { return new Set(flattenWeekData(d).map(e => extractDom
 ════════════════════════════ */
 function getValData()  { return getStoredArray(VAL_KEY); }
 function saveValData(d){
-  const clean = dedupeLeadArrayV434(d, { label:'validacao' });
-  localStorage.setItem(VAL_KEY, JSON.stringify(clean));
-  mergeLeadsIntoPermanentBase(clean, { source:'Validação' });
-  scheduleLegacyOperationalSyncV36();
+  if (typeof dedupeLeadArrayV31 === 'function') d = dedupeLeadArrayV31(d || [], 'saveValData.beforeSave');
+  localStorage.setItem(VAL_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Validação' });
+  scheduleLegacyOperationalSyncV36({ reason:'validation-save' });
 }
 
 /* ════════════════════════════
@@ -476,19 +400,19 @@ function saveValData(d){
 ════════════════════════════ */
 function getAtribuicaoData()  { return getStoredArray(ATRIBUICAO_KEY); }
 function saveAtribuicaoData(d){
-  const clean = dedupeLeadArrayV434(d, { label:'atribuicao' });
-  localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(clean));
-  mergeLeadsIntoPermanentBase(clean, { source:'Atribuição' });
-  scheduleLegacyOperationalSyncV36();
+  if (typeof dedupeLeadArrayV31 === 'function') d = dedupeLeadArrayV31(d || [], 'saveAtribuicaoData.beforeSave');
+  localStorage.setItem(ATRIBUICAO_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Atribuição' });
+  scheduleLegacyOperationalSyncV36({ reason:'assignment-save' });
 }
 
 
 function getInstaFila()  { return getStoredArray(INSTA_KEY); }
 function saveInstaFila(d){
-  const clean = dedupeLeadArrayV434(d, { label:'instagram' });
-  localStorage.setItem(INSTA_KEY, JSON.stringify(clean));
-  mergeLeadsIntoPermanentBase(clean, { source:'Instagram' });
-  scheduleLegacyOperationalSyncV36();
+  if (typeof dedupeLeadArrayV31 === 'function') d = dedupeLeadArrayV31(d || [], 'saveInstaFila.beforeSave');
+  localStorage.setItem(INSTA_KEY, JSON.stringify(d));
+  mergeLeadsIntoPermanentBase(d, { source:'Instagram' });
+  scheduleLegacyOperationalSyncV36({ reason:'instagram-queue-save' });
 }
 
 function recuperarValidacaoZapDoDia() {

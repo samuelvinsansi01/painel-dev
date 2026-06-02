@@ -86,6 +86,17 @@ async function dispatchOneItemV32(item, chip) {
     return { ok:false, reason:'Telefone/template ausente' };
   }
 
+  const lock = typeof acquireWhatsappSendLockV31 === 'function'
+    ? acquireWhatsappSendLockV31({ leadId:queueItem.leadId || queueItem.id, phone, text, instance:chipConfigV405.instance }, 10000)
+    : { ok:true, key:'' };
+  if (!lock.ok) {
+    queueItem.status = 'Bloqueado';
+    queueItem.error = 'Envio duplicado bloqueado';
+    queueItem.updatedAt = new Date().toISOString();
+    saveWhatsappQueueV27(queue);
+    return { ok:false, reason:'Envio duplicado bloqueado' };
+  }
+
   try {
     queueItem.status = 'Enviando';
     saveWhatsappQueueV27(queue);
@@ -138,6 +149,7 @@ async function dispatchOneItemV32(item, chip) {
       addLeadHistory(queueItem.leadId, `Mensagem enviada em massa via ${chip.name} · Template: ${queueItem.templateName}`, findLeadEverywhere(queueItem.leadId) || {});
     }
 
+    if (typeof releaseWhatsappSendLockV31 === 'function') releaseWhatsappSendLockV31(lock.key);
     return { ok:true, reason:'enviado' };
   } catch (err) {
     queueItem.status = 'Erro';
@@ -149,6 +161,7 @@ async function dispatchOneItemV32(item, chip) {
       addLeadHistory(queueItem.leadId, `Disparo WhatsApp falhou: ${queueItem.error}`, findLeadEverywhere(queueItem.leadId) || {});
     }
 
+    if (typeof releaseWhatsappSendLockV31 === 'function') releaseWhatsappSendLockV31(lock.key);
     return { ok:false, reason:queueItem.error };
   }
 }

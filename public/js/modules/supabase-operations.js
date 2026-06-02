@@ -56,11 +56,15 @@ function getOperationalSnapshotV36() {
     }
   });
 
-  return {
+  const snapshot = {
     version: 'v36',
     exportedAt: new Date().toISOString(),
     data
   };
+
+  return typeof dedupeOperationalSnapshotV31 === 'function'
+    ? dedupeOperationalSnapshotV31(snapshot, 'getOperationalSnapshotV36')
+    : snapshot;
 }
 
 function getOperationalDirtyKeyV430() {
@@ -92,14 +96,20 @@ function getOperationalRemoteUpdatedAtV430(row = {}) {
 }
 
 function shouldPreserveLocalOperationalDataV430(row = {}) {
+  // V31: operational_data é snapshot legado/cache, não pode vencer o Supabase.
+  // A preservação automática recriava duplicados depois de apagar no banco.
   const dirtyAt = getOperationalDirtyAtV430();
   const remoteUpdatedAt = getOperationalRemoteUpdatedAtV430(row);
-  if (!dirtyAt) return false;
-  if (!remoteUpdatedAt) return true;
-  return Date.parse(dirtyAt) > Date.parse(remoteUpdatedAt);
+  if (dirtyAt) {
+    uiSyncLogV426('operational-data-cache-preserve-disabled', { dirtyAt, remoteUpdatedAt });
+  }
+  return false;
 }
 
 function restoreOperationalSnapshotV36(snapshot = {}) {
+  if (typeof dedupeOperationalSnapshotV31 === 'function') {
+    snapshot = dedupeOperationalSnapshotV31(snapshot, 'restoreOperationalSnapshotV36');
+  }
   const data = snapshot.data || {};
   const localLegacyChipsUpdatedAt = Date.parse(localStorage.getItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426) || '');
   const localDispatchQueueUpdatedAt = Date.parse(localStorage.getItem(FILA_DISPARO_UPDATED_AT_KEY_V431) || '');
@@ -154,19 +164,29 @@ function isSupabaseOperationalReadyV36() {
   return !!(typeof sbClient !== 'undefined' && sbClient && currentUser?.id);
 }
 
+let operationalSaveRunningV31 = false;
+
 async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
+  if (operationalSaveRunningV31) {
+    uiSyncLogV426('operational-data-save-skipped', { reason:'save-already-running' });
+    return { skipped:true, reason:'save-running' };
+  }
   if (!isSupabaseOperationalReadyV36()) {
     setPersistenceStatusV36('Supabase indisponível ou usuário não conectado.', 'warn');
     if (!silent) notify('Entre na conta antes de sincronizar.', 'warn');
     return;
   }
 
-  const snapshot = getOperationalSnapshotV36();
+  let snapshot = getOperationalSnapshotV36();
+  if (typeof dedupeOperationalSnapshotV31 === 'function') {
+    snapshot = dedupeOperationalSnapshotV31(snapshot, 'syncOperationalDataToSupabaseV36.beforeSave');
+  }
   const dirtyAtBeforeSync = getOperationalDirtyAtV430();
 
   setPersistenceStatusV36('Enviando dados operacionais para o Supabase...');
   uiSyncLogV426('supabase-save-start', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null });
 
+  operationalSaveRunningV31 = true;
   try {
     const payload = {
       user_id: currentUser.id,
@@ -194,6 +214,8 @@ async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
       'warn'
     );
     return { error:err, pending:true };
+  } finally {
+    operationalSaveRunningV31 = false;
   }
 }
 
@@ -217,14 +239,10 @@ async function loadOperationalDataFromSupabaseV36() {
     if (error) throw error;
 
     if (!data?.payload) {
-      if (getOperationalDirtyAtV430()) {
-        try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
-        uiSyncLogV426('optimistic-update', { entity:'operational-data', action:'preserve-local-cache-without-remote-snapshot' });
-        scheduleOperationalSyncV36({ delay:0 });
-        setPersistenceStatusV36('Dados locais pendentes preservados. Enviando ao Supabase...', 'warn');
-        return true;
-      }
-      setPersistenceStatusV36('Nenhum dado operacional encontrado no Supabase.', 'warn');
+      // V31: se o snapshot remoto foi apagado/está vazio, não reenvia cache local antigo.
+      clearOperationalDataDirtyV430();
+      uiSyncLogV426('operational-data-remote-empty', { action:'do-not-preserve-local-cache' });
+      setPersistenceStatusV36('Nenhum dado operacional encontrado no Supabase. Cache local legado não será reenviado automaticamente.', 'warn');
       return false;
     }
 
@@ -359,8 +377,12 @@ function scheduleOperationalSyncV36({ delay = 1500 } = {}) {
 }
 
 function scheduleLegacyOperationalSyncV36(options = {}) {
-  markOperationalDataDirtyV430(options.reason || 'legacy-local-change');
-  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36(options);
+  const reason = options.reason || 'legacy-local-change';
+  markOperationalDataDirtyV430(reason);
+  const delay = reason === 'legacy-local-change'
+    ? Math.max(Number(options.delay || 0), 3000)
+    : options.delay;
+  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36({ ...options, delay });
 }
 
 

@@ -37,51 +37,20 @@ function saveQueueTemplates(list) {
   try { scheduleLegacyOperationalSyncV36({ delay:400, reason:'queue-template-update' }); } catch(e){}
 }
 
-
-
-function getWhatsappQueueIdentityKeyV434(item = {}) {
-  const lead = String(item.leadId || item.id || '').trim();
-  const phone = typeof normalizeLeadPhoneV434 === 'function'
-    ? normalizeLeadPhoneV434(item.telefone || item.phone || item.whatsapp || '')
-    : String(item.telefone || item.phone || item.whatsapp || '').replace(/\D/g, '');
-  const template = String(item.templateName || item.templateId || item.templateText || item.text || '').trim().slice(0, 80);
-  return lead ? `lead:${lead}:${template}` : `phone:${phone}:${template}`;
-}
-
-function dedupeWhatsappQueueV434(list = []) {
-  const result = [];
-  const seen = new Map();
-  let removed = 0;
-  (Array.isArray(list) ? list : []).forEach(item => {
-    const key = getWhatsappQueueIdentityKeyV434(item);
-    if (!key) { result.push(item); return; }
-    const idx = seen.get(key);
-    if (idx === undefined) {
-      seen.set(key, result.length);
-      result.push(item);
-      return;
-    }
-    const prev = result[idx] || {};
-    result[idx] = { ...prev, ...item, id: prev.id || item.id, status: prev.status === 'Enviado' ? prev.status : (item.status || prev.status) };
-    removed++;
-  });
-  if (removed) console.warn('[dedupe][whatsapp-queue]', { before:list.length, after:result.length, removed });
-  return result;
-}
-
 function getWhatsappQueueV27() {
   try {
     const data = JSON.parse(localStorage.getItem(WHATSAPP_QUEUE_V27_KEY) || '[]');
-    return Array.isArray(data) ? data : [];
+    const list = Array.isArray(data) ? data : [];
+    return typeof dedupeLeadArrayV31 === 'function' ? dedupeLeadArrayV31(list, 'getWhatsappQueueV27') : list;
   } catch {
     return [];
   }
 }
 
 function saveWhatsappQueueV27(list) {
-  const clean = dedupeWhatsappQueueV434(list || []);
-  localStorage.setItem(WHATSAPP_QUEUE_V27_KEY, JSON.stringify(clean));
-  uiSyncLogV426('optimistic-update', { entity:'whatsapp-queue', action:'save-local-cache', count:Array.isArray(clean) ? clean.length : 0 });
+  if (typeof dedupeLeadArrayV31 === 'function') list = dedupeLeadArrayV31(list || [], 'saveWhatsappQueueV27.beforeSave');
+  localStorage.setItem(WHATSAPP_QUEUE_V27_KEY, JSON.stringify(list || []));
+  uiSyncLogV426('optimistic-update', { entity:'whatsapp-queue', action:'save-local-cache', count:Array.isArray(list) ? list.length : 0 });
   try { scheduleLegacyOperationalSyncV36({ delay:400, reason:'whatsapp-queue-update' }); } catch(e){}
   updateWhatsappQueueBadge();
   if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();

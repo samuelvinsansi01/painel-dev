@@ -8,26 +8,6 @@ function debugDispatchPersistV413(step, data = {}) {
     console.log(`[dispatch][persist] ${step}`, data);
   }
 }
-
-
-const MANUAL_WHATSAPP_SEND_LOCKS_V434 = window.__MANUAL_WHATSAPP_SEND_LOCKS_V434 || (window.__MANUAL_WHATSAPP_SEND_LOCKS_V434 = new Map());
-
-function getManualWhatsappSendLockKeyV434({ leadId, instance, phone, text }) {
-  const raw = `${leadId || ''}|${instance || ''}|${phone || ''}|${String(text || '').trim()}`;
-  let hash = 0;
-  for (let i = 0; i < raw.length; i++) hash = ((hash << 5) - hash + raw.charCodeAt(i)) | 0;
-  return `manual:${Math.abs(hash)}`;
-}
-
-function acquireManualWhatsappSendLockV434(key, ttlMs = 20000) {
-  const now = Date.now();
-  const expires = MANUAL_WHATSAPP_SEND_LOCKS_V434.get(key);
-  if (expires && expires > now) return false;
-  MANUAL_WHATSAPP_SEND_LOCKS_V434.set(key, now + ttlMs);
-  return true;
-}
-function releaseManualWhatsappSendLockV434(key) { try { MANUAL_WHATSAPP_SEND_LOCKS_V434.delete(key); } catch (_) {} }
-
 /* ════════════════════════════
    ENVIO MANUAL FIX V40.12
 ════════════════════════════ */
@@ -84,14 +64,6 @@ async function sendActiveLeadWhatsappMessage() {
   if (!text) {
     notify('Digite uma mensagem antes de enviar.', 'warn');
     if (result) result.textContent = 'Mensagem vazia.';
-    return;
-  }
-
-  const lockKey = getManualWhatsappSendLockKeyV434({ leadId:activeLeadDrawerId, instance:cfg.instance, phone, text });
-  if (!acquireManualWhatsappSendLockV434(lockKey, 25000)) {
-    debugDispatchPersistV413('manual-duplicate-send-blocked', { leadId:activeLeadDrawerId, instance:cfg.instance, phone, lockKey });
-    notify('Envio duplicado bloqueado: mensagem já está em processamento.', 'warn');
-    if (result) result.textContent = 'Envio em andamento. Aguarde antes de clicar novamente.';
     return;
   }
 
@@ -156,8 +128,6 @@ async function sendActiveLeadWhatsappMessage() {
     if (result) result.textContent = formatEvolutionErrorV41(err);
     if (typeof renderLeadTimeline === 'function') renderLeadTimeline(activeLeadDrawerId);
     notify('Falha ao conectar na Evolution.', 'err');
-  } finally {
-    releaseManualWhatsappSendLockV434(lockKey);
   }
 }
 
@@ -176,28 +146,37 @@ function buildEvolutionTextPayloadV4013(number, text) {
   };
 }
 
-async function sendEvolutionTextV4013({ url, instance, apiKey, number, text }) {
+async function sendEvolutionTextV4013({ url, instance, apiKey, number, text, leadId = '' }) {
+  const lock = typeof acquireWhatsappSendLockV31 === 'function'
+    ? acquireWhatsappSendLockV31({ leadId, phone:number, text, instance }, 10000)
+    : { ok:true, key:'' };
+  if (!lock.ok) throw new Error('Envio duplicado bloqueado por segurança. Aguarde alguns segundos.');
+
   const endpoint = `${String(url || '').replace(/\/$/, '')}/message/sendText/${encodeURIComponent(instance || '')}`;
 
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: {
-      apikey: apiKey,
-      'Content-Type': 'application/json'
-    },
-    body: JSON.stringify(buildEvolutionTextPayloadV4013(number, text))
-  });
+  try {
+    const res = await fetch(endpoint, {
+      method: 'POST',
+      headers: {
+        apikey: apiKey,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify(buildEvolutionTextPayloadV4013(number, text))
+    });
 
-  const raw = await res.text();
-  let data = {};
-  try { data = JSON.parse(raw); } catch { data = { raw }; }
+    const raw = await res.text();
+    let data = {};
+    try { data = JSON.parse(raw); } catch { data = { raw }; }
 
-  if (!res.ok) {
-    const msg = data?.message || data?.error || raw || `HTTP ${res.status}`;
-    throw new Error(msg);
+    if (!res.ok) {
+      const msg = data?.message || data?.error || raw || `HTTP ${res.status}`;
+      throw new Error(msg);
+    }
+
+    return data;
+  } finally {
+    if (typeof releaseWhatsappSendLockV31 === 'function') releaseWhatsappSendLockV31(lock.key);
   }
-
-  return data;
 }
 
 async function sendActiveLeadWhatsappMessage() {
@@ -234,7 +213,8 @@ async function sendActiveLeadWhatsappMessage() {
       instance: cfg.instance,
       apiKey: cfg.apiKey,
       number: phone,
-      text
+      text,
+      leadId: activeLeadDrawerId
     });
 
     const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
@@ -456,7 +436,8 @@ async function sendActiveLeadWhatsappMessage() {
       instance: cfg.instance,
       apiKey: cfg.apiKey,
       number: phone,
-      text
+      text,
+      leadId: activeLeadDrawerId
     });
 
     const persistence = await markLeadWhatsappSentV4014(activeLeadDrawerId, activeLeadDrawerData, {
