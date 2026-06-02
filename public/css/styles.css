@@ -2946,3 +2946,20 @@ body.auth-locked .app{
 .conversation-actions-menu-v421 button:hover{background:rgba(174,255,61,.08);color:var(--accent)}
 .inbox-v41-title-row{display:flex;align-items:center;gap:10px;justify-content:space-between}
 .inbox-v41-count{font-family:'DM Mono',monospace;font-size:9px;color:var(--accent);border:1px solid rgba(174,255,61,.28);background:rgba(174,255,61,.08);padding:4px 7px;border-radius:999px;white-space:nowrap}
+
+/* Minha conta V42.6 */
+.account-v426-grid{display:grid;grid-template-columns:minmax(0,.9fr) minmax(0,1.1fr);gap:16px;margin-bottom:16px}
+.account-v426-profile{display:flex;align-items:center;gap:16px}
+.account-v426-avatar{width:62px;height:62px;border-radius:18px;display:grid;place-items:center;flex-shrink:0;background:rgba(174,255,61,.10);border:1px solid rgba(174,255,61,.32);color:var(--accent);font-size:22px;font-weight:900}
+.account-v426-name{font-size:22px;font-weight:900;letter-spacing:-.03em}
+.account-v426-email,.account-v426-help{margin-top:5px;color:var(--muted);font-family:'DM Mono',monospace;font-size:10px;line-height:1.6;word-break:break-word}
+.account-v426-list{display:grid;gap:10px}
+.account-v426-list>div{display:flex;justify-content:space-between;align-items:flex-start;gap:16px;padding-bottom:10px;border-bottom:1px solid var(--border2)}
+.account-v426-list>div:last-child{padding-bottom:0;border-bottom:0}
+.account-v426-list span{color:var(--muted);font-family:'DM Mono',monospace;font-size:9px}
+.account-v426-list strong{color:var(--text);font-family:'DM Mono',monospace;font-size:10px;text-align:right;word-break:break-word}
+.account-v426-status.ok{color:var(--ok)}
+.account-v426-status.warn{color:var(--warning)}
+.account-v426-actions-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
+.account-v426-actions{display:flex;gap:8px;flex-wrap:wrap}
+@media(max-width:760px){.account-v426-grid{grid-template-columns:1fr}.account-v426-list>div{display:grid;gap:5px}.account-v426-list strong{text-align:left}}

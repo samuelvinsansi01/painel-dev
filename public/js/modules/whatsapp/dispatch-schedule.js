@@ -17,7 +17,7 @@ function setChipBlockUsageV31(chipId, block, count) {
 }
 
 function getCurrentDispatchBlockV31(chip) {
-  const blocks = chip?.blocks?.length ? chip.blocks : ['08:00','10:00','12:00','14:00'];
+  const blocks = chip?.blocks?.length ? chip.blocks : WHATSAPP_CHIP_BLOCKS_V426;
   const now = new Date();
   const currentMinutes = now.getHours() * 60 + now.getMinutes();
 
@@ -36,8 +36,8 @@ function canSendByChipRulesV31(chip) {
   if (!chip) return { ok:false, reason:'chip ausente' };
   if (chip.paused || chip.status === 'disabled') return { ok:false, reason:'chip pausado/desativado' };
 
-  const dailyLimit = Number(chip.dailyLimit || 120);
-  const blockSize = Number(chip.blockSize || 30);
+  const dailyLimit = Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426);
+  const blockSize = Number(chip.blockSize || WHATSAPP_CHIP_BLOCK_SIZE_V426);
   const usedToday = getChipUsedToday(chip.id);
 
   if (usedToday >= dailyLimit) {
@@ -68,8 +68,8 @@ function registerChipSendV31(chip) {
 function getDispatchScheduleSummaryV31() {
   const chips = getWhatsappChipsV29 ? getWhatsappChipsV29() : [];
   const active = chips.filter(c => c.status !== 'disabled' && !c.paused);
-  const totalDaily = active.reduce((sum, chip) => sum + Number(chip.dailyLimit || 120), 0);
-  const remaining = active.reduce((sum, chip) => sum + Math.max(0, Number(chip.dailyLimit || 120) - getChipUsedToday(chip.id)), 0);
+  const totalDaily = active.reduce((sum, chip) => sum + Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426), 0);
+  const remaining = active.reduce((sum, chip) => sum + Math.max(0, Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426) - getChipUsedToday(chip.id)), 0);
   const currentBlock = active[0] ? getCurrentDispatchBlockV31(active[0]) : '--:--';
 
   return {
@@ -103,7 +103,7 @@ function renderDispatchScheduleV31() {
       </div>
     </div>
     <div class="dispatch-v31-warning">
-      Regra ativa: 120 mensagens por chip · 4 blocos de 30 · 120 segundos entre envios · espera 1h entre blocos.
+      Regra ativa: 180 mensagens por chip · 6 blocos de 30 · 120 segundos entre envios · espera 1h entre blocos.
     </div>
   `;
 }

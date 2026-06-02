@@ -67,6 +67,10 @@ const SIDEBAR_KEY    = 'vs_sidebar';
 const EXCLUDED_KEY   = 'vs_excluded_domains';
 const CHIPS_KEY      = 'vs_chips_v2';
 const LEGACY_CHIPS_UPDATED_AT_KEY_V426 = 'vs_chips_v2_updated_at_v426';
+const WHATSAPP_CHIP_DAILY_LIMIT_V426 = 180;
+const WHATSAPP_CHIP_BLOCK_SIZE_V426 = 30;
+const WHATSAPP_CHIP_INTERVAL_SECONDS_V426 = 120;
+const WHATSAPP_CHIP_BLOCKS_V426 = Object.freeze(['08:00','10:00','12:00','14:00','16:00','18:00']);
 const RAMOS_KEY      = 'vs_ramos_v2';
 const TEMPLATES_KEY  = 'vs_templates_v2';
 const TEMPLATES_RAMO_KEY = 'vs_templates_ramo_v1'; // templates por ramo+tipo
@@ -179,6 +183,41 @@ function getUserDisplayName(user) {
   return user.user_metadata?.full_name || user.user_metadata?.name || user.email || 'Usuário';
 }
 
+function setMinhaContaTextV426(id, value = '') {
+  const el = document.getElementById(id);
+  if (el) el.textContent = String(value || '');
+}
+
+function renderMinhaContaV426(user = currentUser) {
+  const connected = !!user?.id;
+  const name = connected ? getUserDisplayName(user) : 'Conta desconectada';
+  const email = connected ? String(user.email || '') : 'Entre com Google para acessar seus dados.';
+  const provider = connected
+    ? String(user.app_metadata?.provider || user.identities?.[0]?.provider || 'google')
+    : '--';
+  const createdAt = user?.created_at
+    ? new Date(user.created_at).toLocaleString('pt-BR')
+    : '--';
+  const initials = name
+    .split(/\s+/)
+    .filter(Boolean)
+    .slice(0, 2)
+    .map(part => part.charAt(0).toUpperCase())
+    .join('') || '?';
+
+  setMinhaContaTextV426('minhaContaAvatarV426', initials);
+  setMinhaContaTextV426('minhaContaNomeV426', name);
+  setMinhaContaTextV426('minhaContaEmailV426', email);
+  setMinhaContaTextV426('minhaContaIdV426', connected ? user.id : '--');
+  setMinhaContaTextV426('minhaContaProviderV426', provider);
+  setMinhaContaTextV426('minhaContaCriadaEmV426', createdAt);
+  setMinhaContaTextV426('minhaContaSessaoV426', connected ? 'Conectada' : 'Desconectada');
+  setMinhaContaTextV426('minhaContaIsolamentoV426', connected ? 'Ativo por user_id e user_email' : 'Aguardando login');
+
+  const status = document.getElementById('minhaContaSessaoV426');
+  if (status) status.className = `account-v426-status ${connected ? 'ok' : 'warn'}`;
+}
+
 
 function escapeHtml(value = '') {
   return String(value)
@@ -190,6 +229,7 @@ function escapeHtml(value = '') {
 }
 
 function renderAuthUser(user) {
+  renderMinhaContaV426(user);
   const box = document.getElementById('authUserBox');
   const loginBtn = document.getElementById('authLoginBtn');
   const logoutBtn = document.getElementById('authLogoutBtn');
@@ -411,4 +451,3 @@ async function logoutSupabase() {
     notify('Sessão local encerrada. Recarregue se necessário.', 'warn');
   }
 }
-

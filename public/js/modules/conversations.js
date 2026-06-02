@@ -307,10 +307,10 @@ function getChipFormValuesV406() {
     url: normalizeEvolutionBaseUrlV405(pick(['chipUrl', 'evoUrl'], 'input[placeholder*="URL"]')),
     instance: pick(['chipInstance', 'evoInstance'], 'input[placeholder*="Instância"],input[placeholder*="Instance"]'),
     key: pick(['chipApiKey', 'evoApiKey', 'evoKey'], 'input[placeholder*="API Key"],input[placeholder*="api key"]'),
-    dailyLimit: Number(document.getElementById('chipDailyLimit')?.value || 120),
-    blockSize: Number(document.getElementById('chipBlockSize')?.value || 30),
-    intervalSeconds: Number(document.getElementById('chipInterval')?.value || 120),
-    blocks: (document.getElementById('chipBlocks')?.value || '08:00,10:00,12:00,14:00').split(',').map(v => v.trim()).filter(Boolean)
+    dailyLimit: Number(document.getElementById('chipDailyLimit')?.value || WHATSAPP_CHIP_DAILY_LIMIT_V426),
+    blockSize: Number(document.getElementById('chipBlockSize')?.value || WHATSAPP_CHIP_BLOCK_SIZE_V426),
+    intervalSeconds: Number(document.getElementById('chipInterval')?.value || WHATSAPP_CHIP_INTERVAL_SECONDS_V426),
+    blocks: (document.getElementById('chipBlocks')?.value || WHATSAPP_CHIP_BLOCKS_V426.join(',')).split(',').map(v => v.trim()).filter(Boolean)
   };
 }
 
@@ -431,4 +431,3 @@ async function validateNumberByChipV406(number, chipLike = null) {
     data
   };
 }
-

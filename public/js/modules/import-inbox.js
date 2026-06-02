@@ -169,7 +169,8 @@ function rebuildSidebarGroupedV41() {
   sidebar.appendChild(createMenuItemV41('conversations','💬','Conversas'));
   sidebar.appendChild(createMenuGroupV41('Gerenciamento',[{panel:'followups',icon:'⏰',label:'Follow-ups',sub:true},{panel:'kanban',icon:'📋',label:'Kanban',sub:true},{panel:'acompanhamento',icon:'📈',label:'Acompanhamentos',sub:true}]));
   sidebar.appendChild(createMenuGroupV41('Ferramentas',[{panel:'redirects',icon:'🔗',label:'Redirecionamentos',sub:true},{panel:'audit',icon:'📊',label:'Auditoria',badgeId:'badge-audit',sub:true}]));
-  sidebar.appendChild(createMenuItemV41('config','⚙️','Configurações'));
+  sidebar.appendChild(createMenuItemV41('conta','👤','Minha conta'));
+  sidebar.appendChild(createMenuItemV41('configuracoes','⚙️','Configurações'));
   const footer=document.createElement('div'); footer.id='sidebarAuthFooterV40'; footer.appendChild(createMenuItemV41('logout','🚪','Sair')); sidebar.appendChild(footer);
   sidebar.dataset.v41Grouped = 'true';
   try{updateInboxBadgeV41();}catch(e){} try{updateWhatsappQueueBadge();}catch(e){} try{updateAuditBadgeV35();}catch(e){}
@@ -295,6 +296,7 @@ function rebuildSidebarGroupedV41() {
     { panel:'audit', icon:'📊', label:'Auditoria', badgeId:'badge-audit' }
   ]));
 
+  sidebar.appendChild(createMenuItemV411('conta', '👤', 'Minha conta'));
   sidebar.appendChild(createMenuItemV411('configuracoes', '⚙️', 'Configurações'));
 
   const footer = document.createElement('div');
@@ -311,4 +313,3 @@ function rebuildSidebarGroupedV41() {
 document.addEventListener('DOMContentLoaded', () => setTimeout(rebuildSidebarGroupedV41, 250));
 setTimeout(rebuildSidebarGroupedV41, 700);
 setTimeout(rebuildSidebarGroupedV41, 1500);
-

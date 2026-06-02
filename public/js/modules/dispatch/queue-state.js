@@ -104,7 +104,7 @@ function saveFilaDisparo() {
   scheduleLegacyOperationalSyncV36();
 }
 
-const CHIP_LIMIT = 120; // máximo de leads por chip por dia
+const CHIP_LIMIT = WHATSAPP_CHIP_DAILY_LIMIT_V426; // maximo de leads por chip por dia
 
 function getFilaChipNoDia(chipId, day) {
   // Retorna apenas os itens da fila do chip que pertencem ao dia informado

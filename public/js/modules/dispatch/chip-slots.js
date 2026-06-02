@@ -14,8 +14,8 @@ const chipSlotState = [
   { filaLotes:[], loteAtual:0, lotesTotal:0, aguardandoLote:false, disparoEmAndamento:false, loteEsperaFim:null, loteEsperaTimer:null, loteCountdownInt:null, loteHistorico:[], retryItems:[], retryDisparado:false, ultimoLoteFimTs:null, pausado:false }
 ];
 
-/* ─── Limit por dia = 120 × nº de chips ─── */
-function getDailyLimit() { return Math.max(1, getChips().length) * 120; }
+/* Limite diario = 180 por chip. */
+function getDailyLimit() { return Math.max(1, getChips().length) * WHATSAPP_CHIP_DAILY_LIMIT_V426; }
 
 /* ─── Helpers por slot ─── */
 function getChipBySlot(slot) { return getChips()[slot] || null; }
@@ -451,6 +451,5 @@ function atualizarStatusFilaSlot(slot, id, status) {
   const labels = { aguardando:'aguardando', enviando:'enviando...', enviado:'✓ enviado', erro:'✗ erro' };
   st.className = `fila-item-status ${status}`; st.textContent = labels[status]||status;
 }
-
 
 

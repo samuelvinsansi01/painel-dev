@@ -357,6 +357,17 @@ function toggleConversationActionsV421() {
   if (menu) menu.classList.toggle('open');
 }
 
+function openConversationLeadDrawerV426(conversationKey = '') {
+  if (!conversationKey) conversationKey = activeConversationLeadV38;
+  const resolved = getConversationLeadFromKeyV412(conversationKey);
+  const leadId = resolved.leadId || (!isPhoneConversationKeyV412(conversationKey) ? conversationKey : '');
+  if (leadId && typeof openLeadDrawer === 'function') {
+    openLeadDrawer(leadId);
+    return;
+  }
+  notify('Associe esta conversa a um lead antes de abrir a ficha.', 'warn');
+}
+
 function addConversationNoteV421(conversationKey = '') {
   if (!conversationKey) conversationKey = activeConversationLeadV38;
   const resolved = getConversationLeadFromKeyV412(conversationKey);
@@ -1174,6 +1185,7 @@ function renderConversationChatV38() {
     ? `<button class="btn btn-ghost" onclick="associateLidConversationToLeadV417('${escHtml(activeConversationLeadV38)}')">Associar ao lead</button>`
     : '';
   const canReassociate = lead.isLid || resolved.mappedFromLid || isPhoneConversationKeyV412(activeConversationLeadV38);
+  const drawerLeadId = resolved.leadId || (!isPhoneConversationKeyV412(activeConversationLeadV38) ? activeConversationLeadV38 : '');
 
   box.innerHTML = `
     <div class="conversation-chat-header-v38">
@@ -1185,6 +1197,7 @@ function renderConversationChatV38() {
         ${associationButton}
         <button class="conversation-actions-btn-v421" onclick="toggleConversationActionsV421()" title="Ações">⋮</button>
         <div id="conversationActionsMenuV421" class="conversation-actions-menu-v421">
+          ${drawerLeadId ? `<button onclick="openConversationLeadDrawerV426('${escHtml(activeConversationLeadV38)}')">Abrir ficha do lead</button>` : ''}
           <button onclick="archiveConversationV421('${escHtml(activeConversationLeadV38)}')">Arquivar conversa</button>
           <button onclick="markConversationReadActionV421('${escHtml(activeConversationLeadV38)}')">Marcar como lida</button>
           <button onclick="markConversationUnreadV421('${escHtml(activeConversationLeadV38)}')">Marcar como não lida</button>

@@ -131,9 +131,10 @@ function rebuildSidebarV40() {
   const audit = ensureSidebarItemV40(sidebar, 'audit', '📊', 'Auditoria', { id:'badge-audit', text:'LOG' });
   const responses = ensureSidebarItemV40(sidebar, 'responses', '💬', 'Respostas', { id:'badge-responses', text:'0' });
   const conversations = ensureSidebarItemV40(sidebar, 'conversations', '🗨️', 'Conversas', { id:'badge-conversations', text:'0' });
+  const account = ensureSidebarItemV40(sidebar, 'conta', '👤', 'Minha conta');
   const config = sidebar.querySelector('[data-label="Configurações"]');
 
-  [redirects, audit, responses, conversations, config].forEach(el => {
+  [redirects, audit, responses, conversations, account, config].forEach(el => {
     if (el) toolsGroup.appendChild(el);
   });
 
@@ -219,7 +220,7 @@ setTimeout(rebuildSidebarV40, 2000);
       }
     }
 
-    ['Redirecionamentos','Auditoria','Respostas','Conversas','Configurações'].forEach(label => {
+    ['Redirecionamentos','Auditoria','Respostas','Conversas','Minha conta','Configurações'].forEach(label => {
       const item = sidebar.querySelector(`[data-label="${label}"]`);
       if (item && item.parentElement !== toolsGroup) {
         toolsGroup.appendChild(item);

@@ -44,21 +44,39 @@ function isChipAllowedForCurrentUserV24(row = {}){
   return allowed;
 }
 
-function normalizeChipRowToLocalV22(row = {}){
+function getDefaultWhatsappChipBlocksV426(){
+  return [...WHATSAPP_CHIP_BLOCKS_V426];
+}
+
+function normalizeWhatsappChipOperationV426(chip = {}){
+  const blocks = Array.isArray(chip.blocks) ? chip.blocks.map(String) : [];
+  const hasLegacyDefaultBlocks = blocks.join(',') === '08:00,10:00,12:00,14:00';
+  const dailyLimit = Number(chip.dailyLimit || chip.daily_limit || 0);
+
   return {
+    ...chip,
+    dailyLimit: !dailyLimit || dailyLimit === 120 ? WHATSAPP_CHIP_DAILY_LIMIT_V426 : dailyLimit,
+    intervalSeconds: Number(chip.intervalSeconds || chip.interval_seconds || WHATSAPP_CHIP_INTERVAL_SECONDS_V426),
+    blockSize: Number(chip.blockSize || chip.block_size || WHATSAPP_CHIP_BLOCK_SIZE_V426),
+    blocks: !blocks.length || hasLegacyDefaultBlocks ? getDefaultWhatsappChipBlocksV426() : blocks
+  };
+}
+
+function normalizeChipRowToLocalV22(row = {}){
+  return normalizeWhatsappChipOperationV426({
     id: String(row.chip_id || row.id || row.instance || `chip_${Date.now()}`),
     name: row.name || row.label || row.instance || 'WhatsApp',
     instance: row.instance || row.name || '',
     status: row.active === false ? 'disabled' : 'active',
     paused: false,
-    dailyLimit: Number(row.daily_limit || row.dailyLimit || 120),
-    intervalSeconds: Number(row.interval_seconds || row.intervalSeconds || 120),
-    blockSize: Number(row.block_size || row.blockSize || 30),
-    blocks: Array.isArray(row.blocks) ? row.blocks : ['08:00','10:00','12:00','14:00'],
+    dailyLimit: Number(row.daily_limit || row.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426),
+    intervalSeconds: Number(row.interval_seconds || row.intervalSeconds || WHATSAPP_CHIP_INTERVAL_SECONDS_V426),
+    blockSize: Number(row.block_size || row.blockSize || WHATSAPP_CHIP_BLOCK_SIZE_V426),
+    blocks: Array.isArray(row.blocks) ? row.blocks : getDefaultWhatsappChipBlocksV426(),
     connectionState: row.status || row.connection_state || 'salvo no banco',
     phone: row.phone || row.number || '',
     dbId: row.id || null
-  };
+  });
 }
 
 function mergeSupabaseWhatsappChipsWithLocalCacheV426(dbChips = []){
@@ -241,14 +259,16 @@ function getWhatsappChipsV29(){
     if (!getCurrentUserIdV22() || !getCurrentUserEmailV24()) return [];
     const key = scopedWhatsappChipsKeyV22();
     const data = JSON.parse(localStorage.getItem(key) || '[]');
-    const chips = Array.isArray(data) ? data : [];
+    const chips = (Array.isArray(data) ? data : []).map(normalizeWhatsappChipOperationV426);
+    if (JSON.stringify(chips) !== JSON.stringify(data)) localStorage.setItem(key, JSON.stringify(chips));
     console.log('[user-isolation][chip-render]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), source:'cache', key, count:chips.length });
     return chips;
   } catch { return []; }
 }
 
 function storeWhatsappChipsCacheV426(list = []){
-  localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(Array.isArray(list) ? list : []));
+  const chips = (Array.isArray(list) ? list : []).map(normalizeWhatsappChipOperationV426);
+  localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(chips));
   localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
 }
 
@@ -367,7 +387,7 @@ function resetDailyChipUsage(){
 function getAvailableChipsV29(){
   return getWhatsappChipsV29().filter(chip => {
     if (chip.status === 'disabled' || chip.paused) return false;
-    return getChipUsedToday(chip.id) < Number(chip.dailyLimit || 120);
+    return getChipUsedToday(chip.id) < Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426);
   });
 }
 
@@ -399,7 +419,7 @@ function assignChipsToReadyQueue(){
       tries++;
 
       const used = getChipUsedToday(chip.id);
-      if (used < Number(chip.dailyLimit || 120)) {
+      if (used < Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426)) {
         selected = chip;
         break;
       }
@@ -410,9 +430,9 @@ function assignChipsToReadyQueue(){
     item.chipId = selected.id;
     item.chipName = selected.name;
     item.chipInstance = selected.instance;
-    item.intervalSeconds = Number(selected.intervalSeconds || 120);
-    item.blockSize = Number(selected.blockSize || 30);
-    item.blocks = selected.blocks || ['08:00','10:00','12:00','14:00'];
+    item.intervalSeconds = Number(selected.intervalSeconds || WHATSAPP_CHIP_INTERVAL_SECONDS_V426);
+    item.blockSize = Number(selected.blockSize || WHATSAPP_CHIP_BLOCK_SIZE_V426);
+    item.blocks = selected.blocks || getDefaultWhatsappChipBlocksV426();
     item.updatedAt = new Date().toISOString();
 
     setChipUsedToday(selected.id, getChipUsedToday(selected.id) + 1);
@@ -435,15 +455,15 @@ function renderChipsOperationSummary(){
 
   const chips = getWhatsappChipsV29();
   const active = chips.filter(c => c.status !== 'disabled' && !c.paused);
-  const totalCapacity = active.reduce((sum, chip) => sum + Math.max(0, Number(chip.dailyLimit || 120) - getChipUsedToday(chip.id)), 0);
-  const totalDaily = chips.reduce((sum, chip) => sum + Number(chip.dailyLimit || 120), 0);
+  const totalCapacity = active.reduce((sum, chip) => sum + Math.max(0, Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426) - getChipUsedToday(chip.id)), 0);
+  const totalDaily = chips.reduce((sum, chip) => sum + Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426), 0);
 
   box.innerHTML = `
     Chips cadastrados: ${chips.length}<br>
     Chips ativos: ${active.length}<br>
     Capacidade diária total: ${totalDaily}<br>
     Capacidade restante hoje: ${totalCapacity}<br>
-    Padrão recomendado: 120 por chip · 4 blocos de 30 · 120s · espera 1h entre blocos
+    Padrão recomendado: 180 por chip · 6 blocos de 30 · 120s · espera 1h entre blocos
   `;
 }
 
@@ -460,7 +480,7 @@ function renderChipsList(){
 
   box.innerHTML = chips.map(chip => {
     const used = getChipUsedToday(chip.id);
-    const limit = Number(chip.dailyLimit || 120);
+    const limit = Number(chip.dailyLimit || WHATSAPP_CHIP_DAILY_LIMIT_V426);
     const pct = Math.min(100, Math.round((used / Math.max(limit,1)) * 100));
     const disabled = chip.status === 'disabled';
     const paused = !!chip.paused;
@@ -484,7 +504,7 @@ function renderChipsList(){
             <div class="chip-card-meta">
               URL: ${escHtml(chip.url || chip.baseUrl || chip.evolutionUrl || 'sem URL')}<br>Instância: ${escHtml(chip.instance)}<br>Estado: ${escHtml(chip.connectionState || 'não testado')}<br>
               Blocos: ${escHtml((chip.blocks || []).join(', '))}<br>
-              Intervalo: ${escHtml(String(chip.intervalSeconds || 120))}s
+              Intervalo: ${escHtml(String(chip.intervalSeconds || WHATSAPP_CHIP_INTERVAL_SECONDS_V426))}s
             </div>
           </div>
           <div>${pill}${syncPill}</div>

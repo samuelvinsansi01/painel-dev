@@ -122,6 +122,10 @@
       </button>
     </details>
 
+    <button class="nav-item" onclick="switchPanel('conta')" data-label="Minha conta">
+      <div class="nav-icon">👤</div><span class="nav-label">Minha conta</span>
+    </button>
+
     <button class="nav-item" onclick="switchPanel('configuracoes')" data-label="Configurações">
       <div class="nav-icon">⚙️</div><span class="nav-label">Configurações</span>
     </button>
@@ -764,6 +768,47 @@
   </div>
 </div>
 
+<!-- MINHA CONTA -->
+<div class="panel" id="panel-conta">
+  <div class="page-header">
+    <div class="page-title">Minha <span>conta.</span></div>
+    <div class="page-sub">// sessão Google · isolamento dos dados · sincronização Supabase</div>
+  </div>
+
+  <div class="account-v426-grid">
+    <div class="stretch-card account-v426-profile">
+      <div class="account-v426-avatar" id="minhaContaAvatarV426">?</div>
+      <div>
+        <div class="account-v426-name" id="minhaContaNomeV426">Conta</div>
+        <div class="account-v426-email" id="minhaContaEmailV426">Carregando sessão...</div>
+      </div>
+    </div>
+
+    <div class="stretch-card">
+      <div class="card-title">Sessão e segurança</div>
+      <div class="account-v426-list">
+        <div><span>Status da sessão</span><strong class="account-v426-status warn" id="minhaContaSessaoV426">Carregando</strong></div>
+        <div><span>Isolamento dos dados</span><strong id="minhaContaIsolamentoV426">Aguardando sessão</strong></div>
+        <div><span>Provedor de login</span><strong id="minhaContaProviderV426">--</strong></div>
+        <div><span>Conta criada em</span><strong id="minhaContaCriadaEmV426">--</strong></div>
+        <div><span>ID da conta</span><strong id="minhaContaIdV426">--</strong></div>
+      </div>
+    </div>
+  </div>
+
+  <div class="stretch-card account-v426-actions-card">
+    <div>
+      <div class="card-title">Dados persistentes</div>
+      <div class="account-v426-help">Leads, chips, conversas e filas permanecem vinculados exclusivamente à conta autenticada.</div>
+    </div>
+    <div class="account-v426-actions">
+      <button class="btn btn-primary" onclick="syncOperationalDataToSupabaseV36()">Sincronizar agora</button>
+      <button class="btn btn-ghost" onclick="loadOperationalDataFromSupabaseV36()">Recarregar do Supabase</button>
+      <button class="btn btn-danger" onclick="logoutSupabase()">Sair da conta</button>
+    </div>
+  </div>
+</div>
+
 <!-- ── CONFIGURAÇÕES ── -->
 <div class="panel" id="panel-configuracoes">
   <div class="page-header">
@@ -831,14 +876,14 @@
       <div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
         <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">MENSAGENS POR LOTE</div>
         <div id="statLoteVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">30 msg</div>
-        <div id="statLoteSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">por chip · 4 lotes por dia</div>
+        <div id="statLoteSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">por chip · 6 lotes por dia</div>
       </div>
 
       <!-- bloco 3: por dia -->
       <div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:14px 18px;flex:1;min-width:140px;display:flex;flex-direction:column;gap:4px">
         <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);letter-spacing:0.12em">LIMITE DIÁRIO POR CHIP <span class="tag">ANTI-BAN</span></div>
-        <div id="statDiaVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">120 msg</div>
-        <div id="statDiaSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">4 lotes × 30 · espera 1h</div>
+        <div id="statDiaVal" style="font-family:'DM Mono',monospace;font-size:22px;font-weight:700;color:var(--text);line-height:1">180 msg</div>
+        <div id="statDiaSub" style="font-family:'DM Mono',monospace;font-size:8px;color:var(--ok)">6 lotes × 30 · espera 1h</div>
       </div>
 
     </div>
@@ -980,12 +1025,12 @@
         <input id="chipInstance" type="text" placeholder="Instância Evolution">
         <input id="chipApiKey" type="password" placeholder="API Key da Evolution">
         <div class="chips-v29-row">
-          <input id="chipDailyLimit" type="number" value="120" placeholder="Limite diário">
+          <input id="chipDailyLimit" type="number" value="180" placeholder="Limite diário">
           <input id="chipBlockSize" type="number" value="30" placeholder="Mensagens por bloco">
         </div>
         <div class="chips-v29-row">
           <input id="chipInterval" type="number" value="120" placeholder="Intervalo em segundos">
-          <input id="chipBlocks" type="text" value="08:00,10:00,12:00,14:00" placeholder="Blocos">
+          <input id="chipBlocks" type="text" value="08:00,10:00,12:00,14:00,16:00,18:00" placeholder="Blocos">
         </div>
         <div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-primary" onclick="addWhatsappChip()">Salvar chip</button><button class="btn btn-ghost" onclick="testEvolutionChipConnectionV407().then(r=>notify(r.ok?`Conectado: ${r.state||'ok'}`:`Falha: ${r.error}`, r.ok?undefined:'warn'))">Testar chip</button></div>
       </div>
@@ -1473,6 +1518,10 @@
         <div class="nav-icon">📊</div><span class="nav-label">Auditoria</span><span class="nav-badge" id="badge-audit">LOG</span>
       </button>
     </details>
+
+    <button class="nav-item" onclick="switchPanel('conta')" data-label="Minha conta">
+      <div class="nav-icon">👤</div><span class="nav-label">Minha conta</span>
+    </button>
 
     <button class="nav-item" onclick="switchPanel('configuracoes')" data-label="Configurações">
       <div class="nav-icon">⚙️</div><span class="nav-label">Configurações</span>

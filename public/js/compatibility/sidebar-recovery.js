@@ -161,7 +161,8 @@ function buildFinalSidebarV413() {
     { panel:'audit', icon:'📊', label:'Auditoria', badgeId:'badge-audit' }
   ]));
 
-  sidebar.appendChild(createMenuItemV413('config', '⚙️', 'Configurações'));
+  sidebar.appendChild(createMenuItemV413('conta', '👤', 'Minha conta'));
+  sidebar.appendChild(createMenuItemV413('configuracoes', '⚙️', 'Configurações'));
 
   const footer = document.createElement('div');
   footer.id = 'sidebarAuthFooterV413';
