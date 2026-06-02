@@ -36,6 +36,22 @@
 const REDIS_URL   = process.env.KV_REST_API_URL;
 const REDIS_TOKEN = process.env.KV_REST_API_TOKEN;
 const LINK_PADRAO = process.env.BASE_URL || 'https://samuelvinsansi.com.br';
+const LEGACY_PROSPECCAO_API_ENABLED = process.env.ENABLE_LEGACY_PROSPECCAO_API === 'true';
+const LEGACY_PROSPECCAO_API_SECRET = process.env.LEGACY_PROSPECCAO_API_SECRET || '';
+
+function assertLegacyProspeccaoAccess(req) {
+  if (!LEGACY_PROSPECCAO_API_ENABLED) {
+    const error = new Error('API legada de prospeccao desativada');
+    error.statusCode = 410;
+    throw error;
+  }
+  const supplied = String(req.headers['x-legacy-api-secret'] || '').trim();
+  if (!LEGACY_PROSPECCAO_API_SECRET || supplied !== LEGACY_PROSPECCAO_API_SECRET) {
+    const error = new Error('API legada nao autorizada');
+    error.statusCode = 401;
+    throw error;
+  }
+}
 
 /* ── Redis helpers ──────────────────────────────────────────────────────── */
 async function redisGet(key) {
@@ -122,8 +138,13 @@ async function evoSendMedia(chip, numero, base64WithUri, imagemNome) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, x-legacy-api-secret');
   if (req.method === 'OPTIONS') return res.status(200).end();
+  try {
+    assertLegacyProspeccaoAccess(req);
+  } catch (error) {
+    return res.status(error.statusCode || 401).json({ error:error.message });
+  }
   if (req.method !== 'POST')   return res.status(405).json({ error: 'Method not allowed' });
 
   const {

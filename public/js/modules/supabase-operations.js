@@ -169,6 +169,7 @@ let operationalSaveRunningV31 = false;
 async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
   if (operationalSaveRunningV31) {
     uiSyncLogV426('operational-data-save-skipped', { reason:'save-already-running' });
+    try { console.log('[operational-data-save]', { action:'skipped', reason:'save-already-running' }); } catch(e) {}
     return { skipped:true, reason:'save-running' };
   }
   if (!isSupabaseOperationalReadyV36()) {
@@ -185,6 +186,7 @@ async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
 
   setPersistenceStatusV36('Enviando dados operacionais para o Supabase...');
   uiSyncLogV426('supabase-save-start', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null });
+  try { console.log('[operational-data-save]', { action:'start', userId:currentUser.id, dirtyAt:dirtyAtBeforeSync || null }); } catch(e) {}
 
   operationalSaveRunningV31 = true;
   try {
@@ -204,10 +206,12 @@ async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
     clearOperationalDataDirtyV430(dirtyAtBeforeSync);
     setPersistenceStatusV36('Dados operacionais sincronizados com sucesso.', 'ok');
     uiSyncLogV426('supabase-save-success', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null });
+    try { console.log('[operational-data-save]', { action:'success', userId:currentUser.id, dirtyAt:dirtyAtBeforeSync || null }); } catch(e) {}
     if (!silent) notify('Dados operacionais enviados ao Supabase.');
     return { ok:true };
   } catch (err) {
     uiSyncLogV426('supabase-save-error', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null, error:err?.message || err });
+    try { console.warn('[operational-data-save]', { action:'error', userId:currentUser?.id || '', error:err?.message || err }); } catch(e) {}
     setPersistenceStatusV36(
       'Falha ao sincronizar. Verifique se a tabela operational_data existe.\n\n' +
       'Erro: ' + (err?.message || 'erro desconhecido'),
@@ -227,6 +231,7 @@ async function loadOperationalDataFromSupabaseV36() {
   }
 
   setPersistenceStatusV36('Carregando dados operacionais do Supabase...');
+  try { console.log('[operational-data-load]', { action:'start', userId:currentUser.id }); } catch(e) {}
 
   try {
     const { data, error } = await sbClient
@@ -242,6 +247,7 @@ async function loadOperationalDataFromSupabaseV36() {
       // V31: se o snapshot remoto foi apagado/está vazio, não reenvia cache local antigo.
       clearOperationalDataDirtyV430();
       uiSyncLogV426('operational-data-remote-empty', { action:'do-not-preserve-local-cache' });
+      try { console.log('[operational-data-load]', { action:'empty', userId:currentUser.id }); } catch(e) {}
       setPersistenceStatusV36('Nenhum dado operacional encontrado no Supabase. Cache local legado não será reenviado automaticamente.', 'warn');
       return false;
     }
@@ -261,6 +267,7 @@ async function loadOperationalDataFromSupabaseV36() {
 
     clearOperationalDataDirtyV430();
     restoreOperationalSnapshotV36(data.payload);
+    try { console.log('[operational-data-load]', { action:'success', userId:currentUser.id, remoteUpdatedAt:data.updated_at || '' }); } catch(e) {}
     setPersistenceStatusV36('Dados carregados do Supabase e aplicados no CRM.', 'ok');
     notify('Dados operacionais carregados.');
     const restoredData = data.payload?.data || {};
@@ -269,6 +276,7 @@ async function loadOperationalDataFromSupabaseV36() {
       || Object.prototype.hasOwnProperty.call(restoredData, 'assignmentQueue')
       || Object.prototype.hasOwnProperty.call(restoredData, 'whatsappDispatchQueues');
   } catch (err) {
+    try { console.warn('[operational-data-load]', { action:'error', userId:currentUser?.id || '', error:err?.message || err }); } catch(e) {}
     setPersistenceStatusV36(
       'Falha ao carregar. Verifique se a tabela operational_data existe.\n\n' +
       'Erro: ' + (err?.message || 'erro desconhecido'),
@@ -384,5 +392,4 @@ function scheduleLegacyOperationalSyncV36(options = {}) {
     : options.delay;
   if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36({ ...options, delay });
 }
-
 

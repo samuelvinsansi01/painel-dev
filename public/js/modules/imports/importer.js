@@ -124,29 +124,82 @@ function importPreview() {
   renderPagination('importPreviewPagination', importPage, totalPrevPages, totalPrev, IMPORT_PG, 'goImportPage', 'changeImportPgSize');
 }
 
-function importarLeads() {
+function logLeadImportV432(tag, payload = {}) {
+  try { console.log(`[${tag}]`, payload); } catch(e) {}
+}
+
+function normalizeImportedLeadPhoneV432(value = '') {
+  return typeof normalizePhoneStrictV31 === 'function'
+    ? normalizePhoneStrictV31(value)
+    : String(value || '').replace(/\D/g, '');
+}
+
+async function getRemoteImportedLeadPhonesV432() {
+  if (!sbClient || !currentUser?.id) throw new Error('Sessao autenticada indisponivel para verificar duplicados.');
+  const { data, error } = await sbClient
+    .from('leads')
+    .select('id,phone')
+    .eq('user_id', currentUser.id);
+  if (error) throw error;
+  const phones = new Map();
+  (data || []).forEach(row => {
+    const phone = normalizeImportedLeadPhoneV432(row.phone);
+    if (phone && !phones.has(phone)) phones.set(phone, row.id);
+  });
+  return phones;
+}
+
+async function importarLeads() {
   const raw = document.getElementById('importJsonInput').value.trim();
   if (!raw) { notify('// cole o JSON primeiro', 'err'); return; }
   const arr = parseApifyJson(raw);
   if (!arr || !arr.length) { notify('// JSON inválido ou vazio', 'err'); return; }
 
+  logLeadImportV432('lead-import', { action:'start', total:arr.length, userId:currentUser?.id || '' });
+  let existingPhones;
+  try {
+    existingPhones = await getRemoteImportedLeadPhonesV432();
+  } catch (error) {
+    logLeadImportV432('lead-import', { action:'blocked', reason:'remote-dedupe-check-failed', error:error?.message || error });
+    notify('// Nao foi possivel verificar duplicados no banco. Importacao cancelada.', 'err');
+    return;
+  }
+
   const novaValFila = [...getValData()];
   const novaInstaFila = [...getInstaFila()];
+  [...novaValFila, ...novaInstaFila, ...(typeof getLeadBaseData === 'function' ? getLeadBaseData() : [])].forEach(lead => {
+    const phone = normalizeImportedLeadPhoneV432(lead.whatsapp || lead.phone || lead.telefone || '');
+    if (phone && !existingPhones.has(phone)) existingPhones.set(phone, lead.id || 'local-cache');
+  });
   const analyses = analyzeApifyRowsV430(arr, 'import');
   const stats = getImportStatsV430(analyses);
   let addedWhatsapp = 0;
   let addedInstagram = 0;
+  let remoteDuplicates = 0;
   let skipped = 0;
 
   analyses.forEach(analysis => {
+    const phone = normalizeImportedLeadPhoneV432(analysis.phone);
+    if ((analysis.route === 'whatsapp-validation' || analysis.route === 'instagram-backlog') && phone && existingPhones.has(phone)) {
+      remoteDuplicates++;
+      skipped++;
+      logLeadImportV432('lead-import-duplicate', { phone, existingId:existingPhones.get(phone), name:analysis.name, route:analysis.route });
+      return;
+    }
     if (analysis.route === 'whatsapp-validation') {
-      novaValFila.push(buildImportedLeadV430(analysis, analysis.route));
+      const lead = buildImportedLeadV430(analysis, analysis.route);
+      novaValFila.push(lead);
+      if (phone) existingPhones.set(phone, lead.id);
       addedWhatsapp++;
+      logLeadImportV432('lead-import-created', { id:lead.id, phone, name:lead.nome, route:analysis.route });
       return;
     }
     if (analysis.route === 'instagram-backlog') {
-      novaInstaFila.push(buildImportedLeadV430(analysis, analysis.route));
+      const lead = buildImportedLeadV430(analysis, analysis.route);
+      novaInstaFila.push(lead);
+      if (phone) existingPhones.set(phone, lead.id);
       addedInstagram++;
+      logLeadImportV432('lead-import-created', { id:lead.id, phone, name:lead.nome, route:analysis.route });
       return;
     }
     skipped++;
@@ -170,6 +223,8 @@ function importarLeads() {
   if (addedInstagram) msg += ` · ${addedInstagram} → backlog Instagram`;
   if (stats.alreadySeen) msg += ` · ${stats.alreadySeen} já vistos`;
   if (skipped) msg += ` · ${skipped} ignoradas`;
+  if (remoteDuplicates) msg += ` | ${remoteDuplicates} duplicados bloqueados`;
+  logLeadImportV432('lead-import', { action:'complete', addedWhatsapp, addedInstagram, remoteDuplicates, skipped });
   notify(msg, addedWhatsapp || addedInstagram ? '' : 'warn');
 
   document.getElementById('importJsonInput').value = '';

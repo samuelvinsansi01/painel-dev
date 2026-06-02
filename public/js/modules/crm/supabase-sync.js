@@ -69,23 +69,54 @@ function getLeadCrmPayloadForSupabaseSyncV428(lead = {}) {
   }
 }
 
-async function upsertLeadToSupabase(lead = {}) {
+function getLeadSyncPhoneV432(lead = {}) {
+  return typeof getLeadPhoneKeyV31 === 'function'
+    ? getLeadPhoneKeyV31(lead)
+    : String(lead.whatsapp || lead.phone || lead.telefone || '').replace(/\D/g, '');
+}
+
+async function getRemoteLeadPhoneMapV432() {
+  const map = new Map();
+  if (!isSupabaseReady()) return map;
+  const { data, error } = await sbClient
+    .from('leads')
+    .select('id,phone')
+    .eq('user_id', currentUser.id);
+  if (error) {
+    console.warn('[lead-sync][remote-index-error]', error.message);
+    return map;
+  }
+  (data || []).forEach(row => {
+    const phone = getLeadSyncPhoneV432(row);
+    if (phone && !map.has(phone)) map.set(phone, row.id);
+  });
+  return map;
+}
+
+async function upsertLeadToSupabase(lead = {}, options = {}) {
   if (!isSupabaseReady() || !lead.id) return { skipped: true, reason:'auth-or-lead-missing' };
   try { requireCurrentAuthIdentityV25('upsertLeadToSupabase'); } catch(error) { return { skipped:true, error }; }
-  const crmData = getLeadCrmPayloadForSupabaseSyncV428(lead);
-  uiSyncLogV426('supabase-save-start', { entity:'lead', id:lead.id, hasCrmData:!!crmData });
+  const phoneKey = getLeadSyncPhoneV432(lead);
+  const remotePhoneMap = options.remotePhoneMap || await getRemoteLeadPhoneMapV432();
+  const canonicalId = phoneKey && remotePhoneMap.get(phoneKey);
+  const leadToSave = canonicalId && canonicalId !== lead.id ? { ...lead, id:canonicalId } : lead;
+  if (canonicalId && canonicalId !== lead.id) {
+    console.warn('[lead-sync-dedupe]', { reason:'remote-phone-match', phone:phoneKey, discardedId:lead.id, canonicalId });
+  }
+  const crmData = getLeadCrmPayloadForSupabaseSyncV428(leadToSave);
+  uiSyncLogV426('supabase-save-start', { entity:'lead', id:leadToSave.id, hasCrmData:!!crmData });
 
   const payload = {
-    id: lead.id,
+    id: leadToSave.id,
     user_id: currentUser.id,
     user_email: String(currentUser.email || '').trim().toLowerCase(),
     company_name: lead.nome || lead.companyName || lead.title || 'Lead sem nome',
-    phone: lead.whatsapp || lead.phone || lead.telefone || '',
-    instagram: lead.instagram || lead.instagramUrl || '',
-    website: lead.site || lead.website || '',
-    maps_url: lead.googleUrl || lead.mapsUrl || lead.url || '',
+    phone: leadToSave.whatsapp || leadToSave.phone || leadToSave.telefone || '',
+    instagram: leadToSave.instagram || leadToSave.instagramUrl || '',
+    website: leadToSave.site || leadToSave.website || '',
+    maps_url: leadToSave.googleUrl || leadToSave.mapsUrl || leadToSave.url || '',
     status: lead.status || 'Não enviada',
-    pipeline_status: lead.pipelineStatus || lead.pipeline_status || crmData?.pipelineStatus || 'contato_enviado',
+    pipeline_status: leadToSave.pipelineStatus || leadToSave.pipeline_status || crmData?.pipelineStatus || 'contato_enviado',
     updated_at: new Date().toISOString()
   };
   if (crmData) payload.crm_data = crmData;
@@ -112,7 +143,7 @@ async function upsertLeadToSupabase(lead = {}) {
       if ((!payload.pipeline_status || payload.pipeline_status === 'contato_enviado') && existing.pipeline_status) {
         payload.pipeline_status = existing.pipeline_status;
       }
-      uiSyncLogV426('supabase-preserve-existing', { entity:'lead', id:lead.id, hasCrmData:!!payload.crm_data });
+      uiSyncLogV426('supabase-preserve-existing', { entity:'lead', id:payload.id, hasCrmData:!!payload.crm_data });
     }
   } catch (mergeError) {
     console.warn('[supabase] preserve existing lead skipped:', mergeError?.message || mergeError);
@@ -120,13 +151,14 @@ async function upsertLeadToSupabase(lead = {}) {
 
   const { error } = await sbClient.from('leads').upsert(payload, { onConflict:'id' });
   if (error) {
-    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message, hasCrmData:!!payload.crm_data, payloadKeys:Object.keys(payload) });
+    uiSyncLogV426('supabase-save-error', { entity:'lead', id:payload.id, error:error.message, hasCrmData:!!payload.crm_data, payloadKeys:Object.keys(payload) });
     console.warn('[supabase] upsert lead:', error.message, payload);
     setSyncState({ lastError: error.message });
     return { error };
   }
 
-  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id, hasCrmData:!!payload.crm_data });
+  uiSyncLogV426('supabase-save-success', { entity:'lead', id:payload.id, hasCrmData:!!payload.crm_data });
+  if (phoneKey) remotePhoneMap.set(phoneKey, payload.id);
   return { ok: true };
 }
 
@@ -148,12 +180,22 @@ async function syncAllLocalLeadsToSupabase() {
   const all = [...permanentLeads, ...weekLeads, ...extras];
   const unique = new Map();
   all.forEach(lead => {
-    if (lead?.id) unique.set(lead.id, lead);
+    if (!lead?.id) return;
+    const phone = getLeadSyncPhoneV432(lead);
+    const key = phone ? `phone:${phone}` : `id:${lead.id}`;
+    if (!unique.has(key)) {
+      unique.set(key, lead);
+      return;
+    }
+    const previous = unique.get(key);
+    unique.set(key, typeof mergeLeadDedupeV31 === 'function' ? mergeLeadDedupeV31(previous, lead) : previous);
+    console.warn('[lead-sync-dedupe]', { reason:'local-phone-match', phone, discardedId:lead.id, canonicalId:previous.id });
   });
 
+  const remotePhoneMap = await getRemoteLeadPhoneMapV432();
   let ok = 0;
   for (const lead of unique.values()) {
-    const result = await upsertLeadToSupabase(lead);
+    const result = await upsertLeadToSupabase(lead, { remotePhoneMap });
     if (result?.ok) ok++;
   }
 
@@ -181,4 +223,3 @@ async function loadSupabaseAsPrimarySource(options = {}) {
 
   renderSyncStatus();
 }
-

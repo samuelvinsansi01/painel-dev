@@ -34,11 +34,41 @@ class SupabaseAdapter {
     return payload;
   }
 
+  normalizeLeadPhoneV432(value = '') {
+    let digits = String(value || '').replace(/\D/g, '');
+    if (!digits) return '';
+    if (!digits.startsWith('55') && (digits.length === 10 || digits.length === 11)) digits = '55' + digits;
+    return digits;
+  }
+
+  async findExistingLeadByPhoneV432(userId, payload = {}) {
+    const phone = this.normalizeLeadPhoneV432(payload.phone);
+    if (!phone) return null;
+    const { data, error } = await this.client
+      .from('leads')
+      .select('id,phone')
+      .eq('user_id', userId);
+    if (error) {
+      console.warn('[supabase-adapter][lead-phone-check-error]', error.message);
+      return null;
+    }
+    return (data || []).find(row => this.normalizeLeadPhoneV432(row.phone) === phone) || null;
+  }
+
   async saveLead(lead = {}) {
     const user = await this.getUser();
     if (!user?.id || !user?.email || !lead?.id) return { data: null, error: null };
 
     const payload = this.normalizeLead(lead, user.id, user.email);
+    const existingPhoneLead = await this.findExistingLeadByPhoneV432(user.id, payload);
+    if (existingPhoneLead?.id && existingPhoneLead.id !== payload.id) {
+      const error = {
+        code:'LEAD_DUPLICATE_PHONE',
+        message:'Lead duplicado bloqueado: ja existe um registro deste usuario com o mesmo telefone.'
+      };
+      console.warn('[lead-import-duplicate]', { source:'supabase-adapter', phone:payload.phone, discardedId:payload.id, canonicalId:existingPhoneLead.id });
+      return { data:existingPhoneLead, error, duplicate:true };
+    }
 
     // V29: preservar dados já existentes da ficha/canais quando um snapshot local antigo
     // dispara um upsert parcial. O bug anterior mostrava "success", mas campos da ficha

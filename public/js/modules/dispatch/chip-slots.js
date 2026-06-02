@@ -248,7 +248,13 @@ async function iniciarDisparoChip(slot) {
     return;
   }
   const st = chipSlotState[slot];
-  if (st.disparoEmAndamento || st.aguardandoLote) return;
+  if (st.disparoEmAndamento || st.aguardandoLote || st.preflightEmAndamento) {
+    try { console.warn('[whatsapp-send-blocked]', { reason:'chip-lot-already-starting', slot }); } catch(e) {}
+    return;
+  }
+  st.preflightEmAndamento = true;
+  try { console.log('[whatsapp-send]', { action:'chip-lot-lock-start', slot }); } catch(e) {}
+  try {
   const chip = getChipBySlot(slot);
   if (!chip) { notify('// chip ' + (slot+1) + ' não configurado','err'); return; }
   if (blockChipDispatchReloadLockV432(slot, chip)) return;
@@ -300,6 +306,10 @@ async function iniciarDisparoChip(slot) {
   const logEl = document.getElementById(`disparoLog${slot}`);
   if (logEl) { logEl.innerHTML = ''; logEl.style.display = 'block'; }
   await dispararLoteChip(slot);
+  } finally {
+    st.preflightEmAndamento = false;
+    try { console.log('[whatsapp-send]', { action:'chip-lot-lock-release', slot }); } catch(e) {}
+  }
 }
 
 /* ─── Disparo de um lote por slot ─── */
@@ -379,9 +389,21 @@ async function dispararLoteChip(slot) {
       // MSG 1 — Apresentação
       if (!item.textSent) {
         const payload1 = { number: numero, options: { delay: 1000 }, textMessage: { text: item.mensagem } };
-        const res1 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload1) });
-        const data1 = await res1.json().catch(() => ({}));
-        if (!res1.ok) throw new Error((data1 && (data1.message || data1.error)) || `sendText HTTP ${res1.status}`);
+        const sendLock = typeof acquireWhatsappSendLockV31 === 'function'
+          ? acquireWhatsappSendLockV31({ leadId:item.leadId || item.id || '', phone:numero, text:item.mensagem || '', instance:chip.instance }, 30000)
+          : { ok:true, key:'' };
+        if (!sendLock.ok) throw new Error('Envio duplicado bloqueado por seguranca.');
+        let res1;
+        let data1;
+        try {
+          try { console.log('[whatsapp-send]', { action:'evolution-text-start', slot, itemId:item.id, phone:numero, instance:chip.instance }); } catch(e) {}
+          res1 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload1) });
+          data1 = await res1.json().catch(() => ({}));
+          if (!res1.ok) throw new Error((data1 && (data1.message || data1.error)) || `sendText HTTP ${res1.status}`);
+          try { console.log('[whatsapp-send]', { action:'evolution-text-success', slot, itemId:item.id, phone:numero, instance:chip.instance }); } catch(e) {}
+        } finally {
+          if (typeof releaseWhatsappSendLockV31 === 'function') releaseWhatsappSendLockV31(sendLock.key);
+        }
         item.textSent = true;
         saveFilaDisparo({ delay:0, reason:'dispatch-chip-text-sent' });
         log(`  ① apresentação enviada`);
@@ -434,6 +456,7 @@ async function dispararLoteChip(slot) {
       atualizarStatusEmpresa(item.id, 'Enviada');
       log(`<span style="color:${chipCor}">✓ ${escHtml(item.nome)}</span>`);
     } catch(e) {
+      try { console.warn('[whatsapp-send]', { action:'error', slot, itemId:item.id, error:e?.message || e }); } catch(logError) {}
       item.status = 'erro';
       saveFilaDisparo({ delay:0, reason:'dispatch-chip-item-error' });
       atualizarStatusFilaSlot(slot, item.id, 'erro');

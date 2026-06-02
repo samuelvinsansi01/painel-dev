@@ -132,10 +132,15 @@ function scheduleSupabaseLeadSync(leads = []) {
   });
   if (!_pendingSupabaseLeadSyncV426.size) return;
   clearTimeout(_supabaseLeadSyncTimer);
-  _supabaseLeadSyncTimer = setTimeout(() => {
+  _supabaseLeadSyncTimer = setTimeout(async () => {
     const pending = Array.from(_pendingSupabaseLeadSyncV426.values());
     _pendingSupabaseLeadSyncV426.clear();
-    pending.forEach(lead => upsertLeadToSupabase(lead));
+    const remotePhoneMap = typeof getRemoteLeadPhoneMapV432 === 'function'
+      ? await getRemoteLeadPhoneMapV432()
+      : null;
+    for (const lead of pending) {
+      await upsertLeadToSupabase(lead, { remotePhoneMap });
+    }
   }, 250);
 }
 
@@ -523,4 +528,3 @@ function isSiteBlocklisted(site) {
     return SITE_BLOCKLIST_DOMAINS.some(b => hostname === b || hostname.endsWith('.' + b));
   } catch { return false; }
 }
-

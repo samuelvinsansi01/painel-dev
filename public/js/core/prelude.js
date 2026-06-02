@@ -214,18 +214,53 @@ function dedupeLeadArrayV31(list = [], source = 'unknown') {
 function dedupeWeeklyLeadsV31(weekly = {}, source = 'weeklyLeads') {
   if (!weekly || typeof weekly !== 'object') return weekly;
   const copy = { ...weekly, days:{ ...(weekly.days || {}) } };
+  const totalBefore = Object.values(copy.days || {}).flat().length;
+  const seen = new Map();
+  const removed = [];
+  try { console.log('[agenda-before-render]', { source, total:totalBefore }); } catch(e) {}
   Object.keys(copy.days || {}).forEach(day => {
-    copy.days[day] = dedupeLeadArrayV31(copy.days[day] || [], `${source}.${day}`);
+    const cleanDay = dedupeLeadArrayV31(copy.days[day] || [], `${source}.${day}`);
+    const nextDay = [];
+    cleanDay.forEach(item => {
+      const key = getLeadDedupeKeyV31(item);
+      if (!key) {
+        nextDay.push(item);
+        return;
+      }
+      if (!seen.has(key)) {
+        seen.set(key, { day, index:nextDay.length });
+        nextDay.push(item);
+        return;
+      }
+      const previous = seen.get(key);
+      copy.days[previous.day][previous.index] = mergeLeadDedupeV31(copy.days[previous.day][previous.index], item);
+      removed.push({ day, key, id:item.id || '', phone:getLeadPhoneKeyV31(item) });
+    });
+    copy.days[day] = nextDay;
   });
+  const totalAfter = Object.values(copy.days || {}).flat().length;
+  try { console.log('[agenda-after-dedupe]', { source, totalBefore, totalAfter, removed:removed.length }); } catch(e) {}
   return copy;
 }
 
 function dedupeFilaDisparoV31(fila = {}, source = 'filaDisparo') {
   if (!fila || typeof fila !== 'object' || Array.isArray(fila)) return fila;
   const copy = { ...fila };
+  const seen = new Set();
+  let removed = 0;
   Object.keys(copy).forEach(chipId => {
-    copy[chipId] = dedupeLeadArrayV31(copy[chipId] || [], `${source}.${chipId}`);
+    copy[chipId] = dedupeLeadArrayV31(copy[chipId] || [], `${source}.${chipId}`).filter(item => {
+      const key = getLeadDedupeKeyV31(item);
+      if (!key) return true;
+      if (seen.has(key)) {
+        removed++;
+        return false;
+      }
+      seen.add(key);
+      return true;
+    });
   });
+  try { console.log('[whatsapp-queue]', { action:'dedupe', source, removed, total:Object.values(copy).flat().length }); } catch(e) {}
   return copy;
 }
 
@@ -235,9 +270,11 @@ function dedupeOperationalSnapshotV31(snapshot = {}, source = 'operational-snaps
   const data = next.data;
   if (data.weeklyLeads) data.weeklyLeads = dedupeWeeklyLeadsV31(data.weeklyLeads, `${source}.weeklyLeads`);
   if (data.whatsappDispatchQueues) data.whatsappDispatchQueues = dedupeFilaDisparoV31(data.whatsappDispatchQueues, `${source}.whatsappDispatchQueues`);
-  ['permanentLeads','validationQueue','assignmentQueue','instagramQueue','whatsappBacklog','whatsappQueue','evolutionResponses','whatsappOutbox'].forEach(key => {
+  // Mensagens e outbox podem conter varios eventos legitimos para o mesmo telefone.
+  ['permanentLeads','validationQueue','assignmentQueue','instagramQueue','whatsappBacklog','whatsappQueue'].forEach(key => {
     if (Array.isArray(data[key])) data[key] = dedupeLeadArrayV31(data[key], `${source}.${key}`);
   });
+  try { console.log('[operational-data-dedupe]', { source }); } catch(e) {}
   return next;
 }
 
@@ -253,12 +290,19 @@ function acquireWhatsappSendLockV31(payload = {}, ttlMs = 10000) {
   window.__whatsappSendLocksV31 = window.__whatsappSendLocksV31 || new Map();
   const now = Date.now();
   const prev = window.__whatsappSendLocksV31.get(key);
-  if (prev && now - prev < ttlMs) {
-    try { console.warn('[message-send-blocked]', { reason:'duplicate-lock', key, ageMs:now - prev, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
-    return { ok:false, key, ageMs:now - prev };
+  const storageKey = `vs_whatsapp_send_lock_v31:${key}`;
+  let storedAt = 0;
+  try { storedAt = Number(JSON.parse(localStorage.getItem(storageKey) || '{}').at || 0); } catch(e) {}
+  const activeAt = Math.max(Number(prev || 0), storedAt);
+  if (activeAt && now - activeAt < ttlMs) {
+    try { console.warn('[message-send-blocked]', { reason:'duplicate-lock', key, ageMs:now - activeAt, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
+    try { console.warn('[whatsapp-send-blocked]', { reason:'duplicate-lock', key, ageMs:now - activeAt, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
+    return { ok:false, key, ageMs:now - activeAt };
   }
   window.__whatsappSendLocksV31.set(key, now);
+  try { localStorage.setItem(storageKey, JSON.stringify({ at:now })); } catch(e) {}
   try { console.log('[message-send][lock-start]', { key, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
+  try { console.log('[whatsapp-send]', { action:'lock-start', key, phone:payload.phone, leadId:payload.leadId }); } catch(e) {}
   return { ok:true, key };
 }
 
@@ -266,6 +310,7 @@ function releaseWhatsappSendLockV31(key = '') {
   if (!key || !window.__whatsappSendLocksV31) return;
   setTimeout(() => {
     try { window.__whatsappSendLocksV31.delete(key); } catch(e) {}
+    try { localStorage.removeItem(`vs_whatsapp_send_lock_v31:${key}`); } catch(e) {}
   }, 10000);
 }
 
@@ -469,6 +514,21 @@ function clearLocalSessionData() {
   try { rebuildSidebarV40(); } catch(e){}
 }
 
+function hasUnscopedLocalSessionDataV432() {
+  const legacyKeys = [
+    'vs_empresas_v2',
+    'vs_validacao_v2',
+    'vs_atribuicao_v1',
+    'vs_fila_disparo_v1',
+    'vs_lead_crm_v1',
+    'vs_leads_base_v1',
+    'vs_chips_v2'
+  ];
+  return legacyKeys.some(key => {
+    try { return Boolean(localStorage.getItem(key)); } catch(e) { return false; }
+  });
+}
+
 async function initAuth() {
   if (!sbClient) {
     console.warn('[auth] Supabase SDK não carregou.');
@@ -484,7 +544,11 @@ async function initAuth() {
   const lastLocalUserEmail = localStorage.getItem(AUTH_LOCAL_EMAIL_KEY_V425) || '';
   if (currentUser?.id) {
     const currentEmail = String(currentUser.email || '').trim().toLowerCase();
-    if ((lastLocalUserId && lastLocalUserId !== currentUser.id) || (lastLocalUserEmail && lastLocalUserEmail !== currentEmail)) {
+    const accountChanged = (lastLocalUserId && lastLocalUserId !== currentUser.id)
+      || (lastLocalUserEmail && lastLocalUserEmail !== currentEmail);
+    const legacyCacheWithoutOwner = (!lastLocalUserId || !lastLocalUserEmail) && hasUnscopedLocalSessionDataV432();
+    if (accountChanged || legacyCacheWithoutOwner) {
+      try { console.warn('[user-isolation][cache-clear]', { accountChanged:!!accountChanged, legacyCacheWithoutOwner }); } catch(e) {}
       clearLocalSessionData();
     }
     localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
