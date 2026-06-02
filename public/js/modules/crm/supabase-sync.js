@@ -48,33 +48,57 @@ function renderSyncStatus() {
   box.textContent = label;
 }
 
+function getLeadCrmPayloadForSupabaseSyncV428(lead = {}) {
+  try {
+    const id = String(lead?.id || '').trim();
+    if (!id) return null;
+    const store = typeof getLeadCrmStore === 'function' ? getLeadCrmStore() : {};
+    const crm = store?.[id] || lead.crmData || lead.crm_data || lead.leadCrm || null;
+    if (!crm || typeof crm !== 'object') return null;
+    const clone = JSON.parse(JSON.stringify(crm));
+    delete clone.uiSyncStatus;
+    delete clone.uiSyncError;
+    return {
+      ...clone,
+      persistedAt: new Date().toISOString(),
+      schema: clone.schema || 'lead_crm_v28'
+    };
+  } catch (error) {
+    console.warn('[supabase][lead-crm-payload-error]', error?.message || error);
+    return null;
+  }
+}
+
 async function upsertLeadToSupabase(lead = {}) {
   if (!isSupabaseReady() || !lead.id) return { skipped: true, reason:'auth-or-lead-missing' };
   try { requireCurrentAuthIdentityV25('upsertLeadToSupabase'); } catch(error) { return { skipped:true, error }; }
-  uiSyncLogV426('supabase-save-start', { entity:'lead', id:lead.id });
+  const crmData = getLeadCrmPayloadForSupabaseSyncV428(lead);
+  uiSyncLogV426('supabase-save-start', { entity:'lead', id:lead.id, hasCrmData:!!crmData });
 
   const payload = {
     id: lead.id,
     user_id: currentUser.id,
+    user_email: String(currentUser.email || '').trim().toLowerCase(),
     company_name: lead.nome || lead.companyName || lead.title || 'Lead sem nome',
     phone: lead.whatsapp || lead.phone || lead.telefone || '',
     instagram: lead.instagram || lead.instagramUrl || '',
     website: lead.site || lead.website || '',
     maps_url: lead.googleUrl || lead.mapsUrl || lead.url || '',
     status: lead.status || 'Não enviada',
-    pipeline_status: lead.pipelineStatus || 'contato_enviado',
+    pipeline_status: lead.pipelineStatus || lead.pipeline_status || crmData?.pipelineStatus || 'contato_enviado',
     updated_at: new Date().toISOString()
   };
+  if (crmData) payload.crm_data = crmData;
 
-  const { error } = await sbClient.from('leads').upsert(payload);
+  const { error } = await sbClient.from('leads').upsert(payload, { onConflict:'id' });
   if (error) {
-    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message });
-    console.warn('[supabase] upsert lead:', error.message);
+    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message, hasCrmData:!!crmData, payloadKeys:Object.keys(payload) });
+    console.warn('[supabase] upsert lead:', error.message, payload);
     setSyncState({ lastError: error.message });
     return { error };
   }
 
-  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id });
+  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id, hasCrmData:!!crmData });
   return { ok: true };
 }
 

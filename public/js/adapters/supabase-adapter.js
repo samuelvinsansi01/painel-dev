@@ -46,20 +46,11 @@ class SupabaseAdapter {
       .select()
       .single();
 
-    // Fallback defensivo: se a coluna crm_data/user_email ainda não existir no Supabase,
-    // não quebrar o salvamento básico do lead. A persistência completa exige rodar o SQL v27.
+    // V28: não mascarar erro de coluna ausente. Antes o fallback removia crm_data/user_email,
+    // o console mostrava success, mas a ficha não persistia. Se isso acontecer, o SQL de
+    // persistência precisa ser executado no Supabase.
     if (error && /crm_data|user_email/i.test(String(error.message || ''))) {
-      const fallbackPayload = { ...payload };
-      delete fallbackPayload.crm_data;
-      delete fallbackPayload.user_email;
-      const fallback = await this.client
-        .from('leads')
-        .upsert(fallbackPayload, { onConflict: 'id' })
-        .select()
-        .single();
-      data = fallback.data;
-      error = fallback.error || error;
-      if (!fallback.error) error = null;
+      console.error('[supabase-adapter] saveLead schema missing: execute sql/lead_crm_data_persistence_v28.sql', error.message);
     }
 
     if (error) console.warn('[supabase-adapter] saveLead:', error.message, payload);
