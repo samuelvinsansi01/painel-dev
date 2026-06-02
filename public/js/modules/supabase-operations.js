@@ -2,6 +2,7 @@
    PERSISTÊNCIA SUPABASE V36
 ════════════════════════════ */
 const OPERATIONAL_SUPABASE_TABLE_V36 = 'operational_data';
+const OPERATIONAL_DIRTY_AT_KEY_V430 = 'vs_operational_dirty_at_v430';
 
 const OPERATIONAL_DATA_KEYS_V36 = {
   leadCrm: 'vs_lead_crm_v1',
@@ -60,6 +61,42 @@ function getOperationalSnapshotV36() {
   };
 }
 
+function getOperationalDirtyKeyV430() {
+  const userId = String(currentUser?.id || '').trim();
+  const userEmail = String(currentUser?.email || '').trim().toLowerCase();
+  return `${OPERATIONAL_DIRTY_AT_KEY_V430}:${userId || 'anonymous'}:${userEmail || 'anonymous'}`;
+}
+
+function getOperationalDirtyAtV430() {
+  return localStorage.getItem(getOperationalDirtyKeyV430()) || '';
+}
+
+function markOperationalDataDirtyV430(reason = 'local-change') {
+  if (!currentUser?.id || !currentUser?.email) return '';
+  const dirtyAt = new Date().toISOString();
+  localStorage.setItem(getOperationalDirtyKeyV430(), dirtyAt);
+  uiSyncLogV426('optimistic-update', { entity:'operational-data', action:'mark-dirty', reason, dirtyAt });
+  return dirtyAt;
+}
+
+function clearOperationalDataDirtyV430(expectedDirtyAt = '') {
+  const key = getOperationalDirtyKeyV430();
+  const currentDirtyAt = localStorage.getItem(key) || '';
+  if (!expectedDirtyAt || currentDirtyAt === expectedDirtyAt) localStorage.removeItem(key);
+}
+
+function getOperationalRemoteUpdatedAtV430(row = {}) {
+  return row?.payload?.exportedAt || row?.updated_at || '';
+}
+
+function shouldPreserveLocalOperationalDataV430(row = {}) {
+  const dirtyAt = getOperationalDirtyAtV430();
+  const remoteUpdatedAt = getOperationalRemoteUpdatedAtV430(row);
+  if (!dirtyAt) return false;
+  if (!remoteUpdatedAt) return true;
+  return Date.parse(dirtyAt) > Date.parse(remoteUpdatedAt);
+}
+
 function restoreOperationalSnapshotV36(snapshot = {}) {
   const data = snapshot.data || {};
   const localLegacyChipsUpdatedAt = Date.parse(localStorage.getItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426) || '');
@@ -110,8 +147,10 @@ async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
   }
 
   const snapshot = getOperationalSnapshotV36();
+  const dirtyAtBeforeSync = getOperationalDirtyAtV430();
 
   setPersistenceStatusV36('Enviando dados operacionais para o Supabase...');
+  uiSyncLogV426('supabase-save-start', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null });
 
   try {
     const payload = {
@@ -127,14 +166,19 @@ async function syncOperationalDataToSupabaseV36({ silent = false } = {}) {
 
     if (error) throw error;
 
+    clearOperationalDataDirtyV430(dirtyAtBeforeSync);
     setPersistenceStatusV36('Dados operacionais sincronizados com sucesso.', 'ok');
+    uiSyncLogV426('supabase-save-success', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null });
     if (!silent) notify('Dados operacionais enviados ao Supabase.');
+    return { ok:true };
   } catch (err) {
+    uiSyncLogV426('supabase-save-error', { entity:'operational-data', dirtyAt:dirtyAtBeforeSync || null, error:err?.message || err });
     setPersistenceStatusV36(
       'Falha ao sincronizar. Verifique se a tabela operational_data existe.\n\n' +
       'Erro: ' + (err?.message || 'erro desconhecido'),
       'warn'
     );
+    return { error:err, pending:true };
   }
 }
 
@@ -158,10 +202,29 @@ async function loadOperationalDataFromSupabaseV36() {
     if (error) throw error;
 
     if (!data?.payload) {
+      if (getOperationalDirtyAtV430()) {
+        uiSyncLogV426('optimistic-update', { entity:'operational-data', action:'preserve-local-cache-without-remote-snapshot' });
+        scheduleOperationalSyncV36({ delay:0 });
+        setPersistenceStatusV36('Dados locais pendentes preservados. Enviando ao Supabase...', 'warn');
+        return true;
+      }
       setPersistenceStatusV36('Nenhum dado operacional encontrado no Supabase.', 'warn');
       return false;
     }
 
+    if (shouldPreserveLocalOperationalDataV430(data)) {
+      uiSyncLogV426('optimistic-update', {
+        entity:'operational-data',
+        action:'preserve-newer-local-cache',
+        dirtyAt:getOperationalDirtyAtV430(),
+        remoteUpdatedAt:getOperationalRemoteUpdatedAtV430(data)
+      });
+      scheduleOperationalSyncV36({ delay:0 });
+      setPersistenceStatusV36('Dados locais mais recentes preservados. Enviando ao Supabase...', 'warn');
+      return true;
+    }
+
+    clearOperationalDataDirtyV430();
     restoreOperationalSnapshotV36(data.payload);
     setPersistenceStatusV36('Dados carregados do Supabase e aplicados no CRM.', 'ok');
     notify('Dados operacionais carregados.');
@@ -279,6 +342,7 @@ function scheduleOperationalSyncV36({ delay = 1500 } = {}) {
 }
 
 function scheduleLegacyOperationalSyncV36(options = {}) {
+  markOperationalDataDirtyV430(options.reason || 'legacy-local-change');
   if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36(options);
 }
 

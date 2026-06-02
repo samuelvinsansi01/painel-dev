@@ -154,6 +154,16 @@ function importarLeads() {
 
   if (addedWhatsapp) saveValData(novaValFila);
   if (addedInstagram) saveInstaFila(novaInstaFila);
+  if (addedWhatsapp || addedInstagram) {
+    if (typeof markOperationalDataDirtyV430 === 'function') markOperationalDataDirtyV430('apify-import');
+    if (typeof syncOperationalDataToSupabaseV36 === 'function') {
+      syncOperationalDataToSupabaseV36({ silent:true }).catch(error => {
+        uiSyncLogV426('supabase-save-error', { entity:'apify-import-operational-data', error:error?.message || error });
+      });
+    } else if (typeof scheduleLegacyOperationalSyncV36 === 'function') {
+      scheduleLegacyOperationalSyncV36({ delay:0, reason:'apify-import' });
+    }
+  }
   updateBadges();
 
   let msg = `✓ ${addedWhatsapp} → Validação WhatsApp`;

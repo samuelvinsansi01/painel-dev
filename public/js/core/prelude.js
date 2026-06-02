@@ -308,7 +308,8 @@ function clearLocalSessionData() {
         key.startsWith('vs_whatsapp_outbox_v412:') ||
         key.startsWith('vs_evolution_responses_v34:') ||
         key.startsWith('vs_whatsapp_conversation_meta_v421:') ||
-        key.startsWith('vs_conversation_status_v412:')
+        key.startsWith('vs_conversation_status_v412:') ||
+        key.startsWith('vs_operational_dirty_at_v430:')
       ) localStorage.removeItem(key);
     });
   } catch(e){}
