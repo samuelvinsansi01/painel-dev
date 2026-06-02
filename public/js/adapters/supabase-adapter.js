@@ -40,20 +40,45 @@ class SupabaseAdapter {
 
     const payload = this.normalizeLead(lead, user.id, user.email);
 
+    // V29: preservar dados já existentes da ficha/canais quando um snapshot local antigo
+    // dispara um upsert parcial. O bug anterior mostrava "success", mas campos da ficha
+    // sumiam após F5 porque syncs globais reenviavam lead sem crm_data ou com canais vazios.
+    try {
+      const { data: existing, error: existingError } = await this.client
+        .from('leads')
+        .select('phone,instagram,website,maps_url,status,pipeline_status,crm_data')
+        .eq('user_id', user.id)
+        .eq('id', payload.id)
+        .maybeSingle();
+
+      if (!existingError && existing) {
+        ['phone', 'instagram', 'website', 'maps_url'].forEach(key => {
+          if (!String(payload[key] || '').trim() && String(existing[key] || '').trim()) {
+            payload[key] = existing[key];
+          }
+        });
+        if (!payload.crm_data && existing.crm_data) payload.crm_data = existing.crm_data;
+        if ((!payload.status || payload.status === 'Não enviada') && existing.status) payload.status = existing.status;
+        if ((!payload.pipeline_status || payload.pipeline_status === 'contato_enviado') && existing.pipeline_status) {
+          payload.pipeline_status = existing.pipeline_status;
+        }
+      }
+    } catch (mergeError) {
+      console.warn('[supabase-adapter] saveLead preserve-existing skipped:', mergeError?.message || mergeError);
+    }
+
     let { data, error } = await this.client
       .from('leads')
       .upsert(payload, { onConflict: 'id' })
       .select()
       .single();
 
-    // V28: não mascarar erro de coluna ausente. Antes o fallback removia crm_data/user_email,
-    // o console mostrava success, mas a ficha não persistia. Se isso acontecer, o SQL de
-    // persistência precisa ser executado no Supabase.
     if (error && /crm_data|user_email/i.test(String(error.message || ''))) {
       console.error('[supabase-adapter] saveLead schema missing: execute sql/lead_crm_data_persistence_v28.sql', error.message);
     }
 
     if (error) console.warn('[supabase-adapter] saveLead:', error.message, payload);
+    else console.log('[supabase-adapter][saveLead-success]', { id: payload.id, hasCrmData: !!payload.crm_data, channels: { phone: payload.phone, instagram: payload.instagram, website: payload.website, maps_url: payload.maps_url } });
     return { data, error };
   }
 

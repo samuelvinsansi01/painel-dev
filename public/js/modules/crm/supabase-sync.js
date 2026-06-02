@@ -90,15 +90,43 @@ async function upsertLeadToSupabase(lead = {}) {
   };
   if (crmData) payload.crm_data = crmData;
 
+  // V29: o sync global roda com snapshots locais antigos. Antes ele fazia upsert sem
+  // crm_data/canais e podia apagar links, notas e pipeline já salvos no banco. Agora,
+  // quando o payload local vier incompleto, preserva os valores não vazios já existentes.
+  try {
+    const { data: existing, error: existingError } = await sbClient
+      .from('leads')
+      .select('phone,instagram,website,maps_url,status,pipeline_status,crm_data')
+      .eq('user_id', currentUser.id)
+      .eq('id', payload.id)
+      .maybeSingle();
+
+    if (!existingError && existing) {
+      ['phone', 'instagram', 'website', 'maps_url'].forEach(key => {
+        if (!String(payload[key] || '').trim() && String(existing[key] || '').trim()) {
+          payload[key] = existing[key];
+        }
+      });
+      if (!payload.crm_data && existing.crm_data) payload.crm_data = existing.crm_data;
+      if ((!payload.status || payload.status === 'Não enviada') && existing.status) payload.status = existing.status;
+      if ((!payload.pipeline_status || payload.pipeline_status === 'contato_enviado') && existing.pipeline_status) {
+        payload.pipeline_status = existing.pipeline_status;
+      }
+      uiSyncLogV426('supabase-preserve-existing', { entity:'lead', id:lead.id, hasCrmData:!!payload.crm_data });
+    }
+  } catch (mergeError) {
+    console.warn('[supabase] preserve existing lead skipped:', mergeError?.message || mergeError);
+  }
+
   const { error } = await sbClient.from('leads').upsert(payload, { onConflict:'id' });
   if (error) {
-    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message, hasCrmData:!!crmData, payloadKeys:Object.keys(payload) });
+    uiSyncLogV426('supabase-save-error', { entity:'lead', id:lead.id, error:error.message, hasCrmData:!!payload.crm_data, payloadKeys:Object.keys(payload) });
     console.warn('[supabase] upsert lead:', error.message, payload);
     setSyncState({ lastError: error.message });
     return { error };
   }
 
-  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id, hasCrmData:!!crmData });
+  uiSyncLogV426('supabase-save-success', { entity:'lead', id:lead.id, hasCrmData:!!payload.crm_data });
   return { ok: true };
 }
 
