@@ -3,9 +3,13 @@
 ════════════════════════════ */
 function devolverZapNaoValidadoParaValidacao() {
   const data = ensureWeekData();
+  const weekLeadById = new Map(
+    Object.values(data.days || {}).flat().filter(lead => lead?.id).map(lead => [lead.id, lead])
+  );
   const validacao = getValData();
   const validacaoIds = new Set(validacao.map(lead => lead.id));
   const devolvidosIds = new Set();
+  let filaEnriquecida = false;
 
   const devolver = (lead = {}) => {
     if (!lead.id || devolvidosIds.has(lead.id)) return;
@@ -53,8 +57,25 @@ function devolverZapNaoValidadoParaValidacao() {
 
   Object.keys(filaDisparo || {}).forEach(chipId => {
     filaDisparo[chipId] = (filaDisparo[chipId] || []).filter(item => {
-      if (item.status === 'enviado' || isLeadWhatsappValidatedForQueue(item)) return true;
-      devolver(item);
+      const weekLead = weekLeadById.get(item.id) || {};
+      const validationCandidate = {
+        ...weekLead,
+        ...item,
+        numStatus: item.numStatus || weekLead.numStatus,
+        whatsappValidationStatus: item.whatsappValidationStatus || weekLead.whatsappValidationStatus
+      };
+      if (item.status === 'enviado' || isLeadWhatsappValidatedForQueue(validationCandidate)) {
+        if (!item.numStatus && validationCandidate.numStatus) {
+          item.numStatus = validationCandidate.numStatus;
+          filaEnriquecida = true;
+        }
+        if (!item.whatsappValidationStatus && validationCandidate.whatsappValidationStatus) {
+          item.whatsappValidationStatus = validationCandidate.whatsappValidationStatus;
+          filaEnriquecida = true;
+        }
+        return true;
+      }
+      devolver(validationCandidate);
       return false;
     });
   });
@@ -66,6 +87,8 @@ function devolverZapNaoValidadoParaValidacao() {
     saveFilaDisparo();
     saveValData(validacao);
     updateBadges();
+  } else if (filaEnriquecida) {
+    saveFilaDisparo({ delay:0, reason:'dispatch-queue-validation-hydrate' });
   }
 
   return devolvidosIds.size;
@@ -117,6 +140,47 @@ function saveFilaDisparo({ delay = 250, reason = 'dispatch-queue-save' } = {}) {
   scheduleLegacyOperationalSyncV36({ delay, reason });
 }
 
+function createDispatchQueueItemV433(emp = {}, overrides = {}) {
+  return {
+    id: emp.id,
+    nome: emp.nome,
+    site: emp.site || '',
+    whatsapp: emp.whatsapp,
+    mensagem: '',
+    templateIdx: -1,
+    ramoId: null,
+    numStatus: emp.numStatus || '',
+    whatsappValidationStatus: emp.whatsappValidationStatus || '',
+    status: 'aguardando',
+    aberto: false,
+    ...overrides
+  };
+}
+
+function hydrateRecoveredDispatchMessagesV433(chipId) {
+  if (!chipId || typeof getLoteRamo !== 'function' || typeof pickTemplate !== 'function') return 0;
+  const fila = getFilaChip(chipId);
+  const data = ensureWeekData();
+  let hydrated = 0;
+
+  Object.keys(data.days || {}).forEach(day => {
+    const idsNoDia = new Set((data.days[day] || []).map(lead => lead.id));
+    fila.filter(item => idsNoDia.has(item.id)).forEach((item, index) => {
+      if (String(item.mensagem || '').trim()) return;
+      const loteNum = Math.floor(index / getLoteSize()) + 1;
+      const ramoId = getLoteRamo(chipId, loteNum);
+      if (!ramoId) return;
+      const { text, idx } = pickTemplate(item.nome, ramoId);
+      item.ramoId = ramoId;
+      item.mensagem = text;
+      item.templateIdx = idx;
+      hydrated++;
+    });
+  });
+
+  return hydrated;
+}
+
 function recoverSingleChipQueueAssignmentsV431() {
   const chips = getChips();
   if (chips.length !== 1) return 0;
@@ -129,27 +193,19 @@ function recoverSingleChipQueueAssignmentsV431() {
   Object.values(data.days || {}).flat().forEach(emp => {
     if (!emp?.id || !emp.whatsapp || emp.status !== 'Em fila' || filaIds.has(emp.id)) return;
     filaIds.add(emp.id);
-    recovered.push({
-      id: emp.id,
-      nome: emp.nome,
-      site: emp.site || '',
-      whatsapp: emp.whatsapp,
-      mensagem: '',
-      templateIdx: -1,
-      ramoId: null,
-      status: 'aguardando',
-      aberto: false
-    });
+    recovered.push(createDispatchQueueItemV433(emp));
   });
 
   if (!recovered.length) return 0;
   fila.push(...recovered);
+  const hydrated = hydrateRecoveredDispatchMessagesV433(chips[0].id);
   saveFilaDisparo({ delay:0, reason:'dispatch-single-chip-orphan-recovery' });
   uiSyncLogV426('optimistic-update', {
     entity:'dispatch-queue',
     action:'recover-single-chip-orphans',
     chipId:chips[0].id,
-    count:recovered.length
+    count:recovered.length,
+    hydrated
   });
   return recovered.length;
 }
@@ -234,7 +290,7 @@ function toggleFilaSlotEmpresa(slot, empId) {
   }
   const jaEnviado = ['Enviada','Respondida','Não respondida','Recusada','Fechada'].includes(emp.status||'');
   const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
-  fila.push({ id: emp.id, nome: emp.nome, site: emp.site || '', whatsapp: emp.whatsapp, mensagem: '', templateIdx: -1, ramoId: null, status: filaStatus, aberto: false });
+  fila.push(createDispatchQueueItemV433(emp, { status:filaStatus }));
   if (!jaEnviado) {
     Object.keys(data.days).forEach(day => {
       const e = (data.days[day]||[]).find(e => e.id === empId);
@@ -271,7 +327,7 @@ function toggleFila(empId) {
     }
     const jaEnviado = emp.status === 'Enviada' || emp.status === 'Respondida' || emp.status === 'Não respondida' || emp.status === 'Recusada' || emp.status === 'Fechada';
     const filaStatus = jaEnviado ? 'enviado' : 'aguardando';
-    fila.push({ id: emp.id, nome: emp.nome, site: emp.site || '', whatsapp: emp.whatsapp, mensagem: '', templateIdx: -1, ramoId: null, status: filaStatus, aberto: false });
+    fila.push(createDispatchQueueItemV433(emp, { status:filaStatus }));
     if (!jaEnviado) {
       Object.keys(data.days).forEach(day => {
         const e = (data.days[day]||[]).find(e => e.id === empId);
