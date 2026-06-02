@@ -404,9 +404,11 @@ if (typeof renderCommercialDashboard !== 'function') {
 
 async function validateActiveLeadWhatsapp() {
   if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+  whatsappValidationLogV427('start', { leadId:activeLeadDrawerId, lead:activeLeadDrawerData });
 
   const cfg = getEvolutionConfigForChipV405();
   const phone = normalizePhoneForEvolution(activeLeadDrawerData.whatsapp || activeLeadDrawerData.phone || activeLeadDrawerData.telefone || '');
+  whatsappValidationLogV427('phone', { leadId:activeLeadDrawerId, phone });
 
   if (!phone || phone.length < 10) {
     setLeadWhatsappStatus(activeLeadDrawerId, {
@@ -445,8 +447,10 @@ async function validateActiveLeadWhatsapp() {
     });
 
     const data = await res.json().catch(() => ({}));
-    const item = Array.isArray(data) ? data[0] : (data?.data?.[0] || data?.result?.[0] || data);
-    const exists = !!item?.exists;
+    const parsed = parseWhatsappNumberCheckV427(data);
+    const item = parsed.item;
+    const exists = parsed.exists;
+    whatsappValidationLogV427('response', { leadId:activeLeadDrawerId, phone, httpStatus:res.status, exists, data });
 
     if (!res.ok) {
       setLeadWhatsappStatus(activeLeadDrawerId, {
@@ -464,6 +468,7 @@ async function validateActiveLeadWhatsapp() {
         number: phone,
         raw: item
       });
+      applyWhatsappValidationToLeadV427(activeLeadDrawerId, phone, 'valid');
       addLeadHistory(activeLeadDrawerId, `WhatsApp validado: ${phone}`, activeLeadDrawerData);
       notify('WhatsApp válido.');
     } else {
@@ -473,6 +478,7 @@ async function validateActiveLeadWhatsapp() {
         number: phone,
         raw: item
       });
+      applyWhatsappValidationToLeadV427(activeLeadDrawerId, phone, 'invalid');
       addLeadHistory(activeLeadDrawerId, `WhatsApp não confirmado: ${phone}`, activeLeadDrawerData);
       notify('WhatsApp não confirmado.', 'warn');
     }

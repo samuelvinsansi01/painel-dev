@@ -1,6 +1,10 @@
 /* ════════════════════════════
    LEAD PRESENTATIONS V16.1 VISIBILITY FIX
 ════════════════════════════ */
+function presentationLogV427(event, payload = {}) {
+  try { console.log(`[lead-presentations][${event}]`, payload); } catch (_) {}
+}
+
 function ensureLeadPresentationsContainer() {
   if (document.getElementById('leadPresentationsList')) return true;
 
@@ -53,6 +57,7 @@ function presentationPublicUrl(presentation) {
 }
 
 function renderLeadPresentations() {
+  presentationLogV427('render', { leadId: activeLeadDrawerId });
   ensureLeadPresentationsContainer();
   const list = document.getElementById('leadPresentationsList');
   if (!list || !activeLeadDrawerId) return;
@@ -87,6 +92,7 @@ function renderLeadPresentations() {
 
 async function addLeadPresentation() {
   if (!activeLeadDrawerId) return;
+  presentationLogV427('add-click', { leadId: activeLeadDrawerId });
 
   const titleEl = document.getElementById('leadPresentationTitle');
   const deskEl = document.getElementById('leadPresentationDeskUrl');
@@ -126,6 +132,7 @@ async function addLeadPresentation() {
 
   crm.presentations.push(presentation);
   saveLeadCrm(activeLeadDrawerId, crm);
+  presentationLogV427('add-local-success', { leadId: activeLeadDrawerId, presentation });
 
   addLeadHistory(activeLeadDrawerId, `Apresentação vinculada: ${title}`, activeLeadDrawerData || {});
 
@@ -143,6 +150,7 @@ async function addLeadPresentation() {
 
     if (res.ok) {
       const data = await res.json();
+      presentationLogV427('shorten-success', { leadId: activeLeadDrawerId, data });
       const store = getLeadCrmStore();
       const current = store[activeLeadDrawerId];
       const found = current?.presentations?.find(p => p.id === presentation.id);
@@ -153,6 +161,7 @@ async function addLeadPresentation() {
       saveLeadCrmStore(store);
     }
   } catch (err) {
+    presentationLogV427('shorten-error', { leadId: activeLeadDrawerId, error: err?.message || err });
     console.warn('[presentations] api shorten indisponível:', err?.message || err);
   }
 
@@ -167,6 +176,7 @@ async function addLeadPresentation() {
 
 function removeLeadPresentation(id) {
   if (!activeLeadDrawerId) return;
+  presentationLogV427('remove-click', { leadId: activeLeadDrawerId, presentationId: id });
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
   const item = (crm.presentations || []).find(p => p.id === id);
   crm.presentations = (crm.presentations || []).filter(p => p.id !== id);
@@ -178,6 +188,7 @@ function removeLeadPresentation(id) {
 }
 
 function copyLeadPresentationUrl(url) {
+  presentationLogV427('copy-url', { leadId: activeLeadDrawerId, url });
   navigator.clipboard?.writeText(url);
   notify('Link copiado.');
 }

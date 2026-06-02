@@ -14,6 +14,153 @@ const PIPELINE_STEPS = [
 let activeLeadDrawerId = null;
 let activeLeadDrawerData = null;
 
+
+/* ════════════════════════════
+   LEAD DRAWER CONSISTENCY + DEBUG V427
+   - centraliza logs da ficha
+   - mantém dados do lead atual sincronizados entre listas locais
+   - agenda sync operacional para campos que ainda vivem em leadCrm
+════════════════════════════ */
+function leadDrawerLogV427(event, payload = {}) {
+  try { console.log(`[lead-drawer][${event}]`, payload); } catch (_) {}
+}
+
+function normalizeChannelUrlV427(kind, value = '') {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+  if (kind === 'whatsapp') {
+    const phone = raw.replace(/\D/g, '');
+    return phone ? `https://wa.me/${phone}` : '';
+  }
+  if (/^https?:\/\//i.test(raw)) return raw;
+  if (kind === 'instagram') return raw.replace(/^@/, '') ? `https://instagram.com/${raw.replace(/^@/, '')}` : '';
+  if (kind === 'site' || kind === 'maps') return `https://${raw}`;
+  return raw;
+}
+
+function patchLeadArrayV427(items, id, patch) {
+  let changed = false;
+  const next = (Array.isArray(items) ? items : []).map(item => {
+    if (!item || item.id !== id) return item;
+    changed = true;
+    return { ...item, ...patch };
+  });
+  return { next, changed };
+}
+
+function patchWeekLeadV427(id, patch) {
+  if (typeof ensureWeekData !== 'function' || typeof saveWeekData !== 'function') return false;
+  const data = ensureWeekData();
+  let changed = false;
+  Object.keys(data.days || {}).forEach(day => {
+    const result = patchLeadArrayV427(data.days[day], id, patch);
+    if (result.changed) {
+      data.days[day] = result.next;
+      changed = true;
+    }
+  });
+  if (changed) saveWeekData(data);
+  return changed;
+}
+
+function updateLeadEverywhereV427(id, patch = {}, options = {}) {
+  if (!id || !patch || typeof patch !== 'object') return { changed:false };
+  const touched = [];
+
+  if (patchWeekLeadV427(id, patch)) touched.push('weekly');
+
+  const patchStorageArray = (name, getter, saver) => {
+    if (typeof getter !== 'function' || typeof saver !== 'function') return;
+    const result = patchLeadArrayV427(getter(), id, patch);
+    if (result.changed) {
+      saver(result.next);
+      touched.push(name);
+    }
+  };
+
+  patchStorageArray('validation', typeof getValData === 'function' ? getValData : null, typeof saveValData === 'function' ? saveValData : null);
+  patchStorageArray('assignment', typeof getAtribuicaoData === 'function' ? getAtribuicaoData : null, typeof saveAtribuicaoData === 'function' ? saveAtribuicaoData : null);
+  patchStorageArray('instagram', typeof getInstaFila === 'function' ? getInstaFila : null, typeof saveInstaFila === 'function' ? saveInstaFila : null);
+
+  if (typeof getAcompData === 'function' && typeof saveAcompData === 'function') {
+    const acomp = getAcompData();
+    let changed = false;
+    Object.keys(acomp || {}).forEach(month => {
+      const result = patchLeadArrayV427(acomp[month], id, patch);
+      if (result.changed) {
+        acomp[month] = result.next;
+        changed = true;
+      }
+    });
+    if (changed) { saveAcompData(acomp); touched.push('tracking'); }
+  }
+
+  if (typeof filaDisparo !== 'undefined' && filaDisparo && typeof saveFilaDisparo === 'function') {
+    let changed = false;
+    Object.keys(filaDisparo || {}).forEach(key => {
+      const result = patchLeadArrayV427(filaDisparo[key], id, patch);
+      if (result.changed) {
+        filaDisparo[key] = result.next;
+        changed = true;
+      }
+    });
+    if (changed) { saveFilaDisparo(); touched.push('dispatchQueue'); }
+  }
+
+  if (typeof getLeadBaseData === 'function' && typeof LEADS_BASE_KEY !== 'undefined') {
+    const result = patchLeadArrayV427(getLeadBaseData(), id, patch);
+    if (result.changed) {
+      localStorage.setItem(LEADS_BASE_KEY, JSON.stringify(result.next));
+      touched.push('permanentBase');
+    }
+  }
+
+  if (activeLeadDrawerId === id && activeLeadDrawerData) {
+    activeLeadDrawerData = normalizeLeadForDrawer({ ...activeLeadDrawerData, ...patch, id });
+    touched.push('activeDrawer');
+  }
+
+  if (typeof scheduleLegacyOperationalSyncV36 === 'function') scheduleLegacyOperationalSyncV36();
+  if (typeof updateBadges === 'function') updateBadges();
+  if (options.render !== false && activeLeadDrawerId === id) {
+    try { renderLeadDrawer(); } catch (_) {}
+    try { renderLeadWhatsappValidation(); } catch (_) {}
+    try { renderLeadMessageBox(); } catch (_) {}
+  }
+  leadDrawerLogV427('lead-patch', { id, patch, touched });
+  return { changed: touched.length > 0, touched };
+}
+
+function editLeadChannelV427(kind) {
+  if (!activeLeadDrawerId || !activeLeadDrawerData) return;
+  const labels = { whatsapp:'WhatsApp', instagram:'Instagram', site:'Site', maps:'Maps' };
+  const fieldMap = {
+    whatsapp: ['whatsapp', 'phone', 'telefone'],
+    instagram: ['instagram'],
+    site: ['site', 'website'],
+    maps: ['googleUrl', 'mapsUrl']
+  };
+  const fields = fieldMap[kind] || [kind];
+  const current = fields.map(f => activeLeadDrawerData[f]).find(Boolean) || '';
+  const value = prompt(`Atualizar ${labels[kind] || kind}:`, current);
+  if (value === null) return;
+  const clean = kind === 'whatsapp' ? String(value || '').replace(/\D/g, '') : String(value || '').trim();
+  const patch = {};
+  fields.forEach(f => { patch[f] = clean; });
+  if (kind === 'whatsapp') {
+    patch.numStatus = 'pendente';
+    patch.whatsappValidationStatus = 'pending';
+    const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
+    crm.whatsappValidation = { status:'pending', label:'Não validado', number:clean, checkedAt:'', checkedAtLabel:'' };
+    saveLeadCrm(activeLeadDrawerId, crm);
+  }
+  updateLeadEverywhereV427(activeLeadDrawerId, patch);
+  if (typeof syncLeadToCloud === 'function') syncLeadToCloud(activeLeadDrawerId, { ...activeLeadDrawerData, ...patch });
+  addLeadHistory(activeLeadDrawerId, `${labels[kind] || kind} atualizado`, { ...activeLeadDrawerData, ...patch });
+  leadDrawerLogV427('channel-edit', { leadId:activeLeadDrawerId, kind, value:clean });
+  notify(`${labels[kind] || 'Canal'} atualizado.`);
+}
+
 function getLeadCrmStore() {
   try { return LeadService.getLeadCrmStore(); }
   catch { return {}; }
@@ -283,6 +430,8 @@ function saveLeadCrm(id, crm) {
   const store = getLeadCrmStore();
   store[id] = { ...crm, updatedAt: new Date().toISOString() };
   saveLeadCrmStore(store);
+  if (typeof scheduleLegacyOperationalSyncV36 === 'function') scheduleLegacyOperationalSyncV36();
+  leadDrawerLogV427('crm-save', { leadId:id, keys:Object.keys(store[id] || {}) });
 }
 
 function setLeadPersistenceStatusV426(id, status = '', error = '') {
@@ -473,9 +622,13 @@ function normalizeLeadForDrawer(lead = {}) {
   };
 }
 
-function leadDrawerLink(label, value, href, missingText = 'não informado') {
-  if (!value) return `<div class="lead-channel missing"><strong>${label}</strong><span>${missingText}</span></div>`;
-  return `<a class="lead-channel" href="${escHtml(href || value)}" target="_blank" rel="noopener"><strong>${label}</strong><span>${escHtml(value)}</span></a>`;
+function leadDrawerLink(label, value, href, missingText = 'não informado', kind = '') {
+  const safeKind = escHtml(kind || label.toLowerCase());
+  if (!value) {
+    return `<div class="lead-channel missing"><strong>${label}</strong><span>${missingText}</span><button type="button" class="lead-channel-edit" onclick="event.preventDefault();event.stopPropagation();editLeadChannelV427('${safeKind}')">Editar</button></div>`;
+  }
+  const url = href || normalizeChannelUrlV427(kind, value) || value;
+  return `<div class="lead-channel"><strong>${label}</strong><span>${escHtml(value)}</span><div class="lead-channel-actions"><a href="${escHtml(url)}" target="_blank" rel="noopener">Abrir</a><button type="button" onclick="event.preventDefault();event.stopPropagation();editLeadChannelV427('${safeKind}')">Editar</button></div></div>`;
 }
 
 function renderLeadDrawer() {
@@ -500,10 +653,10 @@ function renderLeadDrawer() {
 
   const wa = String(lead.whatsapp || '').replace(/\D/g, '');
   channelsEl.innerHTML = [
-    leadDrawerLink('WhatsApp', wa ? `+${wa}` : '', wa ? `https://wa.me/${wa}` : ''),
-    leadDrawerLink('Instagram', lead.instagram, lead.instagram),
-    leadDrawerLink('Site', lead.site, lead.site),
-    leadDrawerLink('Maps', lead.googleUrl, lead.googleUrl),
+    leadDrawerLink('WhatsApp', wa ? `+${wa}` : '', wa ? `https://wa.me/${wa}` : '', 'não informado', 'whatsapp'),
+    leadDrawerLink('Instagram', lead.instagram, lead.instagram, 'não informado', 'instagram'),
+    leadDrawerLink('Site', lead.site, lead.site, 'não informado', 'site'),
+    leadDrawerLink('Maps', lead.googleUrl, lead.googleUrl, 'não informado', 'maps'),
   ].join('');
 
   pipelineEl.innerHTML = PIPELINE_STEPS.map(step => `
@@ -550,6 +703,7 @@ function openLeadDrawer(id) {
   }
   activeLeadDrawerId = id;
   activeLeadDrawerData = normalizeLeadForDrawer(raw);
+  leadDrawerLogV427('open', { id, raw, normalized: activeLeadDrawerData });
   ensureLeadCrm(id, activeLeadDrawerData);
   renderLeadDrawer();
   renderLeadWhatsappValidation();
@@ -570,6 +724,7 @@ function closeLeadDrawer() {
 
 function addLeadNote() {
   if (!activeLeadDrawerId) return;
+  leadDrawerLogV427('note-add-click', { leadId: activeLeadDrawerId });
   const input = document.getElementById('leadNoteInput');
   const text = (input?.value || '').trim();
   if (!text) { notify('Escreva uma nota antes de adicionar.', 'warn'); return; }
@@ -588,12 +743,14 @@ function addLeadNote() {
 
 function updateLeadPipeline(status) {
   if (!activeLeadDrawerId) return;
+  leadDrawerLogV427('pipeline-click', { leadId: activeLeadDrawerId, status });
   const step = PIPELINE_STEPS.find(s => s.id === status);
   if (!step) return;
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
   const old = PIPELINE_STEPS.find(s => s.id === crm.pipelineStatus)?.label || 'Sem status';
   crm.pipelineStatus = status;
   saveLeadCrm(activeLeadDrawerId, crm);
+  updateLeadEverywhereV427(activeLeadDrawerId, { pipelineStatus: status }, { render:false });
 
   uiSyncLogV426('optimistic-update', { entity:'lead', action:'pipeline-update', id:activeLeadDrawerId, status });
   syncLeadToCloud(activeLeadDrawerId, activeLeadDrawerData || {});
@@ -604,6 +761,7 @@ function updateLeadPipeline(status) {
 
 function saveLeadFollowUp() {
   if (!activeLeadDrawerId) return;
+  leadDrawerLogV427('followup-save-click', { leadId: activeLeadDrawerId });
   const input = document.getElementById('leadFollowUpDate');
   const dateIso = (input?.value || '').trim();
   if (!dateIso) {
@@ -631,6 +789,7 @@ function saveLeadFollowUp() {
 
 function clearLeadFollowUp() {
   if (!activeLeadDrawerId) return;
+  leadDrawerLogV427('followup-clear-click', { leadId: activeLeadDrawerId });
   const crm = ensureLeadCrm(activeLeadDrawerId, activeLeadDrawerData || {});
   if (!crm.followUpDate) {
     notify('Este lead não possui follow-up agendado.', 'warn');

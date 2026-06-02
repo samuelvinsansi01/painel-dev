@@ -2963,3 +2963,23 @@ body.auth-locked .app{
 .account-v426-actions-card{display:flex;align-items:center;justify-content:space-between;gap:16px;flex-wrap:wrap}
 .account-v426-actions{display:flex;gap:8px;flex-wrap:wrap}
 @media(max-width:760px){.account-v426-grid{grid-template-columns:1fr}.account-v426-list>div{display:grid;gap:5px}.account-v426-list strong{text-align:left}}
+
+/* Lead drawer channel edit actions V427 */
+.lead-channel { position: relative; gap: 4px; }
+.lead-channel .lead-channel-actions { display:flex; gap:8px; align-items:center; margin-top:6px; }
+.lead-channel .lead-channel-actions a,
+.lead-channel .lead-channel-actions button,
+.lead-channel .lead-channel-edit {
+  border: 1px solid rgba(255,255,255,.12);
+  background: rgba(255,255,255,.04);
+  color: var(--muted);
+  border-radius: 10px;
+  padding: 5px 8px;
+  font-size: 10px;
+  cursor: pointer;
+  text-decoration: none;
+  font-family: inherit;
+}
+.lead-channel .lead-channel-actions a:hover,
+.lead-channel .lead-channel-actions button:hover,
+.lead-channel .lead-channel-edit:hover { color: var(--accent); border-color: rgba(178,255,74,.35); }
