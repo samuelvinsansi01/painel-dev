@@ -20,9 +20,18 @@ function getCurrentUserIdForWhatsappStorageV423(){
   try { return currentUser?.id ? String(currentUser.id) : ''; } catch(e) { return ''; }
 }
 
+function getCurrentUserEmailForWhatsappStorageV425(){
+  try { return currentUser?.email ? String(currentUser.email).trim().toLowerCase() : ''; } catch(e) { return ''; }
+}
+
+function isCurrentWhatsappUserReadyV425(){
+  return !!(getCurrentUserIdForWhatsappStorageV423() && getCurrentUserEmailForWhatsappStorageV425());
+}
+
 function scopedWhatsappStorageKeyV423(baseKey){
   const userId = getCurrentUserIdForWhatsappStorageV423();
-  return userId ? `${baseKey}:${userId}` : `${baseKey}:anonymous`;
+  const email = getCurrentUserEmailForWhatsappStorageV425();
+  return (userId && email) ? `${baseKey}:${userId}:${email}` : `${baseKey}:anonymous`;
 }
 
 async function getSupabaseAuthHeadersV423(extra = {}){
@@ -32,6 +41,7 @@ async function getSupabaseAuthHeadersV423(extra = {}){
     const token = data?.session?.access_token || '';
     if (token) headers.Authorization = `Bearer ${token}`;
     if (currentUser?.id) headers['x-supabase-user-id'] = currentUser.id;
+    if (currentUser?.email) headers['x-supabase-user-email'] = String(currentUser.email).trim().toLowerCase();
   } catch(e) {}
   return headers;
 }
@@ -170,7 +180,7 @@ function findWhatsappLeadCandidatesForMapV417(query = '') {
 }
 
 async function fetchContactMapsV418() {
-  if (!currentUser?.id) return [];
+  if (!currentUser?.id || !currentUser?.email) return [];
   try {
     const res = await fetch(`/api/whatsapp/contact-map?user_id=${encodeURIComponent(currentUser.id)}`, {
       headers: await getSupabaseAuthHeadersV423()
@@ -481,7 +491,7 @@ async function associateContactMapLeadV418(leadId = '') {
   if (!lead) { notify('Lead não encontrado.', 'warn'); return; }
   const phoneReal = normalizeWhatsappDigitsV412(lead.whatsapp || lead.phone || lead.telefone || '');
   if (!phoneReal) { notify('Lead selecionado está sem telefone.', 'warn'); return; }
-  if (!currentUser?.id) { notify('Usuário não autenticado.', 'warn'); return; }
+  if (!currentUser?.id || !currentUser?.email) { notify('Usuário não autenticado.', 'warn'); return; }
 
   debugContactMapV418('[associate]', { lid:state.lid, leadId:lead.id, phoneReal, instance:state.instance });
   try {
@@ -490,6 +500,7 @@ async function associateContactMapLeadV418(leadId = '') {
       headers: await getSupabaseAuthHeadersV423({ 'Content-Type':'application/json' }),
       body: JSON.stringify({
         user_id: currentUser.id,
+        user_email: String(currentUser.email || '').trim().toLowerCase(),
         instance: state.instance || 'prospecto',
         lid: state.lid,
         lead_id: lead.id,
@@ -1179,6 +1190,12 @@ async function persistOutgoingWhatsappMessageV412(message = {}, options = {}) {
   };
 
   debugWhatsappPersistV413('payload', payload);
+
+  if (!currentUser?.id || !currentUser?.email || payload.userId !== currentUser.id) {
+    debugWhatsappPersistV413('blocked:auth-mismatch', { currentUserId:currentUser?.id || '', currentUserEmail:currentUser?.email || '', payloadUserId:payload.userId });
+    if (queueOnFailure) queuePendingOutgoingWhatsappMessageV412(payload);
+    return { ok:false, pending:queueOnFailure, error:'Usuário autenticado inválido para salvar mensagem' };
+  }
 
   if (!payload.id || !payload.instance || !payload.phone || !payload.text || !payload.userId) {
     debugWhatsappPersistV413('blocked:missing-data', { payload, missing: { id:!payload.id, instance:!payload.instance, phone:!payload.phone, text:!payload.text, userId:!payload.userId } });

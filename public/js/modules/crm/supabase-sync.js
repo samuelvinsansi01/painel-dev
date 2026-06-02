@@ -26,7 +26,7 @@ function setSyncState(data = {}) {
 }
 
 function isSupabaseReady() {
-  return !!(sbClient && currentUser);
+  return !!(sbClient && currentUser?.id && currentUser?.email);
 }
 
 function renderSyncStatus() {
@@ -49,7 +49,8 @@ function renderSyncStatus() {
 }
 
 async function upsertLeadToSupabase(lead = {}) {
-  if (!isSupabaseReady() || !lead.id) return { skipped: true };
+  if (!isSupabaseReady() || !lead.id) return { skipped: true, reason:'auth-or-lead-missing' };
+  try { requireCurrentAuthIdentityV25('upsertLeadToSupabase'); } catch(error) { return { skipped:true, error }; }
 
   const payload = {
     id: lead.id,

@@ -88,9 +88,36 @@ const sbClient = window.supabase
   : null;
 let currentUser = null;
 const AUTH_LOCAL_USER_KEY_V423 = 'vs_auth_local_user_v423';
+const AUTH_LOCAL_EMAIL_KEY_V425 = 'vs_auth_local_email_v425';
 const supabaseDataAdapter = (sbClient && window.SupabaseAdapter)
   ? new window.SupabaseAdapter(sbClient)
   : null;
+
+
+/* V25 — identidade autenticada obrigatória para evitar dados órfãos ou vazamento entre contas. */
+function getCurrentAuthIdentityV25() {
+  const id = currentUser?.id ? String(currentUser.id).trim() : '';
+  const email = currentUser?.email ? String(currentUser.email).trim().toLowerCase() : '';
+  return { id, email, ok: !!(id && email) };
+}
+
+function requireCurrentAuthIdentityV25(context = 'operação protegida') {
+  const identity = getCurrentAuthIdentityV25();
+  if (!identity.ok) {
+    console.warn('[user-isolation][auth-required]', { context, currentUserId: identity.id, currentUserEmail: identity.email });
+    throw new Error('Usuário autenticado com email é obrigatório para esta operação.');
+  }
+  return identity;
+}
+
+function getScopedUserCacheKeyV25(baseKey = '') {
+  const identity = getCurrentAuthIdentityV25();
+  return identity.ok ? `${baseKey}:${identity.id}:${identity.email}` : `${baseKey}:anonymous`;
+}
+
+function userIsolationLogV25(step, data = {}) {
+  try { console.log(`[user-isolation]${step}`, data); } catch(e) {}
+}
 
 const STATUS_OPTIONS = ['Não enviada','Em fila','Enviada','Respondida','Não respondida','Recusada','Fechada'];
 const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
@@ -101,7 +128,8 @@ const WEEKDAY_NAMES  = ['Dom','Seg','Ter','Qua','Qui','Sex','Sáb'];
    AUTH GATE V20.2 FIXED
 ════════════════════════════ */
 function isAuthenticated() {
-  return !!(currentUser && currentUser.id);
+  const identity = getCurrentAuthIdentityV25();
+  return identity.ok;
 }
 
 function showAuthGate() {
@@ -243,6 +271,7 @@ function clearLocalSessionData() {
   try { supabaseWhatsappMessagesCacheV412 = []; } catch(e){}
   try { whatsappContactMapCacheV418 = []; } catch(e){}
   try { localStorage.removeItem(AUTH_LOCAL_USER_KEY_V423); } catch(e){}
+  try { localStorage.removeItem(AUTH_LOCAL_EMAIL_KEY_V425); } catch(e){}
   updateAuthGate();
   try { updateChipsBadge(); } catch(e){}
   try { renderChipsPanel(); } catch(e){}
@@ -261,11 +290,14 @@ async function initAuth() {
   if (error) console.warn('[auth] getSession:', error.message);
   currentUser = data?.session?.user || null;
   const lastLocalUserId = localStorage.getItem(AUTH_LOCAL_USER_KEY_V423) || '';
+  const lastLocalUserEmail = localStorage.getItem(AUTH_LOCAL_EMAIL_KEY_V425) || '';
   if (currentUser?.id) {
-    if (lastLocalUserId && lastLocalUserId !== currentUser.id) {
+    const currentEmail = String(currentUser.email || '').trim().toLowerCase();
+    if ((lastLocalUserId && lastLocalUserId !== currentUser.id) || (lastLocalUserEmail && lastLocalUserEmail !== currentEmail)) {
       clearLocalSessionData();
     }
     localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
+    localStorage.setItem(AUTH_LOCAL_EMAIL_KEY_V425, currentEmail);
   }
   
   if (!currentUser) {
@@ -277,12 +309,17 @@ renderAuthUser(currentUser);
 
   sbClient.auth.onAuthStateChange(async (_event, session) => {
     const previousUserId = currentUser?.id || '';
+    const previousUserEmail = String(currentUser?.email || '').trim().toLowerCase();
     const nextUserId = session?.user?.id || '';
-    if (previousUserId && nextUserId && previousUserId !== nextUserId) {
+    const nextUserEmail = String(session?.user?.email || '').trim().toLowerCase();
+    if ((previousUserId && nextUserId && previousUserId !== nextUserId) || (previousUserEmail && nextUserEmail && previousUserEmail !== nextUserEmail)) {
       clearLocalSessionData();
     }
     currentUser = session?.user || null;
-    if (currentUser?.id) localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
+    if (currentUser?.id) {
+      localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
+      localStorage.setItem(AUTH_LOCAL_EMAIL_KEY_V425, String(currentUser.email || '').trim().toLowerCase());
+    }
     renderAuthUser(currentUser);
     updateAuthGate();
 

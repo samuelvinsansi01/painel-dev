@@ -30,7 +30,7 @@ class SupabaseAdapter {
 
   async saveLead(lead = {}) {
     const user = await this.getUser();
-    if (!user || !lead?.id) return { data: null, error: null };
+    if (!user?.id || !user?.email || !lead?.id) return { data: null, error: null };
 
     const payload = this.normalizeLead(lead, user.id);
 
@@ -47,7 +47,7 @@ class SupabaseAdapter {
   async saveNote(lead = {}, noteText = '') {
     const user = await this.getUser();
     const text = String(noteText || '').trim();
-    if (!user || !lead?.id || !text) return { data: null, error: null };
+    if (!user?.id || !user?.email || !lead?.id || !text) return { data: null, error: null };
 
     await this.saveLead(lead);
 
@@ -68,7 +68,7 @@ class SupabaseAdapter {
   async saveHistory(lead = {}, eventText = '') {
     const user = await this.getUser();
     const event = String(eventText || '').trim();
-    if (!user || !lead?.id || !event) return { data: null, error: null };
+    if (!user?.id || !user?.email || !lead?.id || !event) return { data: null, error: null };
 
     await this.saveLead(lead);
 
@@ -102,7 +102,7 @@ class SupabaseAdapter {
   async saveFollowUp(lead = {}, dateIso = '') {
     const user = await this.getUser();
     const followupDate = String(dateIso || '').trim();
-    if (!user || !lead?.id || !followupDate) return { data: null, error: null };
+    if (!user?.id || !user?.email || !lead?.id || !followupDate) return { data: null, error: null };
 
     await this.saveLead(lead);
 
@@ -129,7 +129,7 @@ class SupabaseAdapter {
 
   async clearFollowUp(lead = {}) {
     const user = await this.getUser();
-    if (!user || !lead?.id) return { data: null, error: null };
+    if (!user?.id || !user?.email || !lead?.id) return { data: null, error: null };
 
     const { data, error } = await this.client
       .from('lead_followups')

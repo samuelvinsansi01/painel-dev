@@ -17,7 +17,7 @@ function getCurrentUserEmailV24(){
 function getCurrentUserChipScopeV24(){
   const userId = getCurrentUserIdV22();
   const email = getCurrentUserEmailV24();
-  return userId ? `${userId}:${email || 'no-email'}` : 'anonymous';
+  return (userId && email) ? `${userId}:${email}` : 'anonymous';
 }
 
 function scopedWhatsappChipsKeyV22(){
@@ -188,7 +188,7 @@ function getWhatsappChipsV29(){
 function saveWhatsappChipsV29(list){
   const safeList = Array.isArray(list) ? list : [];
   setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
-  if (getCurrentUserIdV22()) {
+  if (getCurrentUserIdV22() && getCurrentUserEmailV24()) {
     localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(safeList));
     console.log('[user-isolation][chip-cache]', { currentUserId:getCurrentUserIdV22(), currentUserEmail:getCurrentUserEmailV24(), key:scopedWhatsappChipsKeyV22(), count:safeList.length });
     localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
@@ -199,7 +199,7 @@ function saveWhatsappChipsV29(list){
 
 function getChipUsageV29(){
   try {
-    if (!getCurrentUserIdV22()) return { day: todayUsageKeyV29(), chips:{} };
+    if (!getCurrentUserIdV22() || !getCurrentUserEmailV24()) return { day: todayUsageKeyV29(), chips:{} };
     const usage = JSON.parse(localStorage.getItem(scopedChipUsageKeyV22()) || '{}');
     if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return { day: todayUsageKeyV29(), chips:{} };
     if (usage.day !== todayUsageKeyV29()) return { day: todayUsageKeyV29(), chips:{} };
@@ -208,7 +208,7 @@ function getChipUsageV29(){
 }
 
 function saveChipUsageV29(usage){
-  if (!getCurrentUserIdV22()) return;
+  if (!getCurrentUserIdV22() || !getCurrentUserEmailV24()) return;
   localStorage.setItem(scopedChipUsageKeyV22(), JSON.stringify(usage));
 }
 
