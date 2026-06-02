@@ -89,6 +89,31 @@ function mergeSupabaseWhatsappChipsWithLocalCacheV426(dbChips = []){
   return merged;
 }
 
+function mergeWhatsappChipsIntoLegacyCacheV426(chips = []){
+  if (typeof getChips !== 'function') return;
+  const legacyChips = getChips();
+  let changed = false;
+
+  chips.forEach(chip => {
+    const instance = String(chip.instance || '').trim();
+    if (!instance) return;
+    const existing = legacyChips.find(item => item.id === chip.id || item.instance === instance);
+    const mapped = {
+      id: existing?.id || chip.id,
+      nome: chip.nome || chip.name || existing?.nome || instance,
+      url: chip.url || chip.baseUrl || chip.evolutionUrl || existing?.url || '',
+      instance,
+      key: chip.key || chip.apiKey || existing?.key || '',
+      status: chip.connectionState || existing?.status || 'salvo no banco'
+    };
+    if (existing) Object.assign(existing, mapped);
+    else legacyChips.push(mapped);
+    changed = true;
+  });
+
+  if (changed) localStorage.setItem(CHIPS_KEY, JSON.stringify(legacyChips));
+}
+
 async function loadWhatsappChipsFromSupabaseV22(){
   if (!isSupabaseChipStoreReadyV22()) {
     console.log('[user-isolation][chip-load]', { allowed:false, reason:'missing authenticated user/email' });
@@ -114,6 +139,8 @@ async function loadWhatsappChipsFromSupabaseV22(){
     const chips = mergeSupabaseWhatsappChipsWithLocalCacheV426(dbChips);
 
     storeWhatsappChipsCacheV426(chips);
+    mergeWhatsappChipsIntoLegacyCacheV426(chips);
+    if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
     // Remove caches legados/globais para impedir vazamento entre contas no mesmo navegador.
     localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
     try {

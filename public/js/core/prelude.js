@@ -66,6 +66,7 @@ const EVO_KEY        = 'vs_evo_config_v2';
 const SIDEBAR_KEY    = 'vs_sidebar';
 const EXCLUDED_KEY   = 'vs_excluded_domains';
 const CHIPS_KEY      = 'vs_chips_v2';
+const LEGACY_CHIPS_UPDATED_AT_KEY_V426 = 'vs_chips_v2_updated_at_v426';
 const RAMOS_KEY      = 'vs_ramos_v2';
 const TEMPLATES_KEY  = 'vs_templates_v2';
 const TEMPLATES_RAMO_KEY = 'vs_templates_ramo_v1'; // templates por ramo+tipo
@@ -227,6 +228,7 @@ function clearLocalSessionData() {
 
     // Configurações e caches WhatsApp/Evolution
     'vs_chips_v2',
+    'vs_chips_v2_updated_at_v426',
     'vs_whatsapp_chips_v29',
     'vs_chip_usage_day_v29',
     'vs_evolution_settings_v1',
@@ -409,5 +411,4 @@ async function logoutSupabase() {
     notify('Sessão local encerrada. Recarregue se necessário.', 'warn');
   }
 }
-
 

@@ -432,7 +432,12 @@ function saveInstaSched(d){ localStorage.setItem(INSTA_SCHED_KEY, JSON.stringify
    STORAGE — CHIPS
 ════════════════════════════ */
 function getChips()  { return getStoredArray(CHIPS_KEY); }
-function saveChips(c){ localStorage.setItem(CHIPS_KEY, JSON.stringify(c)); scheduleLegacyOperationalSyncV36(); }
+function saveChips(c){
+  localStorage.setItem(CHIPS_KEY, JSON.stringify(c));
+  localStorage.setItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426, new Date().toISOString());
+  uiSyncLogV426('optimistic-update', { entity:'chip', action:'save-legacy-cache', count:Array.isArray(c) ? c.length : 0 });
+  scheduleLegacyOperationalSyncV36({ delay:0 });
+}
 function getChipById(id) { return getChips().find(c => c.id === id); }
 
 /* ════════════════════════════

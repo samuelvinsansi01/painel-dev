@@ -62,7 +62,16 @@ function getOperationalSnapshotV36() {
 
 function restoreOperationalSnapshotV36(snapshot = {}) {
   const data = snapshot.data || {};
+  const localLegacyChipsUpdatedAt = Date.parse(localStorage.getItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426) || '');
+  const remoteExportedAt = Date.parse(snapshot.exportedAt || '');
+  const preserveLocalLegacyChips = !!(
+    localStorage.getItem(CHIPS_KEY)
+    && localLegacyChipsUpdatedAt
+    && (!remoteExportedAt || localLegacyChipsUpdatedAt > remoteExportedAt)
+  );
+
   Object.entries(OPERATIONAL_DATA_KEYS_V36).forEach(([name, key]) => {
+    if (name === 'legacyChips' && preserveLocalLegacyChips) return;
     if (data[name] === undefined) return;
     if (data[name] === null) {
       localStorage.removeItem(key);
@@ -70,6 +79,12 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
     }
     localStorage.setItem(key, JSON.stringify(data[name]));
   });
+  if (preserveLocalLegacyChips) {
+    uiSyncLogV426('optimistic-update', { entity:'chip', action:'preserve-newer-legacy-cache' });
+    scheduleOperationalSyncV36({ delay:0 });
+  } else if (data.legacyChips !== undefined && snapshot.exportedAt) {
+    localStorage.setItem(LEGACY_CHIPS_UPDATED_AT_KEY_V426, snapshot.exportedAt);
+  }
 
   try { filaDisparo = JSON.parse(localStorage.getItem(FILA_DISPARO_KEY) || '{}') || {}; } catch {}
   if (typeof reconcilePermanentLeadBase === 'function') reconcilePermanentLeadBase({ schedule:false });
@@ -79,6 +94,7 @@ function restoreOperationalSnapshotV36(snapshot = {}) {
   if (typeof updateResponsesBadgeV34 === 'function') updateResponsesBadgeV34();
   if (typeof updateAuditBadgeV35 === 'function') updateAuditBadgeV35();
   if (typeof renderInicio === 'function') renderInicio();
+  if (typeof renderConfiguracoes === 'function') renderConfiguracoes();
   if (document.getElementById('panel-fila-zap')?.classList.contains('active') && typeof renderFilaZap === 'function') renderFilaZap();
 }
 
@@ -248,16 +264,22 @@ with check (auth.uid() = user_id);
   notify('SQL das tabelas copiado.');
 }
 
-function scheduleOperationalSyncV36() {
+function scheduleOperationalSyncV36({ delay = 1500 } = {}) {
   if (!isSupabaseOperationalReadyV36()) return;
+  const safeDelay = Math.max(0, Number(delay) || 0);
+  const dueAt = Date.now() + safeDelay;
+  if (window.__operationalSyncV36Timer && Number(window.__operationalSyncV36DueAt || 0) <= dueAt) return;
   clearTimeout(window.__operationalSyncV36Timer);
+  window.__operationalSyncV36DueAt = dueAt;
   window.__operationalSyncV36Timer = setTimeout(() => {
+    window.__operationalSyncV36Timer = null;
+    window.__operationalSyncV36DueAt = 0;
     syncOperationalDataToSupabaseV36({ silent: true });
-  }, 1500);
+  }, safeDelay);
 }
 
-function scheduleLegacyOperationalSyncV36() {
-  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36();
+function scheduleLegacyOperationalSyncV36(options = {}) {
+  if (typeof scheduleOperationalSyncV36 === 'function') scheduleOperationalSyncV36(options);
 }
 
 
