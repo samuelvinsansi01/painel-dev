@@ -255,10 +255,10 @@
     </div>
   </div>
 
-  <!-- SITES JÁ VISTOS — abaixo dos leads ativos -->
+  <!-- DOMÍNIOS EXCLUÍDOS — abaixo dos leads ativos -->
   <div class="card" style="margin-top:16px">
-    <div class="card-title">Sites já vistos <span id="excludedCount" style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
-    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:8px">Bloqueados permanentemente na importação da Apify.</div>
+    <div class="card-title">Domínios excluídos manualmente <span id="excludedCount" style="font-size:10px;color:var(--muted);font-weight:400;text-transform:none;letter-spacing:0"></span></div>
+    <div style="font-family:'DM Mono',monospace;font-size:9px;color:var(--muted);margin-bottom:8px">Bloqueados manualmente na importação da Apify. Não representam automaticamente leads já cadastrados.</div>
     <div id="excludedList" style="max-height:180px;overflow-y:auto;font-family:'DM Mono',monospace;font-size:10px;color:var(--text2);"></div>
     <div class="btn-row" style="margin-top:10px">
       <button class="btn btn-danger" onclick="abrirModalLimparExcluidos()">Limpar lista</button>
@@ -270,7 +270,7 @@
 <div class="panel" id="panel-importar">
   <div class="page-header" style="flex-shrink:0">
     <div class="page-title">Importar <span>Leads.</span></div>
-    <div class="page-sub">// cole o JSON da Apify · empresas SEM site → Validação · COM site → já vistos</div>
+    <div class="page-sub">// Apify · nota ≥ 4,0 · 15+ avaliações · sem site próprio e Wix → Validação · Instagram → backlog</div>
   </div>
   <div class="import-grid" style="align-items:start">
     <div style="display:flex;flex-direction:column">
@@ -368,7 +368,7 @@
   <!-- PAINEL PRINCIPAL -->
   <div class="val-sub-panel active stretch-container" id="valPanelComSite">
     <div class="stretch-card" style="width:100%">
-      <div class="card-title" style="flex-shrink:0">Leads sem site — validar número WhatsApp
+      <div class="card-title" style="flex-shrink:0">Oportunidades sem site próprio — validar número WhatsApp
         <div id="valMantidosBadge" title="Empresas que serão mantidas" style="display:inline-flex;align-items:center;gap:5px;font-family:'DM Mono',monospace;font-size:8px;padding:3px 9px;border-radius:100px;border:1px solid rgba(91,184,245,0.35);background:rgba(91,184,245,0.07);color:#5bb8f5;opacity:0;transform:scale(0.9);transition:opacity 0.22s,transform 0.22s;white-space:nowrap;pointer-events:none">
           <span class="mantidos-dot" style="width:5px;height:5px;border-radius:50%;background:#5bb8f5;flex-shrink:0"></span>
           <span id="valMantidosCount">0</span> mantidos

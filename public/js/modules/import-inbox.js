@@ -1,7 +1,9 @@
 /* ════════════════════════════
    V41 — IMPORTAÇÃO + MENU + INBOX + CONVERSAS
 ════════════════════════════ */
-const IMPORT_RULES_V41 = { minRating: 4.3, minReviews: 15 };
+const IMPORT_RULES_V41 = typeof APIFY_QUALIFICATION_RULES !== 'undefined'
+  ? APIFY_QUALIFICATION_RULES
+  : Object.freeze({ minRating: 4.0, minReviews: 15 });
 
 function normalizeWhatsappV41(value = '') {
   let digits = String(value || '').replace(/\D/g, '').replace(/^0+/, '');
@@ -19,7 +21,10 @@ if (typeof normalizePhoneForEvolution === 'function') {
   normalizePhoneForEvolution = function(value){ return normalizeWhatsappV41(value) || oldNormalizePhoneForEvolutionV41(value); };
 }
 
-function isInstagramUrlV41(value = '') { return /(^|\/\/|www\.)instagram\.com\//i.test(String(value || '')); }
+function isInstagramUrlV41(value = '') {
+  if (typeof isInstagramWebsiteV430 === 'function') return isInstagramWebsiteV430(value);
+  return /(^|\/\/|\.)(?:www\.|m\.)?instagram\.com(?:\/|$)/i.test(String(value || ''));
+}
 function extractInstagramV41(lead = {}) {
   const fields = [lead.instagram, lead.instagramUrl, lead.instagram_url, lead.insta, lead.website, lead.site, lead.url, lead.link, lead.webSite];
   const found = fields.find(v => isInstagramUrlV41(v));
@@ -39,12 +44,47 @@ function getReviewsV41(lead = {}) {
 }
 function getLeadNameV41(lead = {}) { return String(lead.title || lead.name || lead.nome || lead.companyName || lead.company || lead.nomeEmpresa || '').trim(); }
 function getWebsiteV41(lead = {}) {
-  const raw = String(lead.website || lead.site || lead.webSite || lead.url || '').trim();
+  const raw = String(lead.website || lead.site || lead.webSite || lead.websiteUrl || lead.website_url || '').trim();
   return isInstagramUrlV41(raw) ? '' : raw;
 }
 function getWhatsappRawV41(lead = {}) { return lead.phone || lead.phoneNumber || lead.whatsapp || lead.telefone || lead.telefone1 || lead.phone_number || ''; }
 
 function classifyImportedLeadV41(raw = {}) {
+  if (typeof analyzeApifyLeadV430 === 'function') {
+    const databaseIndex = typeof createLeadIdentityIndexV430 === 'function'
+      ? createLeadIdentityIndexV430(typeof getDatabaseLeadCacheV430 === 'function' ? getDatabaseLeadCacheV430() : [])
+      : null;
+    const analysis = analyzeApifyLeadV430(raw, databaseIndex, null, 'legacy-v41');
+    if (analysis.route !== 'whatsapp-validation' && analysis.route !== 'instagram-backlog') {
+      return { status:'ignored', reasons:[analysis.reason], lead:null };
+    }
+    const channel = analysis.route === 'instagram-backlog' ? 'instagram' : 'whatsapp';
+    const stage = analysis.route === 'instagram-backlog' ? 'instagram_backlog' : 'whatsapp_backlog';
+    return {
+      status:'approved',
+      channel,
+      stage,
+      lead:{
+        ...raw,
+        id: raw.id || 'lead_' + Date.now() + '_' + Math.random().toString(36).slice(2),
+        nome:analysis.name,
+        name:analysis.name,
+        whatsapp:normalizeWhatsappV41(analysis.phone),
+        phone:normalizeWhatsappV41(analysis.phone),
+        instagram:analysis.instagram,
+        website:analysis.website.type === 'commercial' ? analysis.website.site : '',
+        website_type:analysis.website.websiteType,
+        website_quality:analysis.website.websiteQuality,
+        rating:analysis.qualification.rating,
+        reviews:analysis.qualification.reviews,
+        sourceChannel:channel,
+        backlogType:channel,
+        stage,
+        importedAt:new Date().toISOString()
+      }
+    };
+  }
+
   const name = getLeadNameV41(raw);
   const rating = getRatingV41(raw);
   const reviews = getReviewsV41(raw);

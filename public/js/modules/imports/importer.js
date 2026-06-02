@@ -1,6 +1,6 @@
-/* ════════════════════════════
+/* ═══════════════════════════
    IMPORTAR
-════════════════════════════ */
+═══════════════════════════ */
 function renderImportarPanel() {
   renderRamoSelect();
   importPreview();
@@ -14,77 +14,111 @@ function parseApifyJson(raw) {
   return Array.isArray(arr) ? arr : null;
 }
 
+function getImportStatsV430(analyses = []) {
+  return {
+    total: analyses.length,
+    validWhatsapp: analyses.filter(item => item.route === 'whatsapp-validation').length,
+    instagramBacklog: analyses.filter(item => item.route === 'instagram-backlog').length,
+    wixSites: analyses.filter(item => item.website.type === 'wixsite').length,
+    alreadySeen: analyses.filter(item => item.alreadyImported).length,
+    outsideBranch: analyses.filter(item => !item.ramoMatch).length,
+    belowQualification: analyses.filter(item => item.ramoMatch && !item.qualification.approved).length,
+    noPhone: analyses.filter(item => !item.hasPhone).length,
+    noSite: analyses.filter(item => item.website.type === 'none').length
+  };
+}
+
+function buildImportedLeadV430(analysis, route) {
+  const isInstagram = route === 'instagram-backlog';
+  return {
+    id: genId(),
+    nome: analysis.name,
+    whatsapp: analysis.phone,
+    instagram: analysis.instagram,
+    site: isInstagram || analysis.website.type === 'none' ? '' : analysis.website.site,
+    googleUrl: analysis.googleUrl,
+    categoria: analysis.category,
+    ramoId: activeRamoId || null,
+    reviewsCount: analysis.qualification.reviews,
+    totalScore: analysis.qualification.rating,
+    numStatus: isInstagram ? 'nao-aplicavel' : 'pendente',
+    tipo: isInstagram ? 'instagram' : 'sem-site',
+    canal: isInstagram ? 'insta' : 'pendente',
+    stage: isInstagram ? 'instagram_backlog' : 'validation',
+    website_type: analysis.website.websiteType,
+    website_quality: analysis.website.websiteQuality,
+    qualification_reason: analysis.reason,
+    importadoEm: todayStr()
+  };
+}
+
 function importPreview() {
-  const raw     = document.getElementById('importJsonInput').value.trim();
-  const listEl  = document.getElementById('importPreviewList');
-  const sumEl   = document.getElementById('importSummary');
+  const raw = document.getElementById('importJsonInput').value.trim();
+  const listEl = document.getElementById('importPreviewList');
+  const sumEl = document.getElementById('importSummary');
   const countEl = document.getElementById('previewCount');
-  if (!raw) { listEl.innerHTML='<span style="color:var(--muted)">// aguardando JSON...</span>'; sumEl.innerHTML='// cole o JSON acima para ver a prévia do filtro'; countEl.textContent=''; return; }
+  if (!raw) {
+    listEl.innerHTML = '<span style="color:var(--muted)">// aguardando JSON...</span>';
+    sumEl.innerHTML = '// cole o JSON acima para ver a prévia do filtro';
+    countEl.textContent = '';
+    return;
+  }
   const arr = parseApifyJson(raw);
-  if (!arr) { sumEl.innerHTML='<span class="err">// JSON inválido</span>'; listEl.innerHTML=''; countEl.textContent=''; return; }
+  if (!arr) {
+    sumEl.innerHTML = '<span class="err">// JSON inválido</span>';
+    listEl.innerHTML = '';
+    countEl.textContent = '';
+    return;
+  }
 
-  const total     = arr.length;
-  const fora      = arr.filter(i => !isRamoMatch(i));
-  const doRamo    = arr.filter(isRamoMatch);
-  // Novo critério: SEM site = válido → Validação; COM site = já-vistos
-  const comSiteRamo   = doRamo.filter(i => hasValidSiteRaw(i) && !isSiteBlocklisted(extractSite(i)) && !isExcludedDomain(extractSite(i)));
-  const comSiteJaVisto= doRamo.filter(i => hasValidSiteRaw(i) && (isSiteBlocklisted(extractSite(i)) || isExcludedDomain(extractSite(i))));
-  const semSiteRamo   = doRamo.filter(i => !hasValidSiteRaw(i));
-  const semTel        = semSiteRamo.filter(i => !hasValidPhone(i));
-  const validos       = semSiteRamo.filter(hasValidPhone);
-
-  // deduplication check
-  const data = ensureWeekData();
-  const valFila = getValData();
-  const permanent = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
-  const existPhones = new Set([
-    ...getAllPhones(data),
-    ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean),
-    ...permanent.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)
-  ]);
-  const novos = validos.filter(i => {
-    const ph = normalizePhone(extractPhone(i));
-    return !existPhones.has(ph);
-  });
+  const analyses = analyzeApifyRowsV430(arr, 'preview');
+  const stats = getImportStatsV430(analyses);
+  const opportunities = analyses.filter(item => item.route === 'whatsapp-validation' || item.route === 'instagram-backlog');
 
   sumEl.innerHTML = `
-    <span class="acc">${total}</span> total ·
-    <span class="err">${fora.length}</span> fora do ramo ·
-    <span class="err">${comSiteRamo.length + comSiteJaVisto.length}</span> com site → já vistos ·
-    <span class="warn">${semTel.length}</span> sem telefone ·
-    <span class="acc">${validos.length}</span> sem site ·
-    <span class="acc">${novos.length}</span> novos → Validação
+    <span class="acc">${stats.total}</span> total ·
+    <span class="acc">${stats.validWhatsapp}</span> válidos WhatsApp ·
+    <span class="acc">${stats.instagramBacklog}</span> backlog Instagram ·
+    <span class="warn">${stats.wixSites}</span> sites Wix ·
+    <span class="warn">${stats.alreadySeen}</span> já vistos ·
+    <span class="err">${stats.outsideBranch}</span> fora do ramo ·
+    <span class="err">${stats.belowQualification}</span> abaixo da qualificação ·
+    <span class="warn">${stats.noPhone}</span> sem telefone ·
+    <span class="acc">${stats.noSite}</span> sem site
   `;
-  countEl.textContent = `· ${validos.length} sem site`;
+  countEl.textContent = `· ${opportunities.length} oportunidades`;
 
-  if (!validos.length) { listEl.innerHTML='<span style="color:var(--muted)">// nenhuma empresa sem site encontrada</span>'; document.getElementById('importPreviewPagination').innerHTML=''; return; }
+  if (!opportunities.length) {
+    listEl.innerHTML = '<span style="color:var(--muted)">// nenhuma oportunidade qualificada encontrada</span>';
+    document.getElementById('importPreviewPagination').innerHTML = '';
+    return;
+  }
 
-  const totalPrev = validos.length;
+  const totalPrev = opportunities.length;
   const totalPrevPages = Math.max(1, Math.ceil(totalPrev / IMPORT_PG));
   if (importPage > totalPrevPages) importPage = totalPrevPages;
-  const previewItems = validos.slice((importPage-1)*IMPORT_PG, importPage*IMPORT_PG);
+  const previewItems = opportunities.slice((importPage - 1) * IMPORT_PG, importPage * IMPORT_PG);
 
-  listEl.innerHTML = '<div class="ext-list">' + previewItems.map(item => {
-    const nome     = extractName(item);
-    const phone    = extractPhone(item);
-    const cat      = extractCategory(item);
-    const googleUrl= extractGoogleUrl(item);
-    const ph = normalizePhone(phone);
-    const isDup = existPhones.has(ph);
-    const score   = item.totalScore;
-    const reviews = item.reviewsCount;
+  listEl.innerHTML = '<div class="ext-list">' + previewItems.map(analysis => {
+    const score = analysis.qualification.rating;
+    const reviews = analysis.qualification.reviews;
     const scoreStr = score ? `⭐ ${Number(score).toFixed(1)}` : '';
-    const revStr   = reviews ? `(${reviews})` : '';
-    return `<div class="empresa-card" style="${isDup?'opacity:0.45':''}">
+    const revStr = reviews ? `(${reviews})` : '';
+    const routeBadge = analysis.route === 'instagram-backlog'
+      ? '<span class="q-badge insta">Instagram backlog</span>'
+      : analysis.website.type === 'wixsite'
+        ? '<span class="q-badge warn">Wix · site fraco</span>'
+        : '<span class="q-badge ok">✓ validar WhatsApp</span>';
+    return `<div class="empresa-card">
       <div class="empresa-info">
-        <div class="empresa-nome">${googleUrl?`<a href="${escHtml(googleUrl)}" target="_blank" style="color:var(--text);text-decoration:none">${escHtml(nome)}</a>`:escHtml(nome)}</div>
+        <div class="empresa-nome">${analysis.googleUrl ? `<a href="${escHtml(analysis.googleUrl)}" target="_blank" style="color:var(--text);text-decoration:none">${escHtml(analysis.name)}</a>` : escHtml(analysis.name)}</div>
         <div class="empresa-meta">
-          <div class="empresa-phone">📱 ${escHtml(phone)}</div>
-          ${cat?`<span class="q-badge ok" style="font-size:7px">${escHtml(cat)}</span>`:''}
-          ${scoreStr?`<span class="q-badge info" style="font-size:7px">${scoreStr} ${revStr}</span>`:''}
+          <div class="empresa-phone">📱 ${escHtml(analysis.phone || 'sem telefone')}</div>
+          ${analysis.category ? `<span class="q-badge ok" style="font-size:7px">${escHtml(analysis.category)}</span>` : ''}
+          ${scoreStr ? `<span class="q-badge info" style="font-size:7px">${scoreStr} ${revStr}</span>` : ''}
         </div>
       </div>
-      ${isDup?'<span class="q-badge warn">duplicada</span>':'<span class="q-badge ok">✓ sem site</span>'}
+      ${routeBadge}
     </div>`;
   }).join('') + '</div>';
   renderPagination('importPreviewPagination', importPage, totalPrevPages, totalPrev, IMPORT_PG, 'goImportPage', 'changeImportPgSize');
@@ -92,83 +126,42 @@ function importPreview() {
 
 function importarLeads() {
   const raw = document.getElementById('importJsonInput').value.trim();
-  if (!raw) { notify('// cole o JSON primeiro','err'); return; }
+  if (!raw) { notify('// cole o JSON primeiro', 'err'); return; }
   const arr = parseApifyJson(raw);
-  if (!arr || !arr.length) { notify('// JSON inválido ou vazio','err'); return; }
+  if (!arr || !arr.length) { notify('// JSON inválido ou vazio', 'err'); return; }
 
-  const data = ensureWeekData();
-  const valFila = getValData();
-  const permanent = typeof getLeadBaseData === 'function' ? getLeadBaseData() : [];
-  const existPhones = new Set([
-    ...getAllPhones(data),
-    ...valFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean),
-    ...permanent.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean)
-  ]);
-  const existSites  = new Set([
-    ...getAllSites(data),
-    ...valFila.map(v => extractDomain(v.site||'')).filter(Boolean),
-    ...permanent.map(v => extractDomain(v.site||'')).filter(Boolean)
-  ]);
+  const novaValFila = [...getValData()];
+  const novaInstaFila = [...getInstaFila()];
+  const analyses = analyzeApifyRowsV430(arr, 'import');
+  const stats = getImportStatsV430(analyses);
+  let addedWhatsapp = 0;
+  let addedInstagram = 0;
+  let skipped = 0;
 
-  // dedup instagram também
-  const instaFila = getInstaFila();
-  const existInstaPhones = new Set(instaFila.map(v => normalizePhone(v.whatsapp||'')).filter(Boolean));
-
-  let addedSemSite = 0, addedJaVistos = 0, skipped = 0;
-  const novaValFila = [...valFila];
-
-  arr.filter(isRamoMatch).forEach(item => {
-    const nome  = extractName(item);
-    const site  = extractSite(item);
-    const phone = extractPhone(item);
-    if (!nome) { skipped++; return; }
-
-    const ph = normalizePhone(phone);
-    const temSite = hasValidSiteRaw(item) && !isSiteBlocklisted(site);
-    const temTel  = hasValidPhone(item);
-
-    // ── COM site → já-vistos (bloqueado permanentemente) ──
-    if (temSite) {
-      const si = extractDomain(site);
-      if (si && !isExcludedDomain(site)) addExcludedDomains([site]);
-      addedJaVistos++;
+  analyses.forEach(analysis => {
+    if (analysis.route === 'whatsapp-validation') {
+      novaValFila.push(buildImportedLeadV430(analysis, analysis.route));
+      addedWhatsapp++;
       return;
     }
-
-    // ── SEM site + com telefone → Validação ──
-    if (!temSite && temTel) {
-      if (ph && existPhones.has(ph)) { skipped++; return; }
-      const entry = {
-        id: genId(), nome,
-        whatsapp: phone,
-        instagram: extractInstagram(item),
-        googleUrl: extractGoogleUrl(item),
-        categoria: extractCategory(item),
-        ramoId: activeRamoId || null,
-        reviewsCount: item.reviewsCount != null ? Number(item.reviewsCount) : null,
-        totalScore:   item.totalScore   != null ? Number(item.totalScore)   : null,
-        numStatus: 'pendente',
-        tipo: 'sem-site',
-        canal: 'pendente', // será definido após validação do número
-        importadoEm: todayStr(),
-      };
-      if (ph) existPhones.add(ph);
-      novaValFila.push(entry);
-      addedSemSite++;
+    if (analysis.route === 'instagram-backlog') {
+      novaInstaFila.push(buildImportedLeadV430(analysis, analysis.route));
+      addedInstagram++;
       return;
     }
-
     skipped++;
   });
 
-  saveValData(novaValFila);
+  if (addedWhatsapp) saveValData(novaValFila);
+  if (addedInstagram) saveInstaFila(novaInstaFila);
   updateBadges();
-  importPreview();
 
-  let msg = `✓ ${addedSemSite} sem site → Validação`;
-  if (addedJaVistos) msg += ` · ${addedJaVistos} com site → já vistos`;
-  if (skipped)    msg += ` · ${skipped} ignoradas`;
-  notify(msg, addedSemSite > 0 ? '' : 'warn');
+  let msg = `✓ ${addedWhatsapp} → Validação WhatsApp`;
+  if (addedInstagram) msg += ` · ${addedInstagram} → backlog Instagram`;
+  if (stats.alreadySeen) msg += ` · ${stats.alreadySeen} já vistos`;
+  if (skipped) msg += ` · ${skipped} ignoradas`;
+  notify(msg, addedWhatsapp || addedInstagram ? '' : 'warn');
+
   document.getElementById('importJsonInput').value = '';
+  importPreview();
 }
-
