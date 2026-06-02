@@ -87,6 +87,7 @@ const sbClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 let currentUser = null;
+const AUTH_LOCAL_USER_KEY_V423 = 'vs_auth_local_user_v423';
 const supabaseDataAdapter = (sbClient && window.SupabaseAdapter)
   ? new window.SupabaseAdapter(sbClient)
   : null;
@@ -174,11 +175,77 @@ function renderAuthUser(user) {
 }
 
 function clearLocalSessionData() {
-  localStorage.removeItem('vs_empresas_v2');
-  localStorage.removeItem('vs_lead_crm_v1');
-  localStorage.removeItem('vs_leads_base_v1');
-  localStorage.removeItem(SYNC_STATE_KEY);
+  // Segurança multiusuário: ao deslogar/trocar conta, remover caches locais sensíveis.
+  // A fonte persistente deve ser o Supabase filtrado por user_id.
+  const exactKeys = [
+    // Leads, funis e filas operacionais
+    'vs_empresas_v2',
+    'vs_history_v2',
+    'vs_acompanhamento_v1',
+    'vs_validacao_v2',
+    'vs_atribuicao_v1',
+    'vs_insta_fila_v2',
+    'vs_insta_week_v1',
+    'vs_insta_sched_v1',
+    'vs_fila_disparo_v1',
+    'vs_recover_validacao_zap_v1',
+    'vin_zap_backlog',
+    'vs_lead_crm_v1',
+    'vs_leads_base_v1',
+
+    // Configurações e caches WhatsApp/Evolution
+    'vs_chips_v2',
+    'vs_whatsapp_chips_v29',
+    'vs_chip_usage_day_v29',
+    'vs_evolution_settings_v1',
+    'vs_evo_config_v2',
+    'vs_whatsapp_messages_cache_v412',
+    'vs_whatsapp_outbox_v412',
+    'vs_evolution_responses_v34',
+    'vs_whatsapp_conversation_meta_v421',
+    'vs_whatsapp_queue_v27',
+    'vs_queue_campaigns_v27',
+    'vs_queue_templates_v27',
+    'vs_whatsapp_queue_control_v28',
+    'vs_dispatch_v30_log',
+    'vs_dispatch_runtime_v32',
+
+    // Preferências operacionais que também podem conter dados de negócio
+    'vs_excluded_domains',
+    'vs_ramos_v2',
+    'vs_templates_v2',
+    'vs_templates_ramo_v1',
+    'vs_templates_insta_v1',
+    'vs_lote_cfg_v1',
+    'vs_disparo_config',
+    'disparoConfig',
+    'vs_supabase_sync_state_v1'
+  ];
+  exactKeys.forEach(key => { try { localStorage.removeItem(key); } catch(e){} });
+  try { localStorage.removeItem(SYNC_STATE_KEY); } catch(e){}
+
+  // Remove chaves com sufixo de usuário antigo, para impedir que outra conta enxergue dados locais.
+  try {
+    Object.keys(localStorage).forEach(key => {
+      if (
+        key.startsWith('vs_whatsapp_chips_v29:') ||
+        key.startsWith('vs_chip_usage_day_v29:') ||
+        key.startsWith('vs_whatsapp_messages_cache_v412:') ||
+        key.startsWith('vs_whatsapp_outbox_v412:') ||
+        key.startsWith('vs_evolution_responses_v34:') ||
+        key.startsWith('vs_whatsapp_conversation_meta_v421:') ||
+        key.startsWith('vs_conversation_status_v412:')
+      ) localStorage.removeItem(key);
+    });
+  } catch(e){}
+
+  try { filaDisparo = {}; } catch(e){}
+  try { supabaseWhatsappMessagesCacheV412 = []; } catch(e){}
+  try { whatsappContactMapCacheV418 = []; } catch(e){}
+  try { localStorage.removeItem(AUTH_LOCAL_USER_KEY_V423); } catch(e){}
   updateAuthGate();
+  try { updateChipsBadge(); } catch(e){}
+  try { renderChipsPanel(); } catch(e){}
   try { rebuildSidebarV40(); } catch(e){}
 }
 
@@ -193,6 +260,13 @@ async function initAuth() {
   const { data, error } = await sbClient.auth.getSession();
   if (error) console.warn('[auth] getSession:', error.message);
   currentUser = data?.session?.user || null;
+  const lastLocalUserId = localStorage.getItem(AUTH_LOCAL_USER_KEY_V423) || '';
+  if (currentUser?.id) {
+    if (lastLocalUserId && lastLocalUserId !== currentUser.id) {
+      clearLocalSessionData();
+    }
+    localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
+  }
   
   if (!currentUser) {
     clearLocalSessionData();
@@ -202,7 +276,13 @@ renderAuthUser(currentUser);
   renderProductionReadyNote();
 
   sbClient.auth.onAuthStateChange(async (_event, session) => {
+    const previousUserId = currentUser?.id || '';
+    const nextUserId = session?.user?.id || '';
+    if (previousUserId && nextUserId && previousUserId !== nextUserId) {
+      clearLocalSessionData();
+    }
     currentUser = session?.user || null;
+    if (currentUser?.id) localStorage.setItem(AUTH_LOCAL_USER_KEY_V423, currentUser.id);
     renderAuthUser(currentUser);
     updateAuthGate();
 
@@ -213,6 +293,10 @@ renderAuthUser(currentUser);
         await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
       } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
         await loadSupabaseLeadsToLocalState({ preserveWorkflow: operationalLoaded });
+      }
+      if (typeof loadWhatsappChipsFromSupabaseV22 === 'function') {
+        await loadWhatsappChipsFromSupabaseV22();
+        if (typeof renderChipsPanel === 'function') renderChipsPanel();
       }
     } else {
       if (typeof clearLocalSessionData === 'function') clearLocalSessionData();
@@ -227,6 +311,10 @@ renderAuthUser(currentUser);
     let operationalLoaded = false;
     try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
     await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
+    if (typeof loadWhatsappChipsFromSupabaseV22 === 'function') {
+      await loadWhatsappChipsFromSupabaseV22();
+      if (typeof renderChipsPanel === 'function') renderChipsPanel();
+    }
   }
 }
 
@@ -253,6 +341,7 @@ async function logoutSupabase() {
   localStorage.removeItem('vs_leads_base_v1');
 
   currentUser = null;
+  if (typeof clearLocalSessionData === 'function') clearLocalSessionData();
 
   renderAuthUser(null);
 

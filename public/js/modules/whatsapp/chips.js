@@ -4,24 +4,148 @@
 const WHATSAPP_CHIPS_V29_KEY = 'vs_whatsapp_chips_v29';
 const CHIP_USAGE_DAY_KEY = 'vs_chip_usage_day_v29';
 
+/* V22 — isolamento multiusuário dos chips
+   O localStorage é apenas cache por usuário. A fonte persistente é public.whatsapp_instances. */
+function getCurrentUserIdV22(){
+  try { return (typeof currentUser !== 'undefined' && currentUser?.id) ? String(currentUser.id) : ''; } catch { return ''; }
+}
+
+function scopedWhatsappChipsKeyV22(){
+  const userId = getCurrentUserIdV22();
+  return userId ? `${WHATSAPP_CHIPS_V29_KEY}:${userId}` : `${WHATSAPP_CHIPS_V29_KEY}:anonymous`;
+}
+
+function scopedChipUsageKeyV22(){
+  const userId = getCurrentUserIdV22();
+  return userId ? `${CHIP_USAGE_DAY_KEY}:${userId}` : `${CHIP_USAGE_DAY_KEY}:anonymous`;
+}
+
+function isSupabaseChipStoreReadyV22(){
+  return !!(typeof sbClient !== 'undefined' && sbClient && getCurrentUserIdV22());
+}
+
+function normalizeChipRowToLocalV22(row = {}){
+  return {
+    id: String(row.chip_id || row.id || row.instance || `chip_${Date.now()}`),
+    name: row.name || row.label || row.instance || 'WhatsApp',
+    instance: row.instance || row.name || '',
+    status: row.active === false ? 'disabled' : 'active',
+    paused: false,
+    dailyLimit: Number(row.daily_limit || row.dailyLimit || 120),
+    intervalSeconds: Number(row.interval_seconds || row.intervalSeconds || 120),
+    blockSize: Number(row.block_size || row.blockSize || 30),
+    blocks: Array.isArray(row.blocks) ? row.blocks : ['08:00','10:00','12:00','14:00'],
+    connectionState: row.status || row.connection_state || 'salvo no banco',
+    phone: row.phone || row.number || '',
+    dbId: row.id || null
+  };
+}
+
+async function loadWhatsappChipsFromSupabaseV22(){
+  if (!isSupabaseChipStoreReadyV22()) return [];
+  const userId = getCurrentUserIdV22();
+  try {
+    const { data, error } = await sbClient
+      .from('whatsapp_instances')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending:false });
+
+    if (error) throw error;
+
+    const rows = (Array.isArray(data) ? data : []).filter(row => row.active !== false);
+    const chips = rows.map(normalizeChipRowToLocalV22).filter(chip => chip.instance);
+
+    localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(chips));
+    // Remove cache legado global para impedir vazamento entre contas no mesmo navegador.
+    localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
+
+    console.log('[chips][db-load]', { userId, count:chips.length });
+    updateChipsBadge();
+    return chips;
+  } catch (err) {
+    console.warn('[chips][db-load-error]', err?.message || err);
+    return [];
+  }
+}
+
+async function persistWhatsappChipsToSupabaseV22(list = []){
+  if (!isSupabaseChipStoreReadyV22()) return;
+  const userId = getCurrentUserIdV22();
+  const chips = Array.isArray(list) ? list : [];
+  try {
+    const { data:existingRows, error:selectError } = await sbClient
+      .from('whatsapp_instances')
+      .select('id,chip_id')
+      .eq('user_id', userId);
+    if (selectError) throw selectError;
+
+    const existingByChipId = new Map((existingRows || []).map(row => [String(row.chip_id || ''), row]));
+    const activeIds = new Set(chips.map(chip => String(chip.id || chip.instance || '')).filter(Boolean));
+
+    for (const chip of chips) {
+      const chipId = String(chip.id || chip.instance || '').trim();
+      if (!chipId) continue;
+      const payload = {
+        user_id: userId,
+        chip_id: chipId,
+        name: chip.name || chip.instance || 'WhatsApp',
+        instance: chip.instance || chip.name || chipId,
+        active: chip.status !== 'disabled'
+      };
+
+      const existing = existingByChipId.get(chipId);
+      if (existing?.id) {
+        const { error } = await sbClient.from('whatsapp_instances').update(payload).eq('id', existing.id).eq('user_id', userId);
+        if (error) throw error;
+      } else {
+        const { error } = await sbClient.from('whatsapp_instances').insert(payload);
+        if (error) throw error;
+      }
+    }
+
+    for (const row of existingRows || []) {
+      const chipId = String(row.chip_id || '');
+      if (chipId && !activeIds.has(chipId)) {
+        const { error } = await sbClient.from('whatsapp_instances').update({ active:false }).eq('id', row.id).eq('user_id', userId);
+        if (error) console.warn('[chips][db-deactivate-error]', error.message);
+      }
+    }
+
+    console.log('[chips][db-save]', { userId, count:chips.length });
+  } catch (err) {
+    console.warn('[chips][db-save-error]', err?.message || err);
+  }
+}
+
+window.loadWhatsappChipsFromSupabaseV22 = loadWhatsappChipsFromSupabaseV22;
+window.persistWhatsappChipsToSupabaseV22 = persistWhatsappChipsToSupabaseV22;
+
 function todayUsageKeyV29(){ return new Date().toISOString().slice(0,10); }
 
 function getWhatsappChipsV29(){
   try {
-    const data = JSON.parse(localStorage.getItem(WHATSAPP_CHIPS_V29_KEY) || '[]');
+    if (!getCurrentUserIdV22()) return [];
+    const data = JSON.parse(localStorage.getItem(scopedWhatsappChipsKeyV22()) || '[]');
     return Array.isArray(data) ? data : [];
   } catch { return []; }
 }
 
 function saveWhatsappChipsV29(list){
+  const safeList = Array.isArray(list) ? list : [];
   setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
-  localStorage.setItem(WHATSAPP_CHIPS_V29_KEY, JSON.stringify(list || []));
+  if (getCurrentUserIdV22()) {
+    localStorage.setItem(scopedWhatsappChipsKeyV22(), JSON.stringify(safeList));
+    localStorage.removeItem(WHATSAPP_CHIPS_V29_KEY);
+    setTimeout(() => { try { persistWhatsappChipsToSupabaseV22(safeList); } catch(e){} }, 0);
+  }
   updateChipsBadge();
 }
 
 function getChipUsageV29(){
   try {
-    const usage = JSON.parse(localStorage.getItem(CHIP_USAGE_DAY_KEY) || '{}');
+    if (!getCurrentUserIdV22()) return { day: todayUsageKeyV29(), chips:{} };
+    const usage = JSON.parse(localStorage.getItem(scopedChipUsageKeyV22()) || '{}');
     if (!usage || typeof usage !== 'object' || Array.isArray(usage)) return { day: todayUsageKeyV29(), chips:{} };
     if (usage.day !== todayUsageKeyV29()) return { day: todayUsageKeyV29(), chips:{} };
     return usage;
@@ -29,7 +153,8 @@ function getChipUsageV29(){
 }
 
 function saveChipUsageV29(usage){
-  localStorage.setItem(CHIP_USAGE_DAY_KEY, JSON.stringify(usage));
+  if (!getCurrentUserIdV22()) return;
+  localStorage.setItem(scopedChipUsageKeyV22(), JSON.stringify(usage));
 }
 
 function getChipUsedToday(chipId){

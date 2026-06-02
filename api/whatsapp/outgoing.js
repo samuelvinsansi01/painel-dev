@@ -20,22 +20,71 @@ function isValidUuid(value = '') {
   return /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(String(value || ''));
 }
 
+
+function getBearerTokenV23(req) {
+  const authorization = String(req?.headers?.authorization || req?.headers?.Authorization || '');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+async function verifyRequestUserV23(req, claimedUserId = '') {
+  const token = getBearerTokenV23(req);
+  if (!token) throw new Error('auth ausente');
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!backendKey) throw new Error('SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY ausente na Vercel');
+  const res = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      apikey: backendKey,
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const raw = await res.text();
+  let data = raw;
+  try { data = JSON.parse(raw); } catch(e) {}
+  if (!res.ok || !data?.id) throw new Error('auth inválida');
+  const authUserId = String(data.id || '').trim();
+  const requestedUserId = String(claimedUserId || '').trim();
+  if (requestedUserId && requestedUserId !== authUserId) {
+    throw new Error('user_id não pertence à sessão autenticada');
+  }
+  return authUserId;
+}
+
+
+async function leadBelongsToUserV23({ userId, leadId }) {
+  if (!leadId) return true;
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  const endpoint = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/leads?select=id&user_id=eq.${encodeURIComponent(userId)}&id=eq.${encodeURIComponent(leadId)}&limit=1`;
+  const headers = { apikey: backendKey, 'Content-Type': 'application/json' };
+  if (!backendKey.startsWith('sb_secret_')) headers.Authorization = `Bearer ${backendKey}`;
+  const res = await fetch(endpoint, { method:'GET', headers });
+  const raw = await res.text();
+  let data = raw;
+  try { data = JSON.parse(raw); } catch(e) {}
+  if (!res.ok) throw new Error(`lead lookup HTTP ${res.status}`);
+  return Array.isArray(data) && data.length > 0;
+}
+
 function makeExternalId(value = '') {
   const clean = String(value || '').trim().replace(/[^a-zA-Z0-9_-]/g, '').slice(0, 120);
   return clean || `out_${Date.now()}_${Math.random().toString(36).slice(2, 10)}`;
 }
 
-async function persistOutgoing(body = {}) {
+async function persistOutgoing(body = {}, req = null) {
   debugOutgoingApi('request:body', body);
   const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
   if (!backendKey) throw new Error('SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY ausente na Vercel');
 
-  const userId = String(body.user_id || body.userId || '').trim();
+  const claimedUserId = String(body.user_id || body.userId || '').trim();
+  const userId = await verifyRequestUserV23(req, claimedUserId);
   if (!isValidUuid(userId)) throw new Error('user_id inválido ou ausente');
 
   const instance = String(body.instance || '').trim();
   const phone = normalizePhone(body.phone || body.phone_normalized || '');
   const text = String(body.body || body.text || '');
+  const leadId = String(body.lead_id || body.leadId || '').trim();
+  if (leadId && !(await leadBelongsToUserV23({ userId, leadId }))) throw new Error('lead_id não pertence à sessão autenticada');
   if (!instance) throw new Error('instance ausente');
   if (!phone) throw new Error('phone ausente');
   if (!text) throw new Error('body/text ausente');
@@ -43,7 +92,7 @@ async function persistOutgoing(body = {}) {
   const record = {
     external_id: makeExternalId(body.external_id || body.id),
     user_id: userId,
-    lead_id: body.lead_id || body.leadId || null,
+    lead_id: leadId || null,
     instance,
     phone,
     direction: 'out',
@@ -86,12 +135,12 @@ async function persistOutgoing(body = {}) {
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-supabase-user-id');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (req.method !== 'POST') return res.status(405).json({ success:false, error:'Method not allowed' });
 
   try {
-    const stored = await persistOutgoing(req.body || {});
+    const stored = await persistOutgoing(req.body || {}, req);
     return res.status(200).json({ success:true, stored:true, id:stored?.id || null, external_id:stored?.external_id || null });
   } catch (error) {
     debugOutgoingApi('error', { error: error?.message || error });

@@ -5,7 +5,11 @@
   const s = document.getElementById('sidebar');
   if (localStorage.getItem(SIDEBAR_KEY)==='1') s.classList.remove('collapsed');
 
-  // Inicializa login Google sem interferir nos dados atuais.
+  // Segurança multiusuário: antes de carregar qualquer painel, remove caches locais sensíveis.
+  // A fonte correta será recarregada do Supabase filtrada pelo user_id da sessão atual.
+  try { if (typeof clearLocalSessionData === 'function') clearLocalSessionData(); } catch(e) {}
+
+  // Inicializa login Google e recarrega os dados do usuário autenticado.
   initAuth();
 
   const cfg = loadEvoConfig() || {};

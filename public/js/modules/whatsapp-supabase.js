@@ -16,6 +16,32 @@ function debugWhatsappPersistV413(step, data = {}) {
 }
 let supabaseWhatsappMessagesCacheV412 = [];
 
+function getCurrentUserIdForWhatsappStorageV423(){
+  try { return currentUser?.id ? String(currentUser.id) : ''; } catch(e) { return ''; }
+}
+
+function scopedWhatsappStorageKeyV423(baseKey){
+  const userId = getCurrentUserIdForWhatsappStorageV423();
+  return userId ? `${baseKey}:${userId}` : `${baseKey}:anonymous`;
+}
+
+async function getSupabaseAuthHeadersV423(extra = {}){
+  const headers = { ...(extra || {}) };
+  try {
+    const { data } = await sbClient.auth.getSession();
+    const token = data?.session?.access_token || '';
+    if (token) headers.Authorization = `Bearer ${token}`;
+    if (currentUser?.id) headers['x-supabase-user-id'] = currentUser.id;
+  } catch(e) {}
+  return headers;
+}
+
+function clearGlobalWhatsappSensitiveCachesV423(){
+  [WHATSAPP_MESSAGES_CACHE_V412_KEY, WHATSAPP_OUTBOX_V412_KEY, 'vs_evolution_responses_v34', WHATSAPP_CONVERSATION_META_V421_KEY].forEach(key => {
+    try { localStorage.removeItem(key); } catch(e) {}
+  });
+}
+
 function normalizeWhatsappDigitsV412(value = '') {
   let digits = String(value || '').replace(/\D/g, '');
   if (!digits) return '';
@@ -62,7 +88,7 @@ function getFallbackContactIdentityByPhoneV416(phone = '') {
 
 function loadSupabaseWhatsappMessagesCacheV412() {
   try {
-    const data = JSON.parse(localStorage.getItem(WHATSAPP_MESSAGES_CACHE_V412_KEY) || '[]');
+    const data = JSON.parse(localStorage.getItem(scopedWhatsappStorageKeyV423(WHATSAPP_MESSAGES_CACHE_V412_KEY)) || '[]');
     supabaseWhatsappMessagesCacheV412 = Array.isArray(data) ? data : [];
   } catch {
     supabaseWhatsappMessagesCacheV412 = [];
@@ -72,7 +98,7 @@ function loadSupabaseWhatsappMessagesCacheV412() {
 
 function saveSupabaseWhatsappMessagesCacheV412(messages = []) {
   supabaseWhatsappMessagesCacheV412 = Array.isArray(messages) ? messages.slice(0, 500) : [];
-  try { localStorage.setItem(WHATSAPP_MESSAGES_CACHE_V412_KEY, JSON.stringify(supabaseWhatsappMessagesCacheV412)); } catch(e) {}
+  try { localStorage.setItem(scopedWhatsappStorageKeyV423(WHATSAPP_MESSAGES_CACHE_V412_KEY), JSON.stringify(supabaseWhatsappMessagesCacheV412)); localStorage.removeItem(WHATSAPP_MESSAGES_CACHE_V412_KEY); } catch(e) {}
 }
 
 function getSupabaseWhatsappMessagesV412() {
@@ -146,7 +172,9 @@ function findWhatsappLeadCandidatesForMapV417(query = '') {
 async function fetchContactMapsV418() {
   if (!currentUser?.id) return [];
   try {
-    const res = await fetch(`/api/whatsapp/contact-map?user_id=${encodeURIComponent(currentUser.id)}`);
+    const res = await fetch(`/api/whatsapp/contact-map?user_id=${encodeURIComponent(currentUser.id)}`, {
+      headers: await getSupabaseAuthHeadersV423()
+    });
     const data = await res.json().catch(() => ({}));
     if (!res.ok || data?.success === false) throw new Error(data?.error || `HTTP ${res.status}`);
     whatsappContactMapCacheV418 = Array.isArray(data.maps) ? data.maps : [];
@@ -170,11 +198,11 @@ function getContactMapByLidV418(lid = '', instance = '') {
 const WHATSAPP_CONVERSATION_META_V421_KEY = 'vs_whatsapp_conversation_meta_v421';
 
 function getConversationMetaStoreV421() {
-  try { return JSON.parse(localStorage.getItem(WHATSAPP_CONVERSATION_META_V421_KEY) || '{}') || {}; } catch(e) { return {}; }
+  try { return JSON.parse(localStorage.getItem(scopedWhatsappStorageKeyV423(WHATSAPP_CONVERSATION_META_V421_KEY)) || '{}') || {}; } catch(e) { return {}; }
 }
 
 function saveConversationMetaStoreV421(store = {}) {
-  try { localStorage.setItem(WHATSAPP_CONVERSATION_META_V421_KEY, JSON.stringify(store || {})); } catch(e) {}
+  try { localStorage.setItem(scopedWhatsappStorageKeyV423(WHATSAPP_CONVERSATION_META_V421_KEY), JSON.stringify(store || {})); localStorage.removeItem(WHATSAPP_CONVERSATION_META_V421_KEY); } catch(e) {}
 }
 
 function getConversationMetaKeyV421(conversationKey = '') {
@@ -459,7 +487,7 @@ async function associateContactMapLeadV418(leadId = '') {
   try {
     const res = await fetch('/api/whatsapp/contact-map', {
       method:'POST',
-      headers:{ 'Content-Type':'application/json' },
+      headers: await getSupabaseAuthHeadersV423({ 'Content-Type':'application/json' }),
       body: JSON.stringify({
         user_id: currentUser.id,
         instance: state.instance || 'prospecto',
@@ -499,7 +527,7 @@ window.associateLidConversationToLeadV417 = associateLidConversationToLeadV417;
 
 function getPendingOutgoingWhatsappMessagesV412() {
   try {
-    const data = JSON.parse(localStorage.getItem(WHATSAPP_OUTBOX_V412_KEY) || '[]');
+    const data = JSON.parse(localStorage.getItem(scopedWhatsappStorageKeyV423(WHATSAPP_OUTBOX_V412_KEY)) || '[]');
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -507,7 +535,8 @@ function getPendingOutgoingWhatsappMessagesV412() {
 }
 
 function savePendingOutgoingWhatsappMessagesV412(list = []) {
-  localStorage.setItem(WHATSAPP_OUTBOX_V412_KEY, JSON.stringify(list.slice(-500)));
+  localStorage.setItem(scopedWhatsappStorageKeyV423(WHATSAPP_OUTBOX_V412_KEY), JSON.stringify(list.slice(-500)));
+  try { localStorage.removeItem(WHATSAPP_OUTBOX_V412_KEY); } catch(e) {}
 }
 
 function queuePendingOutgoingWhatsappMessageV412(message = {}) {
@@ -1107,7 +1136,7 @@ async function persistOutgoingWhatsappMessageViaApiV412(payload = {}) {
   try {
     const res = await fetch('/api/whatsapp/outgoing', {
       method: 'POST',
-      headers: { 'Content-Type':'application/json' },
+      headers: await getSupabaseAuthHeadersV423({ 'Content-Type':'application/json' }),
       body: JSON.stringify({
         id: payload.id,
         external_id: payload.id,

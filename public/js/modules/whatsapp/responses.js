@@ -3,9 +3,13 @@
 ════════════════════════════ */
 const EVOLUTION_RESPONSES_V34_KEY = 'vs_evolution_responses_v34';
 
+function getWhatsappResponsesScopedKeyV423(){
+  try { return currentUser?.id ? `${EVOLUTION_RESPONSES_V34_KEY}:${currentUser.id}` : `${EVOLUTION_RESPONSES_V34_KEY}:anonymous`; } catch(e) { return `${EVOLUTION_RESPONSES_V34_KEY}:anonymous`; }
+}
+
 function getLocalResponsesV34() {
   try {
-    const data = JSON.parse(localStorage.getItem(EVOLUTION_RESPONSES_V34_KEY) || '[]');
+    const data = JSON.parse(localStorage.getItem(getWhatsappResponsesScopedKeyV423()) || '[]');
     return Array.isArray(data) ? data : [];
   } catch {
     return [];
@@ -14,7 +18,8 @@ function getLocalResponsesV34() {
 
 function saveLocalResponsesV34(list) {
   setTimeout(() => { try { scheduleOperationalSyncV36(); } catch(e){} }, 0);
-  localStorage.setItem(EVOLUTION_RESPONSES_V34_KEY, JSON.stringify((list || []).slice(0, 500)));
+  localStorage.setItem(getWhatsappResponsesScopedKeyV423(), JSON.stringify((list || []).slice(0, 500)));
+  try { localStorage.removeItem(EVOLUTION_RESPONSES_V34_KEY); } catch(e) {}
   updateResponsesBadgeV34();
 }
 

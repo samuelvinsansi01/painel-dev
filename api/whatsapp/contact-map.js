@@ -56,6 +56,37 @@ function isValidUserId(value = '') {
   return /^[0-9a-zA-Z_-]{8,80}$/.test(str);
 }
 
+
+function getBearerTokenV23(req) {
+  const authorization = String(req?.headers?.authorization || req?.headers?.Authorization || '');
+  const match = authorization.match(/^Bearer\s+(.+)$/i);
+  return match ? match[1].trim() : '';
+}
+
+async function verifyRequestUserV23(req, claimedUserId = '') {
+  const token = getBearerTokenV23(req);
+  if (!token) throw new Error('auth ausente');
+  const backendKey = SUPABASE_SECRET_KEY || SUPABASE_SERVICE_ROLE_KEY;
+  if (!backendKey) throw new Error('SUPABASE_SECRET_KEY ou SUPABASE_SERVICE_ROLE_KEY ausente na Vercel');
+  const res = await fetch(`${SUPABASE_URL.replace(/\/$/, '')}/auth/v1/user`, {
+    method: 'GET',
+    headers: {
+      apikey: backendKey,
+      Authorization: `Bearer ${token}`
+    }
+  });
+  const raw = await res.text();
+  let data = raw;
+  try { data = JSON.parse(raw); } catch(e) {}
+  if (!res.ok || !data?.id) throw new Error('auth inválida');
+  const authUserId = String(data.id || '').trim();
+  const requestedUserId = String(claimedUserId || '').trim();
+  if (requestedUserId && requestedUserId !== authUserId) {
+    throw new Error('user_id não pertence à sessão autenticada');
+  }
+  return authUserId;
+}
+
 async function supabaseFetch(path, options = {}) {
   const url = `${SUPABASE_URL.replace(/\/$/, '')}/rest/v1/${path}`;
   const res = await fetch(url, { ...options, headers: backendHeaders(options.headers || {}) });
@@ -116,6 +147,17 @@ async function saveContactMap({ userId, instance, lid, leadId, phoneReal, pushNa
   return Array.isArray(data) ? data[0] : data;
 }
 
+
+async function findLeadForUser({ userId, leadId }) {
+  const safeUserId = encodeURIComponent(userId);
+  const safeLeadId = encodeURIComponent(leadId);
+  const data = await supabaseFetch(
+    `leads?select=id,company_name,phone,user_id&id=eq.${safeLeadId}&user_id=eq.${safeUserId}&limit=1`,
+    { method:'GET' }
+  );
+  return Array.isArray(data) ? data[0] || null : null;
+}
+
 async function updateExistingMessages({ userId, instance, lid, leadId, phoneReal }) {
   const data = await supabaseFetch(
     `whatsapp_messages?user_id=eq.${encodeURIComponent(userId)}&instance=eq.${encodeURIComponent(instance)}&phone=eq.${encodeURIComponent(lid)}`,
@@ -134,18 +176,20 @@ async function updateExistingMessages({ userId, instance, lid, leadId, phoneReal
 export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*');
   res.setHeader('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization');
+  res.setHeader('Access-Control-Allow-Headers', 'Content-Type, Authorization, x-supabase-user-id');
   if (req.method === 'OPTIONS') return res.status(200).end();
   if (!['GET', 'POST'].includes(req.method)) return res.status(405).json({ success:false, error:'Method not allowed' });
 
   try {
     const body = parseRequestBody(req);
-    const userId = getUserId(req, body);
+    const claimedUserId = getUserId(req, body);
+    const userId = await verifyRequestUserV23(req, claimedUserId);
     console.log('[contact-map][request]', {
       method: req.method,
       query: req.query || {},
       url: req.url,
       body: req.method === 'GET' ? null : body,
+      claimedUserId,
       userIdResolved: userId
     });
 
@@ -167,8 +211,13 @@ export default async function handler(req, res) {
     if (!leadId) throw new Error('lead_id ausente');
     if (!phoneReal) throw new Error('phone_real ausente');
 
-    const map = await saveContactMap({ userId, instance, lid, leadId, phoneReal, pushName });
-    const updatedMessages = await updateExistingMessages({ userId, instance, lid, leadId, phoneReal });
+    const lead = await findLeadForUser({ userId, leadId });
+    if (!lead?.id) throw new Error('lead_id não pertence à sessão autenticada');
+    const safePhoneReal = normalizePhone(lead.phone || phoneReal);
+    if (!safePhoneReal) throw new Error('lead selecionado está sem telefone');
+
+    const map = await saveContactMap({ userId, instance, lid, leadId: lead.id, phoneReal: safePhoneReal, pushName });
+    const updatedMessages = await updateExistingMessages({ userId, instance, lid, leadId: lead.id, phoneReal: safePhoneReal });
 
     return res.status(200).json({ success:true, map, updatedMessages });
   } catch (error) {

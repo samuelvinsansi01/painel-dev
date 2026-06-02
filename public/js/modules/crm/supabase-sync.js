@@ -2,10 +2,13 @@
    SUPABASE PRIMARY V15
 ════════════════════════════ */
 const SYNC_STATE_KEY = 'vs_supabase_sync_state_v1';
+function getSyncStateKeyV423(){
+  try { return currentUser?.id ? `${SYNC_STATE_KEY}:${currentUser.id}` : `${SYNC_STATE_KEY}:anonymous`; } catch(e) { return `${SYNC_STATE_KEY}:anonymous`; }
+}
 
 function getSyncState() {
   try {
-    const state = JSON.parse(localStorage.getItem(SYNC_STATE_KEY) || '{}');
+    const state = JSON.parse(localStorage.getItem(getSyncStateKeyV423()) || '{}' );
     return state && typeof state === 'object' && !Array.isArray(state) ? state : {};
   } catch {
     return {};
@@ -14,7 +17,7 @@ function getSyncState() {
 
 function setSyncState(data = {}) {
   const prev = getSyncState();
-  localStorage.setItem(SYNC_STATE_KEY, JSON.stringify({
+  localStorage.setItem(getSyncStateKeyV423(), JSON.stringify({
     ...prev,
     ...data,
     updatedAt: new Date().toISOString()
