@@ -159,6 +159,7 @@ async function addLeadPresentation() {
         found.redirectUrl = data.redirectUrl || found.redirectUrl;
       }
       saveLeadCrmStore(store);
+      if (typeof scheduleLeadCrmCloudSyncV427 === 'function') scheduleLeadCrmCloudSyncV427(activeLeadDrawerId, 'presentation-short-url');
     }
   } catch (err) {
     presentationLogV427('shorten-error', { leadId: activeLeadDrawerId, error: err?.message || err });

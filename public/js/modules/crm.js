@@ -161,6 +161,86 @@ function editLeadChannelV427(kind) {
   notify(`${labels[kind] || 'Canal'} atualizado.`);
 }
 
+
+
+/* ════════════════════════════
+   LEAD CRM DB-FIRST PERSISTENCE V27
+   - persiste pipeline, validação, apresentações e metadados da ficha em leads.crm_data
+   - mantém notes/history/followups nas tabelas próprias, mas usa crm_data como fallback completo
+════════════════════════════ */
+function cloneLeadCrmForCloudV427(crm = {}) {
+  const copy = JSON.parse(JSON.stringify(crm || {}));
+  // Evita gravar erros transitórios de UI como verdade permanente.
+  delete copy.uiSyncStatus;
+  delete copy.uiSyncError;
+  return copy;
+}
+
+function getLeadCrmCloudPayloadV427(id, crm = null) {
+  const currentCrm = crm || ensureLeadCrm(id, findLeadEverywhere(id) || {});
+  return {
+    ...cloneLeadCrmForCloudV427(currentCrm),
+    persistedAt: new Date().toISOString(),
+    schema: 'lead_crm_v27'
+  };
+}
+
+let leadCrmCloudTimersV427 = {};
+function scheduleLeadCrmCloudSyncV427(id, reason = 'crm-save', delay = 250) {
+  if (!id) return;
+  if (leadCrmCloudTimersV427[id]) clearTimeout(leadCrmCloudTimersV427[id]);
+  leadCrmCloudTimersV427[id] = setTimeout(() => {
+    delete leadCrmCloudTimersV427[id];
+    syncLeadCrmMetaToCloudV427(id, reason).catch(error => {
+      leadDrawerLogV427('crm-cloud-sync-error', { leadId:id, reason, error:error?.message || error });
+    });
+  }, delay);
+}
+
+async function syncLeadCrmMetaToCloudV427(id, reason = 'crm-meta') {
+  if (!id || !supabaseDataAdapter || !currentUser?.id || !currentUser?.email) return { skipped:true };
+  const raw = findLeadEverywhere(id) || activeLeadDrawerData || { id };
+  const lead = normalizeLeadForDrawer({ ...raw, id });
+  const crm = ensureLeadCrm(id, lead);
+  const payloadLead = {
+    ...lead,
+    ...raw,
+    id,
+    pipelineStatus: crm.pipelineStatus || lead.pipelineStatus || 'contato_enviado',
+    crmData: getLeadCrmCloudPayloadV427(id, crm)
+  };
+  uiSyncLogV426('supabase-save-start', { entity:'lead-crm-meta', id, reason });
+  const result = await supabaseDataAdapter.saveLead(payloadLead);
+  if (result?.error) {
+    uiSyncLogV426('supabase-save-error', { entity:'lead-crm-meta', id, reason, error:result.error.message || result.error });
+    return result;
+  }
+  uiSyncLogV426('supabase-save-success', { entity:'lead-crm-meta', id, reason });
+  return result;
+}
+
+function mergeLeadCrmDataFromCloudV427(store, leadId, crmData) {
+  if (!leadId || !crmData || typeof crmData !== 'object') return false;
+  const existing = store[leadId] || {};
+  const merged = {
+    pipelineStatus: 'contato_enviado',
+    notes: [],
+    history: [],
+    createdAt: new Date().toISOString(),
+    ...existing,
+    ...crmData,
+    notes: Array.isArray(crmData.notes) ? crmData.notes : (Array.isArray(existing.notes) ? existing.notes : []),
+    history: Array.isArray(crmData.history) ? crmData.history : (Array.isArray(existing.history) ? existing.history : []),
+    presentations: Array.isArray(crmData.presentations) ? crmData.presentations : (Array.isArray(existing.presentations) ? existing.presentations : []),
+    followUpDate: crmData.followUpDate || existing.followUpDate || '',
+    followUpStatus: crmData.followUpStatus || existing.followUpStatus || '',
+    pipelineStatus: crmData.pipelineStatus || existing.pipelineStatus || 'contato_enviado',
+    updatedAt: crmData.updatedAt || existing.updatedAt || new Date().toISOString()
+  };
+  store[leadId] = merged;
+  return true;
+}
+
 function getLeadCrmStore() {
   try { return LeadService.getLeadCrmStore(); }
   catch { return {}; }
@@ -326,9 +406,12 @@ async function loadSupabaseLeadsToLocalState({ preserveWorkflow = false } = {}) 
     id: item.id,
     nome: item.company_name || 'Lead sem nome',
     whatsapp: item.phone || '',
+    phone: item.phone || '',
     instagram: item.instagram || '',
     site: item.website || '',
+    website: item.website || '',
     googleUrl: item.maps_url || '',
+    mapsUrl: item.maps_url || '',
     status: item.status || 'Não enviada',
     pipelineStatus: item.pipeline_status || 'contato_enviado',
     permanentCreatedAt: item.created_at || '',
@@ -337,6 +420,18 @@ async function loadSupabaseLeadsToLocalState({ preserveWorkflow = false } = {}) 
       ? new Date(item.created_at).toLocaleDateString('pt-BR')
       : today
   }));
+
+  // Restaura metadados completos da ficha vindos do banco. Isso protege notas,
+  // apresentações, pipeline, follow-up e validação contra perda após F5.
+  const crmStoreFromLeads = getLeadCrmStore ? getLeadCrmStore() : {};
+  let crmMergedFromLeadRows = 0;
+  (data || []).forEach(item => {
+    if (mergeLeadCrmDataFromCloudV427(crmStoreFromLeads, item.id, item.crm_data)) crmMergedFromLeadRows++;
+  });
+  if (crmMergedFromLeadRows) {
+    saveLeadCrmStore(crmStoreFromLeads);
+    leadDrawerLogV427('crm-data-loaded-from-leads', { count: crmMergedFromLeadRows });
+  }
 
   if (typeof mergeLeadsIntoPermanentBase === 'function') {
     mergeLeadsIntoPermanentBase(leads, { source:'Supabase' }, { schedule:false });
@@ -431,6 +526,7 @@ function saveLeadCrm(id, crm) {
   store[id] = { ...crm, updatedAt: new Date().toISOString() };
   saveLeadCrmStore(store);
   if (typeof scheduleLegacyOperationalSyncV36 === 'function') scheduleLegacyOperationalSyncV36();
+  scheduleLeadCrmCloudSyncV427(id, 'saveLeadCrm');
   leadDrawerLogV427('crm-save', { leadId:id, keys:Object.keys(store[id] || {}) });
 }
 
@@ -465,7 +561,8 @@ function getLeadForCloud(id, baseLead = {}) {
   return {
     ...lead,
     id,
-    pipelineStatus: crm.pipelineStatus || 'contato_enviado'
+    pipelineStatus: crm.pipelineStatus || 'contato_enviado',
+    crmData: getLeadCrmCloudPayloadV427(id, crm)
   };
 }
 

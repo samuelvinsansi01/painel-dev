@@ -13,8 +13,9 @@ class SupabaseAdapter {
     return data?.user || null;
   }
 
-  normalizeLead(lead = {}, userId) {
-    return {
+  normalizeLead(lead = {}, userId, userEmail = '') {
+    const crmData = lead.crmData || lead.crm_data || lead.leadCrm || null;
+    const payload = {
       id: String(lead.id || '').trim(),
       user_id: userId,
       company_name: lead.companyName || lead.nome || lead.title || 'Lead sem nome',
@@ -26,19 +27,40 @@ class SupabaseAdapter {
       pipeline_status: lead.pipelineStatus || lead.pipeline_status || 'contato_enviado',
       updated_at: new Date().toISOString()
     };
+
+    if (userEmail) payload.user_email = String(userEmail).trim().toLowerCase();
+    if (crmData && typeof crmData === 'object') payload.crm_data = crmData;
+
+    return payload;
   }
 
   async saveLead(lead = {}) {
     const user = await this.getUser();
     if (!user?.id || !user?.email || !lead?.id) return { data: null, error: null };
 
-    const payload = this.normalizeLead(lead, user.id);
+    const payload = this.normalizeLead(lead, user.id, user.email);
 
-    const { data, error } = await this.client
+    let { data, error } = await this.client
       .from('leads')
       .upsert(payload, { onConflict: 'id' })
       .select()
       .single();
+
+    // Fallback defensivo: se a coluna crm_data/user_email ainda não existir no Supabase,
+    // não quebrar o salvamento básico do lead. A persistência completa exige rodar o SQL v27.
+    if (error && /crm_data|user_email/i.test(String(error.message || ''))) {
+      const fallbackPayload = { ...payload };
+      delete fallbackPayload.crm_data;
+      delete fallbackPayload.user_email;
+      const fallback = await this.client
+        .from('leads')
+        .upsert(fallbackPayload, { onConflict: 'id' })
+        .select()
+        .single();
+      data = fallback.data;
+      error = fallback.error || error;
+      if (!fallback.error) error = null;
+    }
 
     if (error) console.warn('[supabase-adapter] saveLead:', error.message, payload);
     return { data, error };
