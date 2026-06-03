@@ -128,6 +128,17 @@ const sbClient = window.supabase
   ? window.supabase.createClient(SUPABASE_URL, SUPABASE_PUBLISHABLE_KEY)
   : null;
 let currentUser = null;
+function getLoteSize() {
+  const inputValue = Number(document.getElementById('loteTamanho')?.value || 0);
+  let configValue = 0;
+  try {
+    if (typeof loadEvoConfig === 'function') {
+      configValue = Number(loadEvoConfig()?.loteTamanho || 0);
+    }
+  } catch {}
+  const value = inputValue || configValue || WHATSAPP_CHIP_BLOCK_SIZE_V426 || 30;
+  return Math.max(1, Number.isFinite(value) ? Math.floor(value) : 30);
+}
 const AUTH_LOCAL_USER_KEY_V423 = 'vs_auth_local_user_v423';
 const AUTH_LOCAL_EMAIL_KEY_V425 = 'vs_auth_local_email_v425';
 const supabaseDataAdapter = (sbClient && window.SupabaseAdapter)
