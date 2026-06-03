@@ -433,7 +433,7 @@ function updateAuthGate() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  showAuthGate();
+  updateAuthGate();
 });
 
 /* ════════════════════════════
@@ -628,14 +628,22 @@ async function hydrateAuthenticatedUserDataV436() {
   authHydrationPromiseV436 = (async () => {
     let operationalLoaded = false;
     try { operationalLoaded = await loadOperationalDataFromSupabaseV36(); } catch(e){}
-    if (typeof loadSupabaseAsPrimarySource === 'function') {
-      await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
-    } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
-      await loadSupabaseLeadsToLocalState({ preserveWorkflow: operationalLoaded });
+    try {
+      if (typeof loadSupabaseAsPrimarySource === 'function') {
+        await loadSupabaseAsPrimarySource({ preserveWorkflow: operationalLoaded });
+      } else if (typeof loadSupabaseLeadsToLocalState === 'function') {
+        await loadSupabaseLeadsToLocalState({ preserveWorkflow: operationalLoaded });
+      }
+    } catch(e) {
+      console.warn('[auth] hydrate leads:', e?.message || e);
     }
-    if (typeof loadWhatsappChipsFromSupabaseV22 === 'function') {
-      await loadWhatsappChipsFromSupabaseV22();
-      if (typeof renderChipsPanel === 'function') renderChipsPanel();
+    try {
+      if (typeof loadWhatsappChipsFromSupabaseV22 === 'function') {
+        await loadWhatsappChipsFromSupabaseV22();
+        if (typeof renderChipsPanel === 'function') renderChipsPanel();
+      }
+    } catch(e) {
+      console.warn('[auth] hydrate chips:', e?.message || e);
     }
     authHydrationKeyV436 = key;
     authHydrationAtV436 = Date.now();
