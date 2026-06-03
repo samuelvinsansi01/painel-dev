@@ -25,6 +25,10 @@ function isInstagramUrlV41(value = '') {
   if (typeof isInstagramWebsiteV430 === 'function') return isInstagramWebsiteV430(value);
   return /(^|\/\/|\.)(?:www\.|m\.)?instagram\.com(?:\/|$)/i.test(String(value || ''));
 }
+function isWixsiteUrlV41(value = '') {
+  if (typeof isWixsiteWebsiteV430 === 'function') return isWixsiteWebsiteV430(value);
+  return /(^|\/\/|\.)(?:www\.)?wixsite\.com(?:\/|$)/i.test(String(value || ''));
+}
 function extractInstagramV41(lead = {}) {
   const fields = [lead.instagram, lead.instagramUrl, lead.instagram_url, lead.insta, lead.website, lead.site, lead.url, lead.link, lead.webSite];
   const found = fields.find(v => isInstagramUrlV41(v));
@@ -72,7 +76,7 @@ function classifyImportedLeadV41(raw = {}) {
         whatsapp:normalizeWhatsappV41(analysis.phone),
         phone:normalizeWhatsappV41(analysis.phone),
         instagram:analysis.instagram,
-        website:analysis.website.type === 'commercial' ? analysis.website.site : '',
+        website:analysis.website.type === 'wixsite' ? analysis.website.site : '',
         website_type:analysis.website.websiteType,
         website_quality:analysis.website.websiteQuality,
         rating:analysis.qualification.rating,
@@ -91,15 +95,17 @@ function classifyImportedLeadV41(raw = {}) {
   const instagram = extractInstagramV41(raw);
   const whatsapp = normalizeWhatsappV41(getWhatsappRawV41(raw));
   const website = getWebsiteV41(raw);
+  const hasBlockedWebsite = !!website && !isWixsiteUrlV41(website);
   const reasons = [];
   if (!name) reasons.push('sem nome');
   if (rating < IMPORT_RULES_V41.minRating) reasons.push(`nota abaixo de ${IMPORT_RULES_V41.minRating}`);
   if (reviews < IMPORT_RULES_V41.minReviews) reasons.push(`menos de ${IMPORT_RULES_V41.minReviews} avaliações`);
+  if (hasBlockedWebsite && !instagram) reasons.push('site nao elegivel (somente sem site, Instagram ou Wix passam)');
   if (!whatsapp && !instagram) reasons.push('sem WhatsApp e sem Instagram');
   if (reasons.length) return { status:'ignored', reasons, lead:null };
   const channel = instagram ? 'instagram' : 'whatsapp';
   const stage = instagram ? 'instagram_backlog' : 'whatsapp_backlog';
-  return { status:'approved', channel, stage, lead:{...raw, id: raw.id || 'lead_'+Date.now()+'_'+Math.random().toString(36).slice(2), nome:name, name, whatsapp, phone:whatsapp, instagram, website, rating, reviews, sourceChannel:channel, backlogType:channel, stage, importedAt:new Date().toISOString()} };
+  return { status:'approved', channel, stage, lead:{...raw, id: raw.id || 'lead_'+Date.now()+'_'+Math.random().toString(36).slice(2), nome:name, name, whatsapp, phone:whatsapp, instagram, website:isWixsiteUrlV41(website) ? website : '', rating, reviews, sourceChannel:channel, backlogType:channel, stage, importedAt:new Date().toISOString()} };
 }
 function canLeadGoToChipQueueV41(lead = {}) {
   const stage = lead.stage || lead.day || lead.assignedDay || lead.weekDay || '';

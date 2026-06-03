@@ -73,6 +73,23 @@ function isWixsiteWebsiteV430(value = '') {
   return hostname === 'wixsite.com' || hostname.endsWith('.wixsite.com');
 }
 
+const NON_OPPORTUNITY_WEBSITE_HOSTS_V435 = [
+  'bit.ly', 'bitly.com', 'linktr.ee', 'linktree.com',
+  'facebook.com', 'fb.com', 'm.facebook.com', 'web.facebook.com',
+  'wa.me', 'whatsapp.com', 'api.whatsapp.com',
+  'google.com', 'google.com.br', 'maps.google.com', 'goo.gl',
+  'twitter.com', 'x.com', 'linkedin.com', 'youtube.com', 'youtu.be',
+  'tiktok.com', 'pinterest.com', 'hotmart.com', 'kiwify.com.br',
+  'mercadolivre.com.br', 'olx.com.br', 'ifood.com.br', 'booking.com',
+  'tripadvisor.com', 'yelp.com', 'guiamais.com.br', 'telelistas.net'
+];
+
+function isNonOpportunityWebsiteV435(value = '') {
+  const hostname = normalizeWebsiteHostnameV430(value);
+  if (!hostname) return false;
+  return NON_OPPORTUNITY_WEBSITE_HOSTS_V435.some(domain => hostname === domain || hostname.endsWith('.' + domain));
+}
+
 function classifyWebsiteOpportunityV430(item = {}) {
   const site = extractSite(item);
   if (!site) {
@@ -84,13 +101,16 @@ function classifyWebsiteOpportunityV430(item = {}) {
   if (isWixsiteWebsiteV430(site)) {
     return { type:'wixsite', websiteType:'wixsite', websiteQuality:'weak', route:'whatsapp-validation', site, reason:'wixsite sem dominio proprio' };
   }
+  if (isNonOpportunityWebsiteV435(site)) {
+    return { type:'blocked-link', websiteType:'blocked-link', websiteQuality:'blocked', route:'skip', site, reason:'link nao elegivel (somente Instagram e Wix passam)' };
+  }
   if (typeof isExcludedDomain === 'function' && isExcludedDomain(site)) {
     return { type:'excluded', websiteType:'excluded', websiteQuality:'blocked', route:'skip', site, reason:'dominio excluido manualmente' };
   }
   if (typeof isSiteBlocklisted === 'function' && isSiteBlocklisted(site)) {
-    return { type:'external', websiteType:'external', websiteQuality:'weak', route:'whatsapp-validation', site, reason:'link externo sem site proprio' };
+    return { type:'blocked-link', websiteType:'blocked-link', websiteQuality:'blocked', route:'skip', site, reason:'link nao elegivel (somente Instagram e Wix passam)' };
   }
-  return { type:'commercial', websiteType:'commercial', websiteQuality:'commercial', route:'skip', site, reason:'site comercial proprio' };
+  return { type:'commercial', websiteType:'commercial', websiteQuality:'commercial', route:'skip', site, reason:'site nao elegivel (somente sem site, Instagram ou Wix passam)' };
 }
 
 function getApifyQualificationV430(item = {}) {

@@ -55,9 +55,48 @@ function getChipDispatchReloadLockV432(chipId) {
   return null;
 }
 
+function getChipDispatchRuntimeAgeMsV434(runtime = {}) {
+  const updatedAt = Date.parse(runtime.updatedAt || '');
+  return Number.isFinite(updatedAt) ? Date.now() - updatedAt : Infinity;
+}
+
+function recoverStaleChipDispatchRuntimeV434(slot, chip, runtime) {
+  if (!chip || !runtime || runtime.state !== 'sending') return false;
+  const st = chipSlotState[slot] || {};
+  if (st.disparoEmAndamento || st.preflightEmAndamento) return false;
+
+  const filaHoje = getFilaChipNoDia(chip.id, todayStr());
+  const sendingItems = filaHoje.filter(item => item.status === 'enviando');
+  const runtimeItem = runtime.itemId ? filaHoje.find(item => item.id === runtime.itemId) : null;
+  const ageMs = getChipDispatchRuntimeAgeMsV434(runtime);
+
+  const noActiveItem = sendingItems.length === 0;
+  const runtimeItemSettled = runtimeItem && ['aguardando', 'enviado', 'erro'].includes(runtimeItem.status);
+  const runtimeItemMissing = runtime.itemId && !runtimeItem;
+  const staleStartupLock = !runtime.itemId && noActiveItem && ageMs > 5000;
+
+  if (staleStartupLock || (noActiveItem && (runtimeItemSettled || runtimeItemMissing))) {
+    saveChipDispatchRuntimeV432(chip.id, null);
+    notify(`// Chip ${slot + 1}: estado antigo limpo. Pode disparar novamente.`, 'warn');
+    return true;
+  }
+
+  if (sendingItems.length && ageMs > 2 * 60 * 1000) {
+    sendingItems.forEach(item => { item.status = 'erro'; });
+    saveFilaDisparo({ delay:0, reason:'dispatch-chip-stale-sending-recovered' });
+    saveChipDispatchRuntimeV432(chip.id, null);
+    renderFilaSlot(slot, disparoDay);
+    notify(`// Chip ${slot + 1}: envio antigo marcado como erro para liberar a fila.`, 'warn');
+    return true;
+  }
+
+  return false;
+}
+
 function blockChipDispatchReloadLockV432(slot, chip) {
   const runtime = getChipDispatchReloadLockV432(chip.id);
   if (!runtime) return false;
+  if (recoverStaleChipDispatchRuntimeV434(slot, chip, runtime)) return false;
   if (runtime.state === 'sending') {
     notify(`// Chip ${slot + 1}: envio interrompido em estado incerto. Confira a fila antes de reenviar.`, 'err');
     return true;
