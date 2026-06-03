@@ -31,6 +31,7 @@
   setInterval(() => checkHorarioDisparo(new Date()), 30000);
 
   renderRamoSelect();
+  if (typeof ensureMessageTemplateDefaultsV434 === 'function') ensureMessageTemplateDefaultsV434();
   ensureWeekData();
   if (typeof reconcilePermanentLeadBase === 'function') reconcilePermanentLeadBase();
   migrarChavesInstaWeek();
@@ -39,6 +40,7 @@
   renderInicio();
   renderExcluidos();
   updateBadges();
+  if (typeof restoreLastActivePanelV434 === 'function') restoreLastActivePanelV434();
   if (recuperadosValidacao) {
     setTimeout(() => notify(`↩ ${recuperadosValidacao} lead(s) voltaram para Validação`), 0);
   }

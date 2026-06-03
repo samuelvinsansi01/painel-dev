@@ -21,7 +21,12 @@ function renderFilaInsta() {
   }
 
   listEl.innerHTML = filtered.map(item => {
-    const apresentacao = getTemplates()[0].replace(/\{EMPRESA\}/g, item.nome);
+    const tplBase = typeof normalizeMessageTemplateV434 === 'function'
+      ? normalizeMessageTemplateV434(getTemplates()[0] || {})
+      : { part1:String(getTemplates()[0] || ''), part2:'' };
+    const apresentacao = typeof fillTemplateCompanyV434 === 'function'
+      ? fillTemplateCompanyV434(tplBase.part1, item.nome)
+      : tplBase.part1.replace(/\{EMPRESA\}/g, item.nome);
     return `<div class="insta-card" id="insta-card-${item.id}">
       <div class="insta-card-header">
         <div class="insta-nome">

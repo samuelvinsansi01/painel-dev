@@ -155,10 +155,10 @@ function onLoteRamoChange(chipId, loteNum, ramoId, isSlot, slot) {
     if (!item || item.status === 'enviado') continue;
     item.ramoId = ramoId || null;
     if (ramoId) {
-      const { text, idx } = pickTemplate(item.nome, ramoId);
-      item.mensagem = text; item.templateIdx = idx;
+      const { text, text2, idx } = pickTemplate(item.nome, ramoId);
+      item.mensagem = text; item.mensagem2 = text2 || ''; item.templateIdx = idx;
     } else {
-      item.mensagem = ''; item.templateIdx = -1;
+      item.mensagem = ''; item.mensagem2 = ''; item.templateIdx = -1;
     }
   }
   saveFilaDisparo();

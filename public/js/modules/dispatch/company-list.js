@@ -338,7 +338,9 @@ function renderFilaSlot(slot, filterDay) {
           <div class="fila-item-body" style="display:${aberto?'flex':'none'}">
             <div style="width:100%">
               <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:4px">① APRESENTAÇÃO</div>
-              <textarea class="fila-msg-area" id="fila-msg-${slot}-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFilaSlot(${slot},'${item.id}',this.value)">${escHtml(item.mensagem||'')}</textarea>
+              <textarea class="fila-msg-area" id="fila-msg-${slot}-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFilaSlot(${slot},'${item.id}',this.value,'mensagem')">${escHtml(item.mensagem||'')}</textarea>
+              <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin:8px 0 4px">TEXTO 2</div>
+              <textarea class="fila-msg-area" id="fila-msg2-${slot}-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFilaSlot(${slot},'${item.id}',this.value,'mensagem2')">${escHtml(item.mensagem2||'')}</textarea>
               <button class="fila-msg-shuffle" onclick="shuffleFilaMsgSlot(${slot},'${item.id}')">↻ sortear</button>
             </div>
           </div>

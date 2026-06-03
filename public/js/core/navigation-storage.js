@@ -49,8 +49,10 @@ function toggleSidebar() {
   s.classList.toggle('collapsed', open);
   localStorage.setItem(SIDEBAR_KEY, open ? '0' : '1');
 }
+const ACTIVE_PANEL_KEY_V434 = 'vs_active_panel_v434';
 const PANELS = ['audit','conversations','responses','chips','whatsappQueue','evolution','inicio','inbox','importar','validacao','atribuicao','instagram','fila-zap','kanban','followups','acompanhamento','redirecionamentos','configuracoes','conta'];
-function switchPanel(name) {
+function switchPanel(name, options = {}) {
+  if (!PANELS.includes(name)) name = 'inicio';
   PANELS.forEach(p => {
     const el = document.getElementById('panel-'+p);
     if (el) el.classList.toggle('active', p===name);
@@ -79,7 +81,19 @@ function switchPanel(name) {
     renderConfiguracoes();
     if (typeof renderWebhookUrlV34 === 'function') renderWebhookUrlV34();
   }
+  if (options.persist !== false) {
+    try { localStorage.setItem(ACTIVE_PANEL_KEY_V434, name); } catch(e) {}
+  }
   updateBadges();
+}
+
+function restoreLastActivePanelV434() {
+  let panel = 'inicio';
+  try {
+    const saved = localStorage.getItem(ACTIVE_PANEL_KEY_V434) || '';
+    if (PANELS.includes(saved)) panel = saved;
+  } catch(e) {}
+  switchPanel(panel, { persist:false });
 }
 
 function updateBadges() {

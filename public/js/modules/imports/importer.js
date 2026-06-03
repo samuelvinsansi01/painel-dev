@@ -124,9 +124,7 @@ function importPreview() {
   renderPagination('importPreviewPagination', importPage, totalPrevPages, totalPrev, IMPORT_PG, 'goImportPage', 'changeImportPgSize');
 }
 
-function logLeadImportV432(tag, payload = {}) {
-  try { console.log(`[${tag}]`, payload); } catch(e) {}
-}
+function logLeadImportV432(tag, payload = {}) {}
 
 function normalizeImportedLeadPhoneV432(value = '') {
   return typeof normalizePhoneStrictV31 === 'function'
@@ -149,7 +147,21 @@ async function getRemoteImportedLeadPhonesV432() {
   return phones;
 }
 
+let importInProgressV434 = false;
+
 async function importarLeads() {
+  if (importInProgressV434) {
+    notify('// importação já em andamento', 'warn');
+    return;
+  }
+  importInProgressV434 = true;
+  const btn = document.getElementById('importLeadsBtn');
+  const originalLabel = btn ? btn.textContent : '';
+  if (btn) {
+    btn.disabled = true;
+    btn.textContent = 'Importando...';
+  }
+  try {
   const raw = document.getElementById('importJsonInput').value.trim();
   if (!raw) { notify('// cole o JSON primeiro', 'err'); return; }
   const arr = parseApifyJson(raw);
@@ -227,6 +239,13 @@ async function importarLeads() {
   logLeadImportV432('lead-import', { action:'complete', addedWhatsapp, addedInstagram, remoteDuplicates, skipped });
   notify(msg, addedWhatsapp || addedInstagram ? '' : 'warn');
 
-  document.getElementById('importJsonInput').value = '';
+  importPage = 1;
   importPreview();
+  } finally {
+    importInProgressV434 = false;
+    if (btn) {
+      btn.disabled = false;
+      btn.textContent = originalLabel || '↓ Importar para Validação';
+    }
+  }
 }

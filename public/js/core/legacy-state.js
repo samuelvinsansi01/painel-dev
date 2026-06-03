@@ -46,11 +46,154 @@ const RAMO_TEMPLATES_DEFAULT = {
   },
 };
 
+const TEMPLATE_SCHEMA_VERSION_KEY_V434 = 'vs_templates_schema_v434';
+const MARCENARIA_TEMPLATES_V434 = [
+  {
+    part1: `Olá, tudo bem?
+
+Me chamo Samuel.
+
+Encontrei a {EMPRESA} pesquisando pelo Google Maps e me chamou atenção a quantidade de avaliações positivas que vocês possuem. Dá para perceber que existe um trabalho sério sendo realizado e que os clientes reconhecem isso.
+
+O ponto que notei é que, apesar dessa reputação construída, vocês ainda não possuem um site próprio. Hoje, muitas pessoas pesquisam por móveis planejados no Google antes mesmo de pedir um orçamento, e sem uma presença mais estruturada vocês acabam aparecendo menos do que poderiam.
+
+O motivo de eu comentar isso é porque já vi essa situação acontecer em outras marcenarias.`,
+    part2: `Recentemente desenvolvi o site da Bicho Preguiça justamente para transformar os projetos que eles já executavam em uma apresentação profissional capaz de transmitir mais confiança para quem está pesquisando e comparando fornecedores.
+
+Você pode ver o projeto aqui:
+
+bichopreguicaplanejados.com.br
+
+Pensando nisso, montei uma amostra personalizada mostrando como essa reputação que vocês já construíram poderia ser transformada em uma presença digital ainda mais forte.
+
+Dá uma olhada e me fala se faz sentido para vocês, beleza?`
+  },
+  {
+    part1: `Olá, tudo bem?
+
+Me chamo Samuel.
+
+Conheci a {EMPRESA} através do Google Maps e uma coisa chamou minha atenção: vocês já possuem uma boa quantidade de avaliações e uma reputação construída junto aos clientes.
+
+Isso mostra que o trabalho de vocês já gera confiança. O que acontece é que essa confiança hoje fica concentrada dentro do Google Maps, enquanto poderia estar sendo apresentada de forma muito mais completa para quem pesquisa por móveis planejados.
+
+Quando uma empresa já possui essa validação dos clientes, normalmente existe uma oportunidade interessante de ampliar sua presença digital e reforçar ainda mais a percepção de valor.`,
+    part2: `Foi exatamente essa ideia que apliquei em um projeto recente para a marcenaria Bicho Preguiça:
+
+bichopreguicaplanejados.com.br
+
+O objetivo foi criar um espaço onde qualquer pessoa pudesse conhecer os projetos, entender os diferenciais da empresa e gerar mais confiança antes mesmo do primeiro contato.
+
+Montei uma amostra personalizada mostrando como essa presença digital poderia apresentar melhor os projetos, diferenciais e a qualidade do trabalho que vocês já entregam.
+
+Dá uma olhada e me fala o que acha.`
+  },
+  {
+    part1: `Olá, tudo bem?
+
+Me chamo Samuel.
+
+Encontrei a {EMPRESA} no Google Maps e vi que vocês possuem boas avaliações dos clientes. Isso normalmente é um sinal claro de que a empresa entrega um trabalho de qualidade e já conquistou a confiança de quem contratou.
+
+Por isso me chamou atenção o fato de que vocês ainda não possuem um site próprio. Hoje, quem encontra vocês geralmente já está pesquisando na região, mas existe uma oportunidade de ampliar essa visibilidade e apresentar os projetos para muito mais pessoas que procuram móveis planejados através do Google.`,
+    part2: `O que me chamou atenção é que vocês já possuem avaliações que demonstram a qualidade do trabalho. Quando existe essa reputação, normalmente vale a pena transformá-la em uma presença digital mais forte.
+
+Foi exatamente essa ideia que apliquei em um projeto recente para a marcenaria Bicho Preguiça:
+
+bichopreguicaplanejados.com.br
+
+A proposta foi criar um espaço onde todo o portfólio, os diferenciais e a qualidade dos projetos fossem apresentados de forma profissional, reforçando a confiança antes mesmo da conversa acontecer.
+
+Pensando nisso, montei uma amostra personalizada mostrando como essa mesma estratégia poderia ser aplicada para ampliar a visibilidade e reforçar a confiança de quem chega até vocês pela internet.
+
+Dá uma olhada e me fala se faz sentido.`
+  },
+  {
+    part1: `Olá, tudo bem?
+
+Me chamo Samuel.
+
+Encontrei a {EMPRESA} pelo Google Maps e vi que vocês possuem ótimas avaliações. Isso normalmente é um sinal de que o trabalho entregue gera satisfação e confiança nos clientes.
+
+O que me chamou atenção é que essa confiança hoje aparece principalmente para quem já encontra vocês no Google Maps. Porém, antes de pedir um orçamento, muitas pessoas procuram referências, projetos realizados e informações que ajudem na decisão.
+
+Quando não existe um espaço próprio para apresentar tudo isso, boa parte dessa percepção de valor acaba ficando pelo caminho.`,
+    part2: `Recentemente desenvolvi um projeto para uma marcenaria chamada Bicho Preguiça justamente com esse objetivo: apresentar o trabalho realizado de forma mais profissional e transmitir confiança antes mesmo do primeiro contato.
+
+Você pode ver o projeto aqui:
+
+bichopreguicaplanejados.com.br
+
+Montei uma amostra personalizada mostrando como os projetos, diferenciais e a reputação que vocês já construíram poderiam ser apresentados de forma mais completa para quem está avaliando fornecedores.
+
+Dá uma olhada e me fala o que acha.`
+  },
+  {
+    part1: `Olá, tudo bem?
+
+Me chamo Samuel.
+
+Conheci a {EMPRESA} através do Google Maps e vi que vocês possuem uma boa reputação construída junto aos clientes.
+
+Por isso me chamou atenção um detalhe: hoje, quando alguém pesquisa por móveis planejados, encontra as avaliações de vocês, mas tem poucas formas de conhecer melhor os projetos realizados, os diferenciais da empresa e o padrão do trabalho entregue.
+
+Na prática, isso faz com que muitas decisões acabem sendo tomadas com base apenas no que está disponível online. Empresas que possuem uma apresentação mais completa acabam levando vantagem nesse processo.`,
+    part2: `Recentemente trabalhei em um projeto para a marcenaria Bicho Preguiça com exatamente essa proposta:
+
+bichopreguicaplanejados.com.br
+
+Criar uma presença digital capaz de reforçar a qualidade do trabalho e aumentar a confiança de quem está pesquisando antes de solicitar um orçamento.
+
+Pensando nisso, montei uma amostra personalizada mostrando como essa mesma estratégia poderia ser aplicada para fortalecer ainda mais a presença digital de vocês.
+
+Dá uma olhada e me fala se faz sentido.`
+  }
+];
+
+RAMO_TEMPLATES_DEFAULT.marcenaria['com-site'] = MARCENARIA_TEMPLATES_V434;
+
+function normalizeMessageTemplateV434(template = {}) {
+  if (typeof template === 'string') return { part1: template, part2: '' };
+  if (template && typeof template === 'object') {
+    return {
+      part1: String(template.part1 ?? template.text ?? template.mensagem ?? ''),
+      part2: String(template.part2 ?? template.text2 ?? template.mensagem2 ?? '')
+    };
+  }
+  return { part1: '', part2: '' };
+}
+
+function cloneTemplateListV434(list = []) {
+  return (Array.isArray(list) ? list : []).map(template => ({ ...normalizeMessageTemplateV434(template) }));
+}
+
+function fillTemplateCompanyV434(text = '', nome = '') {
+  return String(text || '').replace(/\{EMPRESA\}/g, nome).replace(/\[EMPRESA\]/g, nome);
+}
+
+function renderPickedTemplateV434(template = {}, nome = '') {
+  const normalized = normalizeMessageTemplateV434(template);
+  return {
+    text: fillTemplateCompanyV434(normalized.part1, nome),
+    text2: fillTemplateCompanyV434(normalized.part2, nome)
+  };
+}
+
+function ensureMessageTemplateDefaultsV434(force = false) {
+  const key = 'marcenaria__com-site';
+  const migrated = localStorage.getItem(TEMPLATE_SCHEMA_VERSION_KEY_V434) === '1';
+  if (migrated && !force) return;
+  const all = getRamoTemplates();
+  all[key] = cloneTemplateListV434(MARCENARIA_TEMPLATES_V434);
+  saveRamoTemplates(all);
+  localStorage.setItem(TEMPLATE_SCHEMA_VERSION_KEY_V434, '1');
+}
+
 function getRamoTemplatesDefault(ramoId, tipo) {
   if (RAMO_TEMPLATES_DEFAULT[ramoId] && RAMO_TEMPLATES_DEFAULT[ramoId][tipo]) {
-    return RAMO_TEMPLATES_DEFAULT[ramoId][tipo];
+    return cloneTemplateListV434(RAMO_TEMPLATES_DEFAULT[ramoId][tipo]);
   }
-  return tipo === 'com-site' ? TEMPLATES_DEFAULT : TEMPLATES_DEFAULT.slice(0, 3);
+  return cloneTemplateListV434(tipo === 'com-site' ? TEMPLATES_DEFAULT : TEMPLATES_DEFAULT.slice(0, 3));
 }
 
 function getRamoTemplates() {
@@ -63,17 +206,20 @@ function saveRamoTemplates(obj) {
 }
 
 function getTemplatesForRamoTipo(ramoId, tipo) {
+  if (ramoId === 'marcenaria' && tipo === 'com-site') ensureMessageTemplateDefaultsV434();
   const all = getRamoTemplates();
   const key = `${ramoId}__${tipo}`;
-  if (all[key] && all[key].length > 0) return all[key];
+  if (all[key] && all[key].length > 0) return cloneTemplateListV434(all[key]);
   return getRamoTemplatesDefault(ramoId, tipo);
 }
 
-function saveRamoTemplate(ramoId, tipo, idx, val) {
+function saveRamoTemplate(ramoId, tipo, idx, val, field = 'part1') {
   const all = getRamoTemplates();
   const key = `${ramoId}__${tipo}`;
   if (!all[key]) all[key] = [...getRamoTemplatesDefault(ramoId, tipo)];
-  all[key][idx] = val;
+  const current = normalizeMessageTemplateV434(all[key][idx]);
+  current[field === 'part2' ? 'part2' : 'part1'] = val;
+  all[key][idx] = current;
   saveRamoTemplates(all);
 }
 
@@ -83,7 +229,10 @@ function adicionarRamoTemplate(ramoId, tipo) {
   if (!all[key]) all[key] = [...getRamoTemplatesDefault(ramoId, tipo)];
   const maxTpl = tipo === 'sem-site' ? 3 : 10;
   if (all[key].length >= maxTpl) { notify(`// máximo de ${maxTpl} templates para ${tipo}`,'warn'); return; }
-  all[key].push(`Olá, me chamo Samuel. Tudo bem?\n\nVi ${tipo==='com-site'?'o site d':''}a {EMPRESA}...\n\nFaz sentido conversarmos?`);
+  all[key].push({
+    part1: `Olá, tudo bem?\n\nMe chamo Samuel.\n\nVi a {EMPRESA} e acredito que pode existir uma oportunidade de melhorar a presença digital de vocês.`,
+    part2: `Posso te enviar uma amostra rápida para mostrar a ideia?\n\nFaz sentido conversarmos?`
+  });
   saveRamoTemplates(all);
   renderTemplatesConfig();
 }
@@ -212,7 +361,7 @@ function capitalizeName(raw) {
 }
 
 function getTemplates() {
-  try { return JSON.parse(localStorage.getItem(TEMPLATES_KEY) || 'null') || TEMPLATES_DEFAULT; } catch { return TEMPLATES_DEFAULT; }
+  try { return cloneTemplateListV434(JSON.parse(localStorage.getItem(TEMPLATES_KEY) || 'null') || TEMPLATES_DEFAULT); } catch { return cloneTemplateListV434(TEMPLATES_DEFAULT); }
 }
 function saveTemplates(t) {
   localStorage.setItem(TEMPLATES_KEY, JSON.stringify(t));
@@ -222,14 +371,14 @@ function saveTemplates(t) {
 
 function pickTemplate(nome, ramoId) {
   const tpl = ramoId ? getTemplatesForRamoTipo(ramoId, 'com-site') : getTemplates();
-  if (!tpl || !tpl.length) return { text: '', idx: 0 };
+  if (!tpl || !tpl.length) return { text: '', text2: '', idx: 0 };
   const idx = Math.floor(Math.random() * tpl.length);
-  return { text: tpl[idx].replace(/\{EMPRESA\}/g, nome).replace(/\[EMPRESA\]/g, nome), idx };
+  return { ...renderPickedTemplateV434(tpl[idx], nome), idx };
 }
 function pickOtherTemplate(nome, cur, ramoId) {
   const tpl = ramoId ? getTemplatesForRamoTipo(ramoId, 'com-site') : getTemplates();
-  if (!tpl || !tpl.length) return { text: '', idx: 0 };
+  if (!tpl || !tpl.length) return { text: '', text2: '', idx: 0 };
   let idx; do { idx = Math.floor(Math.random() * tpl.length); } while (idx === cur && tpl.length > 1);
-  return { text: tpl[idx].replace(/\{EMPRESA\}/g, nome).replace(/\[EMPRESA\]/g, nome), idx };
+  return { ...renderPickedTemplateV434(tpl[idx], nome), idx };
 }
 

@@ -76,11 +76,14 @@ function toggleFilaItemSlot(slot, id) {
   renderFilaSlot(slot, disparoDay);
 }
 
-function atualizarMsgFilaSlot(slot, id, val) {
+function atualizarMsgFilaSlot(slot, id, val, field = 'mensagem') {
   const chip = getChipBySlot(slot); if (!chip) return;
   const fila = getFilaChip(chip.id);
   const item = fila.find(f => f.id === id);
-  if (item) { item.mensagem = val; saveFilaDisparo(); }
+  if (item) {
+    item[field === 'mensagem2' ? 'mensagem2' : 'mensagem'] = val;
+    saveFilaDisparo();
+  }
 }
 
 function removerFilaSlot(slot, id) {
@@ -185,7 +188,10 @@ async function validateDispatchPreflightV432(slot, items = []) {
     return { ok:false, error };
   }
 
-  const withoutMessage = items.filter(item => !item.textSent && !String(item.mensagem || '').trim());
+  const withoutMessage = items.filter(item =>
+    (!item.textSent && !String(item.mensagem || '').trim()) ||
+    (!item.text2Sent && !String(item.mensagem2 || '').trim())
+  );
   if (withoutMessage.length) {
     const error = `${withoutMessage.length} lead(s) sem mensagem. Selecione o ramo do lote antes de disparar.`;
     debugDispatchPersistV413('preflight-error', { slot, error, ids:withoutMessage.map(item => item.id) });
@@ -322,7 +328,7 @@ async function dispararLoteChip(slot) {
   const esperaMin = Math.max(60, parseInt(document.getElementById('loteEsperaMin')?.value)||60);
   const delayMin  = parseInt(document.getElementById('delayMin')?.value)||120;
   const delayMax  = parseInt(document.getElementById('delayMax')?.value)||180;
-  const MSG_DELAY = 15000;
+  const MSG_DELAY = 6000;
   const chipCor   = slot === 0 ? 'var(--accent)' : '#5bb8f5';
 
   st.disparoEmAndamento = true;
@@ -431,6 +437,45 @@ async function dispararLoteChip(slot) {
       }
 
       // MSG 2 — Imagem do lote
+      if (!item.text2Sent) {
+        const payload2 = { number: numero, options: { delay: 1000 }, textMessage: { text: item.mensagem2 } };
+        const sendLock2 = typeof acquireWhatsappSendLockV31 === 'function'
+          ? acquireWhatsappSendLockV31({ leadId:item.leadId || item.id || '', phone:numero, text:item.mensagem2 || '', instance:chip.instance }, 30000)
+          : { ok:true, key:'' };
+        if (!sendLock2.ok) throw new Error('Envio duplicado bloqueado por seguranca.');
+        let res2;
+        let data2;
+        try {
+          res2 = await fetch(`${chip.url}/message/sendText/${chip.instance}`, { method:'POST', headers:{'Content-Type':'application/json','apikey':chip.key}, body: JSON.stringify(payload2) });
+          data2 = await res2.json().catch(() => ({}));
+          if (!res2.ok) throw new Error((data2 && (data2.message || data2.error)) || `sendText HTTP ${res2.status}`);
+        } finally {
+          if (typeof releaseWhatsappSendLockV31 === 'function') releaseWhatsappSendLockV31(sendLock2.key);
+        }
+        item.text2Sent = true;
+        saveFilaDisparo({ delay:0, reason:'dispatch-chip-text2-sent' });
+        log(`  complemento enviado`);
+
+        if (typeof persistOutgoingWhatsappMessageV412 === 'function') {
+          const persistence2 = await persistOutgoingWhatsappMessageV412({
+            id: typeof getEvolutionWhatsappExternalIdV412 === 'function'
+              ? getEvolutionWhatsappExternalIdV412(data2, item.id)
+              : '',
+            leadId: item.leadId || item.id || '',
+            instance: chip.instance,
+            phone: numero,
+            text: item.mensagem2 || '',
+            occurredAt: new Date().toISOString(),
+            response: data2
+          }, { queueOnFailure: true });
+          if (persistence2?.ok) log(`  complemento salvo no banco`);
+          else log(`  <span style="color:var(--warning)">complemento pendente de sincronizacao</span>`);
+        }
+        await new Promise(r => setTimeout(r, MSG_DELAY));
+      } else {
+        log(`  complemento ja enviado - retomando imagem pendente`);
+      }
+
       const loteNum = item.mediaLoteNum || st.loteAtual;
       const imgRedesign = getLoteImagem(chip.id, loteNum);
       if (!imgRedesign && !item.mediaSent) throw new Error(`Imagem do lote ${loteNum} indisponível`);

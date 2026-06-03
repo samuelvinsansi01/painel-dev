@@ -1,3 +1,34 @@
+const CRM_DEBUG_LOGS_V434 = false;
+(function setupQuietConsoleV434(){
+  if (window.__crmQuietConsoleV434) return;
+  window.__crmQuietConsoleV434 = true;
+  const original = {
+    log: console.log.bind(console),
+    info: console.info.bind(console),
+    debug: console.debug.bind(console),
+    warn: console.warn.bind(console),
+    groupCollapsed: console.groupCollapsed?.bind(console),
+    groupEnd: console.groupEnd?.bind(console)
+  };
+  window.__crmConsoleOriginalV434 = original;
+  const noisy = [
+    '[ui-sync]', '[qualification', '[lead-drawer]', '[lead-presentations]',
+    '[whatsapp-send]', '[message-send]', '[operational-data', '[lead-import]',
+    '[agenda-', '[whatsapp-queue]', '[dispatch][persist]', '[user-isolation]',
+    '[chips]', '[contact-map]', '[whatsapp_messages][persist]', '[supabase]',
+    '[lead-sync', '[lead-dedupe]', '[insta]', '[migra'
+  ];
+  const isNoisy = args => noisy.some(prefix => String(args?.[0] || '').startsWith(prefix) || String(args?.[0] || '').includes(prefix));
+  console.log = (...args) => { if (CRM_DEBUG_LOGS_V434) original.log(...args); };
+  console.info = (...args) => { if (CRM_DEBUG_LOGS_V434) original.info(...args); };
+  console.debug = (...args) => { if (CRM_DEBUG_LOGS_V434) original.debug(...args); };
+  console.groupCollapsed = (...args) => { if (CRM_DEBUG_LOGS_V434 && original.groupCollapsed) original.groupCollapsed(...args); };
+  console.groupEnd = (...args) => { if (CRM_DEBUG_LOGS_V434 && original.groupEnd) original.groupEnd(...args); };
+  console.warn = (...args) => {
+    if (!CRM_DEBUG_LOGS_V434 && isNoisy(args)) return;
+    original.warn(...args);
+  };
+})();
 
 /* V41.9 DELAYMIN ERROR GUARD */
 window.addEventListener('error', function(e){

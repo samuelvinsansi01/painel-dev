@@ -160,6 +160,7 @@ function createDispatchQueueItemV433(emp = {}, overrides = {}) {
     site: emp.site || '',
     whatsapp: emp.whatsapp,
     mensagem: '',
+    mensagem2: '',
     templateIdx: -1,
     ramoId: null,
     numStatus: emp.numStatus || '',
@@ -182,11 +183,17 @@ function getTemporaryDispatchMessageV433(name = '') {
     const firstRamo = (typeof getRamos === 'function' ? getRamos() : [])[0] || {};
     if (typeof pickTemplate === 'function') {
       const picked = pickTemplate(name || 'Lead teste', firstRamo.id || null);
-      if (String(picked?.text || '').trim()) return { text:picked.text, idx:picked.idx ?? -1, ramoId:firstRamo.id || null };
+      if (String(picked?.text || '').trim()) return {
+        text:picked.text,
+        text2:picked.text2 || '',
+        idx:picked.idx ?? -1,
+        ramoId:firstRamo.id || null
+      };
     }
   } catch(e) {}
   return {
     text:`Olá, tudo bem?\n\nEsta é uma mensagem de teste de envio pela plataforma.`,
+    text2:`Esta e a segunda mensagem de teste antes da imagem.`,
     idx:-1,
     ramoId:null
   };
@@ -239,6 +246,7 @@ function addTemporaryDispatchLead(slot) {
   const fila = getFilaChip(chip.id);
   fila.push(createDispatchQueueItemV433(lead, {
     mensagem: customMessage || picked.text,
+    mensagem2: picked.text2 || '',
     templateIdx: picked.idx,
     ramoId: picked.ramoId,
     status: 'aguardando',
@@ -268,13 +276,14 @@ function hydrateRecoveredDispatchMessagesV433(chipId) {
   Object.keys(data.days || {}).forEach(day => {
     const idsNoDia = new Set((data.days[day] || []).map(lead => lead.id));
     fila.filter(item => idsNoDia.has(item.id)).forEach((item, index) => {
-      if (String(item.mensagem || '').trim()) return;
+      if (String(item.mensagem || '').trim() && String(item.mensagem2 || '').trim()) return;
       const loteNum = Math.floor(index / getLoteSize()) + 1;
       const ramoId = getLoteRamo(chipId, loteNum);
       if (!ramoId) return;
-      const { text, idx } = pickTemplate(item.nome, ramoId);
+      const { text, text2, idx } = pickTemplate(item.nome, ramoId);
       item.ramoId = ramoId;
-      item.mensagem = text;
+      if (!String(item.mensagem || '').trim()) item.mensagem = text;
+      if (!String(item.mensagem2 || '').trim()) item.mensagem2 = text2 || '';
       item.templateIdx = idx;
       hydrated++;
     });
@@ -475,7 +484,9 @@ function renderFila() {
       <div class="fila-item-body" style="display:${aberto?'flex':'none'}">
         <div style="width:100%">
           <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:4px">① APRESENTAÇÃO</div>
-          <textarea class="fila-msg-area" id="fila-msg-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFila('${item.id}',this.value)">${escHtml(item.mensagem)}</textarea>
+          <textarea class="fila-msg-area" id="fila-msg-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFila('${item.id}',this.value,'mensagem')">${escHtml(item.mensagem||'')}</textarea>
+          <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin:8px 0 4px">TEXTO 2</div>
+          <textarea class="fila-msg-area" id="fila-msg2-${item.id}" style="background:var(--surface2);border-radius:8px;padding:10px 12px;font-family:'DM Mono',monospace;font-size:9px;color:var(--text2);line-height:1.7;min-height:80px;border:1px solid var(--border2);resize:vertical;width:100%;outline:none" oninput="atualizarMsgFila('${item.id}',this.value,'mensagem2')">${escHtml(item.mensagem2||'')}</textarea>
           <button class="fila-msg-shuffle" onclick="shuffleFilaMsg('${item.id}')">↻ sortear</button>
         </div>
       </div>
@@ -491,10 +502,13 @@ function toggleFilaItem(id) {
   renderFila();
 }
 
-function atualizarMsgFila(id, val) {
+function atualizarMsgFila(id, val, field = 'mensagem') {
   const fila = getFilaChip(disparoChipId);
   const item = fila.find(f => f.id === id);
-  if (item) { item.mensagem = val; saveFilaDisparo({ reason:'dispatch-message-update' }); }
+  if (item) {
+    item[field === 'mensagem2' ? 'mensagem2' : 'mensagem'] = val;
+    saveFilaDisparo({ reason:'dispatch-message-update' });
+  }
 }
 
 function shuffleFilaMsgSlot(slot, id) {
@@ -504,10 +518,12 @@ function shuffleFilaMsgSlot(slot, id) {
   if (!item) return;
   const itemIdx = fila.findIndex(f => f.id === id);
   const loteNum = Math.floor(itemIdx / getLoteSize()) + 1;
-  const { text, idx } = pickOtherTemplate(item.nome, item.templateIdx, item.ramoId || null);
-  item.mensagem = text; item.templateIdx = idx;
+  const { text, text2, idx } = pickOtherTemplate(item.nome, item.templateIdx, item.ramoId || null);
+  item.mensagem = text; item.mensagem2 = text2 || ''; item.templateIdx = idx;
   const el = document.getElementById(`fila-msg-${slot}-${id}`);
   if (el) el.value = item.mensagem;
+  const el2 = document.getElementById(`fila-msg2-${slot}-${id}`);
+  if (el2) el2.value = item.mensagem2 || '';
   saveFilaDisparo();
 }
 function shuffleFilaMsg(id) {
@@ -516,10 +532,12 @@ function shuffleFilaMsg(id) {
   if (!item) return;
   const itemIdx = fila.findIndex(f => f.id === id);
   const loteNum = Math.floor(itemIdx / getLoteSize()) + 1;
-  const { text, idx } = pickOtherTemplate(item.nome, item.templateIdx, item.ramoId || null);
-  item.mensagem = text; item.templateIdx = idx;
+  const { text, text2, idx } = pickOtherTemplate(item.nome, item.templateIdx, item.ramoId || null);
+  item.mensagem = text; item.mensagem2 = text2 || ''; item.templateIdx = idx;
   const el = document.getElementById(`fila-msg-${id}`);
   if (el) el.value = item.mensagem;
+  const el2 = document.getElementById(`fila-msg2-${id}`);
+  if (el2) el2.value = item.mensagem2 || '';
   saveFilaDisparo({ reason:'dispatch-message-shuffle' });
 }
 function onRamoFilaChange(id, ramoId) {
@@ -529,11 +547,13 @@ function onRamoFilaChange(id, ramoId) {
   item.ramoId = ramoId || null;
   saveFilaDisparo();
   // Sortear automaticamente com o novo ramo
-  const { text, idx } = pickTemplate(item.nome, item.ramoId);
-  item.mensagem = text; item.templateIdx = idx;
+  const { text, text2, idx } = pickTemplate(item.nome, item.ramoId);
+  item.mensagem = text; item.mensagem2 = text2 || ''; item.templateIdx = idx;
   saveFilaDisparo();
   const el = document.getElementById(`fila-msg-${id}`);
   if (el) el.value = item.mensagem;
+  const el2 = document.getElementById(`fila-msg2-${id}`);
+  if (el2) el2.value = item.mensagem2 || '';
 }
 function onImgChange(id, input, slot) {
   const file = input.files[0]; if (!file) return;

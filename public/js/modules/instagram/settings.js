@@ -185,11 +185,19 @@ function renderTemplatesConfig() {
     ? `<span style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted)">${tpls.length}/${maxTpl} templates</span>`
     : '';
 
-  const tplsHtml = tpls.map((t, i) => `<div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
+  const tplsHtml = tpls.map((t, i) => {
+    const tpl = typeof normalizeMessageTemplateV434 === 'function'
+      ? normalizeMessageTemplateV434(t)
+      : { part1:String(t || ''), part2:'' };
+    return `<div style="background:var(--bg);border:1px solid var(--border2);border-radius:10px;padding:12px;margin-bottom:8px;position:relative">
     <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:8px">TEMPLATE ${i+1}</div>
-    <textarea style="min-height:80px;font-size:10px;line-height:1.6" oninput="${isRamo?`saveRamoTemplate('${tplRamoId}','com-site',${i},this.value)`:`saveTemplate(${i},this.value)`}">${escHtml(t)}</textarea>
+    <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:5px">CAMPO 1 - TEXTO INICIAL</div>
+    <textarea style="min-height:120px;font-size:10px;line-height:1.6;margin-bottom:10px" oninput="${isRamo?`saveRamoTemplate('${tplRamoId}','com-site',${i},this.value,'part1')`:`saveTemplate(${i},this.value,'part1')`}">${escHtml(tpl.part1)}</textarea>
+    <div style="font-family:'DM Mono',monospace;font-size:8px;color:var(--muted);margin-bottom:5px">CAMPO 2 - TEXTO COMPLEMENTAR</div>
+    <textarea style="min-height:120px;font-size:10px;line-height:1.6" oninput="${isRamo?`saveRamoTemplate('${tplRamoId}','com-site',${i},this.value,'part2')`:`saveTemplate(${i},this.value,'part2')`}">${escHtml(tpl.part2)}</textarea>
     ${tpls.length>1?`<button class="del-btn" style="position:absolute;top:8px;right:8px" onclick="${isRamo?`removerRamoTemplate('${tplRamoId}','com-site',${i})`:`removerTemplate(${i})`}">✕</button>`:''}
-  </div>`).join('');
+  </div>`;
+  }).join('');
 
   const addBtn = `<div style="display:flex;align-items:center;justify-content:space-between;margin-top:12px">
     ${limitLabel}
@@ -208,14 +216,28 @@ function setTplTipo(tipo) {
   renderTemplatesConfig();
 }
 
-function saveTemplate(idx, val) {
-  const tpls = getTemplates(); tpls[idx] = val; saveTemplates(tpls);
+function saveTemplate(idx, val, field = 'part1') {
+  const tpls = getTemplates();
+  const current = typeof normalizeMessageTemplateV434 === 'function'
+    ? normalizeMessageTemplateV434(tpls[idx] || {})
+    : { part1:String(tpls[idx] || ''), part2:'' };
+  current[field === 'part2' ? 'part2' : 'part1'] = val;
+  tpls[idx] = current;
+  saveTemplates(tpls);
 }
 function adicionarTemplate() {
   const tpls = getTemplates();
+  tpls.push({
+    part1: 'Ola, me chamo Samuel. Tudo bem?\n\nVi o site da {EMPRESA} e acredito que pode existir uma oportunidade de melhorar a apresentacao digital.',
+    part2: 'Posso te enviar uma amostra rapida para mostrar a ideia?\n\nFaz sentido conversarmos?'
+  });
+  saveTemplates(tpls); renderTemplatesConfig(); notify('Template adicionado');
+}
+/* legacy single-field template fallback disabled
   tpls.push('Olá, me chamo Samuel. Tudo bem?\n\nVi o site da {EMPRESA}...\n\nFaz sentido conversarmos?');
   saveTemplates(tpls); renderTemplatesConfig(); notify('✓ Template adicionado');
 }
+*/
 function removerTemplate(idx) {
   const tpls = getTemplates(); tpls.splice(idx, 1); saveTemplates(tpls); renderTemplatesConfig();
 }
