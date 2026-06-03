@@ -63,9 +63,9 @@ function getChipDispatchRuntimeAgeMsV434(runtime = {}) {
 function recoverStaleChipDispatchRuntimeV434(slot, chip, runtime) {
   if (!chip || !runtime || runtime.state !== 'sending') return false;
   const st = chipSlotState[slot] || {};
-  if (st.disparoEmAndamento || st.preflightEmAndamento) return false;
+  if (st.disparoEmAndamento) return false;
 
-  const filaHoje = getFilaChipNoDia(chip.id, todayStr());
+  const filaHoje = getFilaChip(chip.id);
   const sendingItems = filaHoje.filter(item => item.status === 'enviando');
   const runtimeItem = runtime.itemId ? filaHoje.find(item => item.id === runtime.itemId) : null;
   const ageMs = getChipDispatchRuntimeAgeMsV434(runtime);
@@ -73,7 +73,7 @@ function recoverStaleChipDispatchRuntimeV434(slot, chip, runtime) {
   const noActiveItem = sendingItems.length === 0;
   const runtimeItemSettled = runtimeItem && ['aguardando', 'enviado', 'erro'].includes(runtimeItem.status);
   const runtimeItemMissing = runtime.itemId && !runtimeItem;
-  const staleStartupLock = !runtime.itemId && noActiveItem && ageMs > 5000;
+  const staleStartupLock = !runtime.itemId && noActiveItem;
 
   if (staleStartupLock || (noActiveItem && (runtimeItemSettled || runtimeItemMissing))) {
     saveChipDispatchRuntimeV432(chip.id, null);
@@ -93,9 +93,36 @@ function recoverStaleChipDispatchRuntimeV434(slot, chip, runtime) {
   return false;
 }
 
+function recoverStaleSendingItemsV434(slot, chip, maxAgeMs = 2 * 60 * 1000) {
+  if (!chip) return 0;
+  const runtime = getChipDispatchRuntimeMapV432()[chip.id] || null;
+  const ageMs = runtime ? getChipDispatchRuntimeAgeMsV434(runtime) : Infinity;
+  if (ageMs < maxAgeMs) return 0;
+
+  const filaHoje = getFilaChip(chip.id);
+  const staleItems = filaHoje.filter(item => item.status === 'enviando');
+  if (!staleItems.length) return 0;
+
+  staleItems.forEach(item => { item.status = 'erro'; });
+  saveFilaDisparo({ delay:0, reason:'dispatch-chip-stale-sending-preflight-recovered' });
+  saveChipDispatchRuntimeV432(chip.id, null);
+  renderFilaSlot(slot, disparoDay);
+  notify(`// Chip ${slot + 1}: envio antigo marcado como erro para liberar a fila.`, 'warn');
+  return staleItems.length;
+}
+
 function blockChipDispatchReloadLockV432(slot, chip) {
   const runtime = getChipDispatchReloadLockV432(chip.id);
   if (!runtime) return false;
+  if (runtime.state === 'sending') {
+    const st = chipSlotState[slot] || {};
+    const activeSendingItems = getFilaChip(chip.id).filter(item => item.status === 'enviando');
+    if (!st.disparoEmAndamento && activeSendingItems.length === 0) {
+      saveChipDispatchRuntimeV432(chip.id, null);
+      notify(`// Chip ${slot + 1}: trava antiga removida. Disparo liberado.`, 'warn');
+      return false;
+    }
+  }
   if (recoverStaleChipDispatchRuntimeV434(slot, chip, runtime)) return false;
   if (runtime.state === 'sending') {
     notify(`// Chip ${slot + 1}: envio interrompido em estado incerto. Confira a fila antes de reenviar.`, 'err');
@@ -219,6 +246,7 @@ async function validateDispatchPreflightV432(slot, items = []) {
     return { ok:false, error };
   }
 
+  recoverStaleSendingItemsV434(slot, chip);
   const uncertain = getFilaChipNoDia(chip.id, todayStr()).filter(item => item.status === 'enviando');
   if (uncertain.length) {
     const error = `${uncertain.length} envio(s) em estado incerto. Confira antes de reenviar.`;
